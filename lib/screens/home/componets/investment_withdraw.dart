@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../theme/theme.dart';
 
 class Withdraw extends StatefulWidget {
   @override
@@ -9,8 +10,12 @@ class _WithdrawState extends State<Withdraw> {
   PageController _pageController = PageController();
   int currentStep = 0;
 
-  // Sample portfolios
-  final List<String> portfolios = ['Portfolio A', 'Portfolio B', 'Portfolio C'];
+  // Sample portfolios data
+  final Map<String, Map<String, double>> portfoliosData = {
+    'Portfolio A': {'deposit': 1234.56, 'netWorth': 5000.00},
+    'Portfolio B': {'deposit': 4567.89, 'netWorth': 7500.00},
+    'Portfolio C': {'deposit': 7890.12, 'netWorth': 9500.00},
+  };
 
   String? selectedPortfolio;
   String? withdrawMethod;
@@ -82,24 +87,70 @@ class _WithdrawState extends State<Withdraw> {
         Text(
           'Select Portfolio',
           style: TextStyle(
-              fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black),
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: Colors.black,
+          ),
         ),
-        DropdownButton<String>(
-          value: selectedPortfolio,
-          hint: Text('Choose a portfolio'),
-          items: portfolios.map((portfolio) {
-            return DropdownMenuItem<String>(
-              value: portfolio,
-              child: Text(portfolio),
-            );
-          }).toList(),
-          onChanged: (value) {
-            setState(() {
-              selectedPortfolio = value;
-            });
-            _pageController.nextPage(
-                duration: Duration(milliseconds: 300), curve: Curves.easeIn);
-          },
+        SizedBox(height: 20),
+        // ListView to show the portfolios as scrollable cards
+        Expanded(
+          // Use Expanded to make sure the list fills the available space
+          child: ListView(
+            children: portfoliosData.keys.map((portfolio) {
+              return GestureDetector(
+                onTap: () {
+                  setState(() {
+                    selectedPortfolio = portfolio;
+                  });
+                  _pageController.nextPage(
+                      duration: Duration(milliseconds: 300),
+                      curve: Curves.easeIn);
+                },
+                child: Card(
+                  color: primaryTwo, // Applying primaryTwo color
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12), // Rounded corners
+                  ),
+                  elevation: 5, // Adding elevation for a more stylish look
+                  margin: EdgeInsets.symmetric(vertical: 8), // Vertical spacing
+                  child: Padding(
+                    padding:
+                        EdgeInsets.all(16), // Internal padding for the card
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          portfolio, // Portfolio name
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          'Deposit Amount: \$${portfoliosData[portfolio]!['deposit']!.toStringAsFixed(2)}', // Dynamic deposit amount
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.white70,
+                          ),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          'Net Worth: \$${portfoliosData[portfolio]!['netWorth']!.toStringAsFixed(2)}', // Dynamic net worth
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.white70,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
         ),
       ],
     );
