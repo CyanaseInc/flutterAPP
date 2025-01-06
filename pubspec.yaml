@@ -1,0 +1,39 @@
+name: app
+description: "A new Flutter project."
+publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.6.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  intl_phone_field: ^3.0.1
+  country_picker: ^2.0.18
+  sim_card_info: ^0.0.1
+  fl_chart: ^0.70.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0 # Consider upgrading for latest linting rules
+
+flutter:
+  uses-material-design: true
+
+  # Add the assets section to include your logo image
+  assets:
+    - assets/logo.png
+
+  # Add the fonts section for Montserrat
+  fonts:
+    - family: Montserrat
+      fonts:
+        - asset: assets/fonts/Montserrat-Regular.ttf
+        - asset: assets/fonts/Montserrat-Bold.ttf
+          weight: 700
+        - asset: assets/fonts/Montserrat-Italic.ttf
+          style: italic
