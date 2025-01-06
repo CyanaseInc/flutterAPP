@@ -15,6 +15,7 @@ dependencies:
   country_picker: ^2.0.18
   sim_card_info: ^0.0.1
   fl_chart: ^0.70.0
+  
 
 dev_dependencies:
   flutter_test:

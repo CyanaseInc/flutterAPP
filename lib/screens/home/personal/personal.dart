@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
-import '../../../theme/theme.dart'; // Assuming your theme file has primaryTwo defined
-import 'fund_manager.dart';
-import 'deposit_withdraw_buttons.dart';
-import 'card.dart';
-import 'sample_goals.dart';
-import './portifolio.dart';
+import '../../../theme/theme.dart'; // Your custom theme file
+import './sample_goals.dart'; // Importing the SampleGoals widget
+import './portifolio.dart'; // Portfolio screen or logic
+import './card.dart'; // Assuming this includes TotalDepositsCard and NetworthCard widgets
+import './deposit_withdraw_buttons.dart'; // DepositWithdrawButtons widget
+import './fund_manager.dart'; // FundManagerSlider widget
 
 class PersonalTab extends StatelessWidget {
+  final TabController tabController;
+
+  PersonalTab({required this.tabController});
+
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
@@ -15,6 +19,7 @@ class PersonalTab extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // My Portfolio Button
             Align(
               alignment: Alignment.topRight,
               child: OutlinedButton(
@@ -24,7 +29,7 @@ class PersonalTab extends StatelessWidget {
                     MaterialPageRoute(
                       builder: (context) => Portfolio(),
                     ),
-                  ); // Navigate to portfolio screen or implement logic
+                  );
                 },
                 style: OutlinedButton.styleFrom(
                   side: BorderSide(color: primaryTwo),
@@ -40,18 +45,28 @@ class PersonalTab extends StatelessWidget {
                 ),
               ),
             ),
-            SizedBox(height: 20),
+            const SizedBox(height: 20),
+            // Total Deposits Card
             TotalDepositsCard(),
-            SizedBox(height: 10),
+            const SizedBox(height: 10),
+            // Deposit and Withdraw Buttons
             DepositWithdrawButtons(),
-            SizedBox(height: 10),
+            const SizedBox(height: 10),
+            // Net Worth Card
             NetworthCard(),
-            SizedBox(height: 10),
+            const SizedBox(height: 10),
+            // Fund Manager Slider
             FundManagerSlider(),
-            SizedBox(height: 10),
+            const SizedBox(height: 10),
+            // Goals Section
             SizedBox(
-              height: 500, // Adjust height if needed
-              child: SampleGoals(),
+              height: 500, // Adjust height if necessary
+              child: SampleGoals(
+                onGoalTap: () {
+                  // Navigate to the "Goals" tab
+                  tabController.animateTo(2); // Index 2 is the "Goals" tab
+                },
+              ),
             ),
           ],
         ),

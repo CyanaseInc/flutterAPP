@@ -24,6 +24,8 @@ class _WithdrawState extends State<Withdraw> {
   double? withdrawAmount;
 
   @override
+  bool isLoading = false; // Flag to track if the withdrawal is in progress
+
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.all(16.0),
@@ -57,21 +59,45 @@ class _WithdrawState extends State<Withdraw> {
                             duration: Duration(milliseconds: 300),
                             curve: Curves.easeIn);
                       },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: primaryTwo,
+                        foregroundColor: Colors.white,
+                      ),
                       child: Text('Back'),
                     )
                   : SizedBox(),
               ElevatedButton(
-                onPressed: () {
-                  if (currentStep == 3) {
-                    // Confirm withdraw logic here
-                    Navigator.pop(context); // Close bottom sheet
+                onPressed: () async {
+                  if (currentStep == 2) {
+                    // Show circular loader and trigger withdrawal
+                    setState(() {
+                      isLoading = true;
+                    });
+
+                    // Simulate the withdrawal process (you can replace this with your actual logic)
+                    await Future.delayed(Duration(seconds: 2));
+
+                    // After withdrawal is done, close the bottom sheet
+                    Navigator.pop(context);
+
+                    setState(() {
+                      isLoading = false;
+                    });
                   } else {
                     _pageController.nextPage(
                         duration: Duration(milliseconds: 300),
                         curve: Curves.easeIn);
                   }
                 },
-                child: Text(currentStep == 3 ? 'Confirm Withdraw' : 'Next'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryTwo,
+                  foregroundColor: Colors.white,
+                ),
+                child: isLoading
+                    ? CircularProgressIndicator(
+                        color: Colors.white,
+                      ) // Show loader while processing
+                    : Text(currentStep == 2 ? 'Confirm Withdraw' : 'Next'),
               ),
             ],
           ),
@@ -89,7 +115,7 @@ class _WithdrawState extends State<Withdraw> {
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,
-            color: Colors.black,
+            color: primaryTwo,
           ),
         ),
         SizedBox(height: 20),
@@ -163,7 +189,7 @@ class _WithdrawState extends State<Withdraw> {
         Text(
           'Select Withdraw Method',
           style: TextStyle(
-              fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black),
+              fontSize: 18, fontWeight: FontWeight.bold, color: primaryTwo),
         ),
         DropdownButton<String>(
           value: withdrawMethod,
@@ -199,12 +225,14 @@ class _WithdrawState extends State<Withdraw> {
         Text(
           'Mobile Money Details',
           style: TextStyle(
-              fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black),
+              fontSize: 18, fontWeight: FontWeight.bold, color: primaryTwo),
         ),
+        SizedBox(height: 10),
         TextField(
           decoration: InputDecoration(
             labelText: 'Phone Number',
-            border: OutlineInputBorder(),
+            // Use UnderlineInputBorder for only a bottom border
+            border: UnderlineInputBorder(),
           ),
           keyboardType: TextInputType.phone,
           onChanged: (value) {
@@ -215,7 +243,8 @@ class _WithdrawState extends State<Withdraw> {
         TextField(
           decoration: InputDecoration(
             labelText: 'Amount',
-            border: OutlineInputBorder(),
+            // Use UnderlineInputBorder for only a bottom border
+            border: UnderlineInputBorder(),
           ),
           keyboardType: TextInputType.number,
           onChanged: (value) {
@@ -235,7 +264,7 @@ class _WithdrawState extends State<Withdraw> {
         Text(
           'Bank Details',
           style: TextStyle(
-              fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black),
+              fontSize: 18, fontWeight: FontWeight.bold, color: primaryTwo),
         ),
         TextField(
           decoration: InputDecoration(

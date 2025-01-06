@@ -92,6 +92,7 @@ class NetworthCard extends StatelessWidget {
                   'Networth',
                   style: TextStyle(
                     fontSize: 16,
+                    color: primaryTwo,
                   ),
                 ),
                 SizedBox(height: 10),
@@ -103,9 +104,7 @@ class NetworthCard extends StatelessWidget {
                           offset: Offset(0, -6),
                           child: Text(
                             'UGX',
-                            style: TextStyle(
-                              fontSize: 16,
-                            ),
+                            style: TextStyle(fontSize: 16, color: primaryTwo),
                           ),
                         ),
                       ),
@@ -113,6 +112,7 @@ class NetworthCard extends StatelessWidget {
                         text: ' 5,000',
                         style: TextStyle(
                           fontSize: 32,
+                          color: primaryTwo,
                         ),
                       ),
                     ],

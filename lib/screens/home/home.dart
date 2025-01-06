@@ -49,8 +49,7 @@ class _HomeScreenState extends State<HomeScreen>
               const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: () {
-                  // Handle payment navigation
-                  Navigator.pop(context);
+                  Navigator.pop(context); // Handle payment navigation
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: primaryTwo,
@@ -84,7 +83,6 @@ class _HomeScreenState extends State<HomeScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: primaryTwo,
         titleSpacing: 16,
         title: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -93,12 +91,12 @@ class _HomeScreenState extends State<HomeScreen>
               'Cyanase',
               style: TextStyle(
                 fontWeight: FontWeight.bold,
-                color: Colors.white,
+                color: primaryTwo,
                 fontSize: 25,
               ),
             ),
             IconButton(
-              icon: const Icon(Icons.more_vert, color: Colors.white),
+              icon: const Icon(Icons.more_vert, color: primaryTwo),
               onPressed: () {
                 _showMenu(context);
               },
@@ -106,31 +104,37 @@ class _HomeScreenState extends State<HomeScreen>
           ],
         ),
         automaticallyImplyLeading: false,
-        bottom: TabBar(
-          controller: _tabController,
-          indicator: UnderlineTabIndicator(
-            borderSide:
-                BorderSide(width: 4.0, color: Colors.white), // Highlight
-            insets: EdgeInsets.symmetric(horizontal: 16.0), // Add spacing
-          ),
-          labelColor: Colors.white,
-          unselectedLabelColor:
-              Colors.white.withOpacity(0.6), // Dim inactive tabs
-          labelStyle: const TextStyle(fontWeight: FontWeight.bold),
-          unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal),
-          tabs: const [
-            Tab(icon: Icon(Icons.group_work), text: 'Personal'),
-            Tab(icon: Icon(Icons.chat_bubble), text: 'Groups'),
-            Tab(icon: Icon(Icons.flag), text: 'Goals'),
-          ],
-        ),
       ),
-      body: TabBarView(
-        controller: _tabController,
+      body: Column(
         children: [
-          PersonalTab(),
-          GroupsTab(),
-          GoalsTab(),
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                GroupsTab(),
+                PersonalTab(tabController: _tabController),
+                GoalsTab(),
+              ],
+            ),
+          ),
+          // Move the TabBar to the bottom
+          TabBar(
+            controller: _tabController,
+            indicator: UnderlineTabIndicator(
+              borderSide: BorderSide(width: 4.0, color: primaryTwo),
+              insets: EdgeInsets.symmetric(horizontal: 16.0),
+            ),
+            labelColor: primaryTwo,
+            unselectedLabelColor: primaryTwoLight.withOpacity(0.6),
+            labelStyle: const TextStyle(fontWeight: FontWeight.bold),
+            unselectedLabelStyle:
+                const TextStyle(fontWeight: FontWeight.normal),
+            tabs: const [
+              Tab(icon: Icon(Icons.chat_bubble), text: 'Groups'),
+              Tab(icon: Icon(Icons.group_work), text: 'Personal'),
+              Tab(icon: Icon(Icons.flag), text: 'Goals'),
+            ],
+          ),
         ],
       ),
     );
