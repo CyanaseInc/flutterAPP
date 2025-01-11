@@ -148,10 +148,22 @@ class _DepositState extends State<Deposit> {
         Text(
           'Select Fund Manager',
           style: TextStyle(
-            fontSize: 18,
+            fontSize: 20,
             fontWeight: FontWeight.bold,
             color: primaryTwo,
           ),
+        ),
+        Text(
+          'There should be someone to look after your money, choose  who',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: Colors.grey[600],
+          ),
+          textAlign:
+              TextAlign.center, // This centers the text within its container
+          softWrap:
+              true, // Ensures the text wraps if it exceeds the line length
         ),
         DropdownButton<String>(
           value: selectedFundManager,
@@ -184,17 +196,29 @@ class _DepositState extends State<Deposit> {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Text(
-          'Select Fund Class',
+        const Text(
+          'Select an Investment Class',
           style: TextStyle(
-            fontSize: 18,
+            fontSize: 20,
             fontWeight: FontWeight.bold,
             color: primaryTwo,
           ),
         ),
+        Text(
+          'Where do you want to invest your money?',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: Colors.grey[600],
+          ),
+          textAlign:
+              TextAlign.center, // This centers the text within its container
+          softWrap:
+              true, // Ensures the text wraps if it exceeds the line length
+        ),
         DropdownButton<String>(
           value: selectedFundClass,
-          hint: Text('Choose a fund class'),
+          hint: const Text('Choose investment  class'),
           items: fundClasses[selectedFundManager!]!.map((fundClass) {
             return DropdownMenuItem<String>(
               value: fundClass,
@@ -225,10 +249,22 @@ class _DepositState extends State<Deposit> {
         Text(
           'Select Option',
           style: TextStyle(
-            fontSize: 18,
+            fontSize: 20,
             fontWeight: FontWeight.bold,
             color: primaryTwo,
           ),
+        ),
+        Text(
+          'Let\'s get into the details of your investment',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: Colors.grey[600],
+          ),
+          textAlign:
+              TextAlign.center, // This centers the text within its container
+          softWrap:
+              true, // Ensures the text wraps if it exceeds the line length
         ),
         DropdownButton<String>(
           value: selectedOption,

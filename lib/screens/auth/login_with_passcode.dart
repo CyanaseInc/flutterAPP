@@ -22,7 +22,6 @@ class _NumericLoginScreenState extends State<NumericLoginScreen> {
       });
 
       if (_input.length == _passcodeLength) {
-        // Handle passcode submission
         _verifyPasscode(_input);
       }
     }
@@ -37,7 +36,6 @@ class _NumericLoginScreenState extends State<NumericLoginScreen> {
   }
 
   void _verifyPasscode(String passcode) {
-    // Add logic to verify the passcode
     print("Entered Passcode: $passcode");
     Navigator.push(
       context,
@@ -55,18 +53,16 @@ class _NumericLoginScreenState extends State<NumericLoginScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Image.asset(
-            'assets/logo.png', // Your logo image here
+            'assets/images/logo.png',
             height: 100,
             width: 70,
           ),
           const SizedBox(height: 20),
-//Display passcode dots
           const Text(
             'Enter pass code to login',
             style: TextStyle(
               fontSize: 20,
-
-              color: primaryTwo, // Use primaryTwo color from theme
+              color: primaryTwo,
             ),
           ),
           const SizedBox(height: 40),
@@ -86,9 +82,7 @@ class _NumericLoginScreenState extends State<NumericLoginScreen> {
             ),
           ),
           const SizedBox(height: 40),
-          // Numeric keypad with your initial design
           Column(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               for (var row in [
                 ["1", "2", "3"],
@@ -100,13 +94,17 @@ class _NumericLoginScreenState extends State<NumericLoginScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: row.map((item) {
                     if (item == "") {
-                      return const SizedBox(width: 60, height: 60);
+                      return SizedBox(
+                        width: 60,
+                        height: 60,
+                        child: Container(), // Empty space placeholder
+                      );
                     } else if (item == "\u232b") {
                       return GestureDetector(
                         onTap: _onDeletePressed,
                         child: Container(
-                          width: 40,
-                          height: 40,
+                          width: 60,
+                          height: 60,
                           alignment: Alignment.center,
                           child: const Icon(Icons.backspace, size: 28),
                         ),
@@ -127,8 +125,8 @@ class _NumericLoginScreenState extends State<NumericLoginScreen> {
                           child: Text(
                             item,
                             style: const TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
+                              fontSize: 20,
+                              color: primaryTwo,
                             ),
                           ),
                         ),
@@ -141,7 +139,6 @@ class _NumericLoginScreenState extends State<NumericLoginScreen> {
           const SizedBox(height: 20),
           GestureDetector(
             onTap: () {
-              // Navigate to the Passcode Login screen
               Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -152,7 +149,7 @@ class _NumericLoginScreenState extends State<NumericLoginScreen> {
             child: const Text(
               'Login using Phone number?',
               style: TextStyle(
-                color: primaryColor, // Use primaryColor from theme
+                color: primaryColor,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -160,7 +157,6 @@ class _NumericLoginScreenState extends State<NumericLoginScreen> {
           const SizedBox(height: 10),
           GestureDetector(
             onTap: () {
-              // Navigate to the Passcode Login screen
               Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -169,11 +165,12 @@ class _NumericLoginScreenState extends State<NumericLoginScreen> {
               );
             },
             child: const Text(
-              'Dont have an account signup?',
+              'Don’t have an account? Sign up!',
               style: TextStyle(
-                  // Use primaryColor from theme
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18),
+                color: primaryTwo,
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+              ),
             ),
           ),
         ],

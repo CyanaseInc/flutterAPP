@@ -1,11 +1,10 @@
-import 'package:app/theme/theme.dart';
+import '../../../theme/theme.dart';
 import 'package:flutter/material.dart';
 import '../componets/investment_deposit.dart'; // Import the Deposit widget
 
 class FundManager {
   final String name;
   final String imagePath;
-
   FundManager({required this.name, required this.imagePath});
 }
 
@@ -19,7 +18,7 @@ class _FundManagerSliderState extends State<FundManagerSlider> {
   int _currentIndex = 0;
 
   final List<FundManager> fundManagers = [
-    FundManager(name: 'Manager 1', imagePath: 'assets/logo.png'),
+    FundManager(name: 'Manager 1', imagePath: 'assets/images/logo.png'),
     FundManager(name: 'Manager 2', imagePath: 'assets/manager_2.jpg'),
     FundManager(name: 'Manager 3', imagePath: 'assets/manager_3.png'),
     FundManager(name: 'Manager 4', imagePath: 'assets/manager_4.jpg'),
@@ -113,7 +112,7 @@ class _FundManagerSliderState extends State<FundManagerSlider> {
                     fundManager.name,
                     style: TextStyle(
                       color: primaryTwo,
-                      fontSize: 10,
+                      fontSize: 15,
                       fontWeight: FontWeight.bold,
                     ),
                   ),

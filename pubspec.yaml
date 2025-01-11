@@ -1,7 +1,5 @@
-name: app
-description: "A new Flutter project."
-publish_to: 'none' # Remove this line if you wish to publish to pub.dev
-
+name: cyanase
+description: "An investment app."
 version: 1.0.0+1
 
 environment:
@@ -15,21 +13,34 @@ dependencies:
   country_picker: ^2.0.18
   sim_card_info: ^0.0.1
   fl_chart: ^0.70.0
-  
+  flutter_svg: ^2.0.0
+  flutter_lints: ^2.0.0
+  web_socket_channel: ^2.4.0 # For WebSocket communication
+  encrypt: ^5.0.0 # For encryption/decryption
+  provider: ^6.0.5
+  image_picker: ^1.1.2
+  image_cropper: ^8.1.0
+  audioplayers: ^6.1.0  # For playing audio
+  record: ^4.4.0    
+  path_provider: ^2.1.5    # For recording audio
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^5.0.0 # Consider upgrading for latest linting rules
 
 flutter:
   uses-material-design: true
 
-  # Add the assets section to include your logo image
+  # Include assets like images and icons
   assets:
-    - assets/logo.png
+    - assets/images/logo.png
+    - assets/images/vian.jpg
+    - assets/icons/person.svg
+    - assets/icons/groups.svg
+    - assets/icons/goal-icon.svg
+    - assets/images/back.svg
 
-  # Add the fonts section for Montserrat
+  # Include custom fonts like Montserrat
   fonts:
     - family: Montserrat
       fonts:

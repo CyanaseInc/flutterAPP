@@ -6,7 +6,7 @@ class GroupsTab extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white, // Set the background color to white
-      body: ChatListScreen(),
+      body: ChatList(),
     );
   }
 }

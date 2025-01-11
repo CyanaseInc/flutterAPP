@@ -21,7 +21,7 @@ class EmailBirthSlide extends StatelessWidget {
         children: [
           Center(
             child: Image.asset(
-              'assets/logo.png',
+              'assets/images/logo.png',
               height: 100,
               width: 70,
             ),

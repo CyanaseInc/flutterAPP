@@ -81,7 +81,7 @@ class _SetCodeScreenState extends State<SetCodeScreen> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Image.asset(
-            'assets/logo.png', // Your logo image here
+            'assets/images/logo.png', // Your logo image here
             height: 100,
             width: 70,
           ),

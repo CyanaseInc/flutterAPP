@@ -1,7 +1,7 @@
 // Refactor of the SignupScreen code to separate each slide into its own file
 
 // signup.dart
-import 'package:app/screens/auth/verification.dart';
+import 'package:cyanase/screens/auth/verification.dart';
 import 'package:flutter/material.dart';
 import 'package:country_picker/country_picker.dart';
 import 'package:sim_card_info/sim_card_info.dart';

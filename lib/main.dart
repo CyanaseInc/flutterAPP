@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '/screens/splash.dart';
-import '/screens/auth/login_sec.dart'; // Import your LoginScreen
+import 'screens/auth/login_with_passcode.dart'; // Import your LoginScreen
 import 'theme/theme.dart'; // Import the centralized theme
 
 void main() {
@@ -13,7 +13,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      title: 'Cyanase',
       theme: appTheme, // Use the theme from theme.dart
       home: const SplashScreenWrapper(), // Start with the Splash Screen Wrapper
     );

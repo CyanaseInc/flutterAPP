@@ -24,9 +24,11 @@ class DepositWithdrawButtons extends StatelessWidget {
             foregroundColor: primaryTwo,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),
+              side: BorderSide(
+                  color: primaryTwo, width: 1), // Border with primaryTwo color
             ),
           ),
-          child: Row(
+          child: const Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
@@ -35,7 +37,7 @@ class DepositWithdrawButtons extends StatelessWidget {
                 color: primaryTwo,
               ),
               SizedBox(width: 5),
-              Text('Deposit'),
+              Text('Invest'),
             ],
           ),
         ),
@@ -54,6 +56,8 @@ class DepositWithdrawButtons extends StatelessWidget {
             foregroundColor: primaryTwo,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),
+              side: BorderSide(
+                  color: primaryTwo, width: 1), // Border with primaryTwo color
             ),
           ),
           child: Row(

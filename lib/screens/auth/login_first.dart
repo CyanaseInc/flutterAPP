@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // For TextInputFormatter
 import '../../theme/theme.dart'; // Import your theme file
-import 'login_sec.dart'; // Import the NumericLoginScreen
+import 'login_with_passcode.dart'; // Import the NumericLoginScreen
 import 'signup.dart'; // Import the SignupScreen
 import 'forgot.dart';
 
@@ -21,7 +21,7 @@ class LoginScreen extends StatelessWidget {
               children: [
                 // App Logo
                 Image.asset(
-                  'assets/logo.png', // Your logo image here
+                  'assets/images/logo.png', // Your logo image here
                   height: 100,
                   width: 70,
                 ),
