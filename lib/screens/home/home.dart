@@ -90,8 +90,7 @@ class _HomeScreenState extends State<HomeScreen>
                   'Pay Now',
                   style: TextStyle(
                     fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
+                    color: primaryColor,
                   ),
                 ),
               ),

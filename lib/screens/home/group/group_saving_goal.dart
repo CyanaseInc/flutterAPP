@@ -22,6 +22,55 @@ class GroupSavingGoal {
   }
 }
 
+class GroupSavingGoalsSection extends StatelessWidget {
+  final List<GroupSavingGoal> groupGoals;
+
+  const GroupSavingGoalsSection({Key? key, required this.groupGoals})
+      : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: Colors.white, // White background for the section
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Group Goals',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
+                ),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  // Handle Add Goal button action
+                },
+                child: Text('Add Goal'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryTwo,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 16),
+          ...groupGoals
+              .map((groupGoal) => GroupSavingGoalsCard(groupGoal: groupGoal))
+              .toList(),
+        ],
+      ),
+    );
+  }
+}
+
 class GroupSavingGoalsCard extends StatelessWidget {
   final GroupSavingGoal groupGoal;
 
@@ -32,7 +81,7 @@ class GroupSavingGoalsCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       elevation: 4,
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      margin: const EdgeInsets.symmetric(vertical: 8),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -60,9 +109,9 @@ class GroupSavingGoalsCard extends StatelessWidget {
                 ),
               ],
             ),
-            SizedBox(height: 12),
+
             Divider(color: Colors.grey.shade300, thickness: 1),
-            SizedBox(height: 12),
+            SizedBox(height: 6),
             Row(
               children: [
                 Text(
@@ -110,7 +159,7 @@ class GroupSavingGoalsCard extends StatelessWidget {
                 minHeight: 8,
               ),
             ),
-            SizedBox(height: 8),
+            SizedBox(height: 4),
             Align(
               alignment: Alignment.centerRight,
               child: Text(
@@ -119,6 +168,89 @@ class GroupSavingGoalsCard extends StatelessWidget {
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
                   color: primaryTwo,
+                ),
+              ),
+            ),
+            SizedBox(height: 8),
+            // Deposit Button
+            ElevatedButton(
+              onPressed: () {
+                // Handle deposit logic here
+                showDialog(
+                  context: context,
+                  builder: (context) {
+                    final TextEditingController _controller =
+                        TextEditingController();
+
+                    return AlertDialog(
+                      backgroundColor:
+                          Colors.white, // White background for the modal
+                      title: Text(
+                        'Enter Amount',
+                        style: TextStyle(
+                          color: Colors.black87,
+                          fontSize: 18,
+                        ), // Customize title text color
+                      ),
+                      content: TextField(
+                        controller: _controller,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          labelText: 'Amount',
+                          labelStyle: TextStyle(
+                              color: Colors.black54), // Label text color
+                          enabledBorder: OutlineInputBorder(
+                            borderSide: BorderSide(
+                                color: Colors.black54), // Border color
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderSide: BorderSide(
+                                color: primaryTwo), // Focused border color
+                          ),
+                        ),
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () =>
+                              Navigator.pop(context), // Cancel action
+                          child: Text(
+                            'Cancel',
+                            style: TextStyle(
+                                color: primaryTwo), // Button text color
+                          ),
+                        ),
+                        ElevatedButton(
+                          onPressed: () {
+                            // Handle the submit action
+                            double depositAmount =
+                                double.tryParse(_controller.text) ?? 0;
+                            if (depositAmount > 0) {
+                              groupGoal.addContribution(depositAmount);
+                            }
+                            Navigator.pop(
+                                context); // Close the dialog after submission
+                          },
+                          child: Text('Submit'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor:
+                                primaryTwo, // Customize the button color
+                            // Text color
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                );
+              },
+              child: Text('Deposit'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryTwo, // Customize the button color
+                // Text color
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
                 ),
               ),
             ),

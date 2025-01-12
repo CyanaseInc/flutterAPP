@@ -1,8 +1,10 @@
-import 'package:cyanase/theme/theme.dart';
 import 'package:flutter/material.dart';
-import './image_picker_helper.dart';
-import 'test.dart'; // Import the helper file
-import 'dart:io'; // For File handling
+import 'get_group_loan.dart';
+import 'group_deposit_info_button.dart';
+import 'group_withdraw.dart';
+import 'package:cyanase/theme/theme.dart'; // Assuming this is where your colors are defined
+import 'dart:io';
+import 'package:image_picker/image_picker.dart'; // For image picking functionality
 
 class GroupHeader extends StatefulWidget {
   final String groupName;
@@ -19,143 +21,199 @@ class GroupHeader extends StatefulWidget {
 }
 
 class _GroupHeaderState extends State<GroupHeader> {
-  File? _profilePicFile; // To hold the profile picture
+  File? _profilePicFile;
 
-  // Function to handle profile picture update
   void _updateProfilePic(File image) {
     setState(() {
-      _profilePicFile = image; // Update the profile picture
+      _profilePicFile = image;
+    });
+  }
+
+  void _showProfilePicOptions() {
+    showModalBottomSheet(
+      context: context,
+      builder: (BuildContext context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              ListTile(
+                leading: const Icon(Icons.edit),
+                title: const Text('Edit'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _editProfilePic();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.delete),
+                title: const Text('Remove Image'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _removeProfilePic();
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _editProfilePic() async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+
+    if (image != null) {
+      _updateProfilePic(File(image.path));
+    }
+  }
+
+  void _removeProfilePic() {
+    setState(() {
+      _profilePicFile = null;
     });
   }
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: double.infinity, // Ensures the container takes full width
+      width: double.infinity,
       color: Colors.white,
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
       child: Column(
         children: [
-          // Top Row with Menu Icon
+          // Top Row with Group Name, Profile Pic, and Menu Icon
           Row(
-            mainAxisAlignment: MainAxisAlignment.end,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // Vertical Three Dots Menu
-              PopupMenuButton<String>(
-                onSelected: (value) {
-                  if (value == 'Add Members') {
-                    // Handle "Add Members" action
-                  } else if (value == 'Change Group Name') {
-                    // Handle "Change Group Name" action
-                  }
-                },
-                itemBuilder: (context) => [
-                  const PopupMenuItem(
-                    value: 'Add Members',
-                    child: Text('Add Members'),
+              // Group Name on the left
+              Text(
+                widget.groupName,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              // Profile Picture and Menu Icon on the right
+              Row(
+                children: [
+                  // Profile Picture
+                  GestureDetector(
+                    onTap: _showProfilePicOptions,
+                    child: CircleAvatar(
+                      backgroundImage: _profilePicFile != null
+                          ? FileImage(_profilePicFile!)
+                          : AssetImage(widget.profilePic) as ImageProvider,
+                      radius: 20,
+                    ),
                   ),
-                  const PopupMenuItem(
-                    value: 'Change Group Name',
-                    child: Text('Change Group Name'),
+                  const SizedBox(width: 10),
+                  // Vertical Bars (Menu)
+                  PopupMenuButton<String>(
+                    onSelected: (value) {
+                      if (value == 'Add Members') {
+                        // Handle "Add Members" action
+                      } else if (value == 'Change Group Name') {
+                        // Handle "Change Group Name" action
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(
+                        value: 'Add Members',
+                        child: Text('Add Members'),
+                      ),
+                      const PopupMenuItem(
+                        value: 'Change Group Name',
+                        child: Text('Change Group Name'),
+                      ),
+                    ],
+                    icon: const Icon(Icons.more_vert),
                   ),
                 ],
-                icon: const Icon(Icons.more_vert),
               ),
             ],
           ),
 
-          // Profile Picture (Center of the page)
-          GestureDetector(
-            onTap: () {
-              // Show bottom sheet with options when the profile picture is clicked
-              showModalBottomSheet(
-                context: context,
-                builder: (context) {
-                  return Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        ListTile(
-                          leading: Icon(Icons.edit),
-                          title: Text("Edit Profile Picture"),
-                          onTap: () {
-                            // Handle "Edit Profile Picture" action
-                            Navigator.pop(context); // Close the bottom sheet
-                            ImagePickerHelper.pickImageFromCamera(
-                                context, _updateProfilePic);
-                          },
+          const SizedBox(height: 10),
+
+          // Total Savings and Contributions
+          Container(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              children: [
+                // Use a Row with Expanded to center the text and push the menu icon to the right
+                Row(
+                  children: [
+                    // Expanded widget to center the text
+                    Expanded(
+                      child: Center(
+                        child: Text(
+                          'TOTAL BALANCE',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[600],
+                          ),
                         ),
-                        ListTile(
-                          leading: Icon(Icons.photo_camera),
-                          title: Text("Change Profile Picture"),
-                          onTap: () {
-                            // Handle "Change Profile Picture" action
-                            Navigator.pop(context); // Close the bottom sheet
-                            ImagePickerHelper.pickImageFromGallery(
-                                context, _updateProfilePic);
-                          },
-                        ),
-                        ListTile(
-                          leading: Icon(Icons.delete),
-                          title: Text("Remove Profile Picture"),
-                          onTap: () {
-                            // Handle "Remove Profile Picture" action
-                            Navigator.pop(context); // Close the bottom sheet
-                            setState(() {
-                              _profilePicFile =
-                                  null; // Remove the profile picture
-                            });
-                          },
-                        ),
-                      ],
+                      ),
                     ),
-                  );
-                },
-              );
-            },
-            child: Container(
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: primaryTwo, // Change the color of the border as needed
-                  width: 2, // Adjust the width of the border
+                    // Menu icon on the right
+                    GestureDetector(
+                      onTap: () {
+                        // Show dropdown menu
+                        _showBalanceOptionsMenu(context);
+                      },
+                      child: Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.grey[200],
+                        ),
+                        padding: const EdgeInsets.all(8),
+                        child: const Icon(
+                          Icons.arrow_drop_down,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-              child: CircleAvatar(
-                backgroundImage: _profilePicFile != null
-                    ? FileImage(
-                        _profilePicFile!) // Show the selected profile picture
-                    : AssetImage(widget.profilePic)
-                        as ImageProvider, // Default image if no profile is set
-                radius: 50,
-              ),
+                const SizedBox(height: 8),
+                Text(
+                  '\$12,900,345.67',
+                  style: TextStyle(
+                    fontSize: 35,
+                    fontWeight: FontWeight.bold,
+                    color: primaryColor, // Using your primaryColor
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'MY CONTRIBUTIONS',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[600],
+                  ),
+                ),
+                Text(
+                  '\$1,234.56',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: primaryTwo, // Using your primaryTwo
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
             ),
           ),
 
           const SizedBox(height: 10),
 
-          // Group Name
-          Text(
-            widget.groupName,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const Text(
-            '18 members',
-            style: TextStyle(fontSize: 14, color: Colors.grey),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 8),
-
           // Group Description
           const Text(
             'This is a family saving group for us all',
             style: TextStyle(
-              color: primaryTwo,
+              color: Colors.grey,
               fontSize: 15,
             ),
             textAlign: TextAlign.center,
@@ -163,12 +221,12 @@ class _GroupHeaderState extends State<GroupHeader> {
           const SizedBox(height: 10),
 
           // Action Buttons
-          Row(
+          const Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              _buildDepositButton(context),
-              _buildRequestLoanButton(),
-              _buildWithdrawButton(),
+              DepositButton(),
+              LoanButton(),
+              WithdrawButton(),
             ],
           ),
         ],
@@ -176,78 +234,29 @@ class _GroupHeaderState extends State<GroupHeader> {
     );
   }
 
-  // Deposit Button: ElevatedButton style
-  Widget _buildDepositButton(BuildContext context) {
-    return ElevatedButton(
-      onPressed: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => Testa(),
-          ),
-        );
-        // Add Deposit functionality here
-      },
-      style: ElevatedButton.styleFrom(
-        backgroundColor: primaryTwo, // Background color
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10), // Rounded corners
+  void _showBalanceOptionsMenu(BuildContext context) {
+    showMenu(
+      context: context,
+      position: const RelativeRect.fromLTRB(
+          100, 100, 0, 0), // Adjust position as needed
+      items: [
+        const PopupMenuItem(
+          value: 'Withdraw',
+          child: Text('Withdraw'),
         ),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 20, vertical: 12), // Padding
-      ),
-      child: const Text(
-        'Deposit', // Button label
-        style: TextStyle(
-            color: Colors.white, // Text color
-            fontSize: 12,
-            fontWeight: FontWeight.bold),
-      ),
-    );
-  }
-
-  // Request Loan Button: ElevatedButton style
-  Widget _buildRequestLoanButton() {
-    return ElevatedButton(
-      onPressed: () {
-        // Implement action for requesting a loan
-      },
-      style: ElevatedButton.styleFrom(
-        backgroundColor: Colors.grey,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(15),
+        const PopupMenuItem(
+          value: 'Add Interest',
+          child: Text('Add Interest'),
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-      ),
-      child: const Text(
-        'Get Loan',
-        style: TextStyle(
-            color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-      ),
-    );
-  }
-
-  // Withdraw Button: OutlinedButton style with border
-  Widget _buildWithdrawButton() {
-    return OutlinedButton(
-      onPressed: () {
-        // Implement action for withdrawing
-      },
-      style: OutlinedButton.styleFrom(
-        side: BorderSide(color: primaryTwo), // Border color (red for emphasis)
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10), // Rounded corners
-        ),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 20, vertical: 12), // Padding
-      ),
-      child: const Text(
-        'Withdraw', // Button label
-        style: const TextStyle(
-            color: primaryTwo, // Text color matches the border
-            fontSize: 12,
-            fontWeight: FontWeight.bold),
-      ),
-    );
+      ],
+    ).then((value) {
+      if (value != null) {
+        if (value == 'Withdraw') {
+          // Handle "Withdraw" action
+        } else if (value == 'Add Interest') {
+          // Handle "Add Interest" action
+        }
+      }
+    });
   }
 }

@@ -31,9 +31,10 @@ class GroupMembers extends StatelessWidget {
                   children: [
                     Text('Member Name $index',
                         style: const TextStyle(fontSize: 16)),
-                    Text('Rank: ${index + 1}',
+                    Text('Saving rank: ${index + 1}',
                         style:
                             const TextStyle(fontSize: 14, color: Colors.grey)),
+                    _buildFinancialInfo(index),
                   ],
                 ),
                 _buildRoleBreadcrumb(index),
@@ -80,14 +81,21 @@ class GroupMembers extends StatelessWidget {
             ),
           );
   }
-}
 
-void main() {
-  runApp(MaterialApp(
-    debugShowCheckedModeBanner: false,
-    home: Scaffold(
-      appBar: AppBar(title: const Text('Group Members')),
-      body: GroupMembers(),
-    ),
-  ));
+  Widget _buildFinancialInfo(int index) {
+    // Simulated loan and savings data for demonstration
+    double loan = (index + 1) * 1000.0; // Example loan amount
+    double savings = (index + 1) * 2000.0; // Example savings amount
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (loan > 0)
+          Text('Loan: \$${loan.toStringAsFixed(2)}',
+              style: const TextStyle(fontSize: 14, color: Colors.red)),
+        Text('Savings: \$${savings.toStringAsFixed(2)}',
+            style: const TextStyle(fontSize: 14, color: Colors.green)),
+      ],
+    );
+  }
 }

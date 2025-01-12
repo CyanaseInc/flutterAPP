@@ -1,4 +1,3 @@
-// File: cards.dart
 import 'package:flutter/material.dart';
 import '../../../theme/theme.dart';
 
@@ -19,19 +18,27 @@ class TotalDepositsCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Total group Deposits',
+                  'Total group interest',
                   style: TextStyle(
                       fontSize: 12,
                       color: primaryTwo,
                       fontWeight: FontWeight.bold),
                 ),
-                SizedBox(height: 10),
+                const SizedBox(height: 4),
+                const Text(
+                  'Total interest earned by the group',
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: Colors.grey,
+                  ),
+                ),
+                const SizedBox(height: 10),
                 Text.rich(
                   TextSpan(
                     children: [
                       WidgetSpan(
                         child: Transform.translate(
-                          offset: Offset(0, -6),
+                          offset: const Offset(0, -6),
                           child: const Text(
                             'UGX',
                             style: TextStyle(
@@ -51,7 +58,7 @@ class TotalDepositsCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                SizedBox(height: 10),
+                const SizedBox(height: 10),
               ],
             ),
           ),
@@ -93,13 +100,21 @@ class NetworthCard extends StatelessWidget {
                       color: Colors.white,
                       fontWeight: FontWeight.bold),
                 ),
-                SizedBox(height: 10),
+                const SizedBox(height: 4),
+                const Text(
+                  'Total investments made by the group',
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: Colors.white70,
+                  ),
+                ),
+                const SizedBox(height: 10),
                 Text.rich(
                   TextSpan(
                     children: [
                       WidgetSpan(
                         child: Transform.translate(
-                          offset: Offset(0, -6),
+                          offset: const Offset(0, -6),
                           child: const Text(
                             'UGX',
                             style: TextStyle(
@@ -119,7 +134,7 @@ class NetworthCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                SizedBox(height: 10),
+                const SizedBox(height: 10),
               ],
             ),
           ),
@@ -163,13 +178,21 @@ class LoanCard extends StatelessWidget {
                       color: primaryTwo,
                       fontWeight: FontWeight.bold),
                 ),
-                SizedBox(height: 10),
+                const SizedBox(height: 4),
+                const Text(
+                  'Total loans currently being repaid',
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: Colors.grey,
+                  ),
+                ),
+                const SizedBox(height: 10),
                 Text.rich(
                   TextSpan(
                     children: [
                       WidgetSpan(
                         child: Transform.translate(
-                          offset: Offset(0, -6),
+                          offset: const Offset(0, -6),
                           child: const Text(
                             'UGX',
                             style: TextStyle(
@@ -189,7 +212,7 @@ class LoanCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                SizedBox(height: 10),
+                const SizedBox(height: 10),
               ],
             ),
           ),
@@ -198,7 +221,8 @@ class LoanCard extends StatelessWidget {
             right: 16,
             child: Text(
               '\$130.50',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                  fontSize: 14, color: primaryTwo, fontWeight: FontWeight.bold),
             ),
           ),
         ],

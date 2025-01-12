@@ -5,31 +5,24 @@ import 'group_members.dart';
 import 'group_media.dart';
 import 'danger_zone.dart';
 import 'group_stat.dart';
-import 'group_saving_goal.dart';
+import 'group_saving_goal.dart'; // Import the file
 
 class GroupInfoPage extends StatelessWidget {
   final String groupName;
   final String profilePic;
-  const GroupInfoPage(
-      {Key? key, required this.groupName, required this.profilePic})
+
+  // Example list of goals
+  final List<GroupSavingGoal> groupGoals = [
+    GroupSavingGoal(goalName: 'Build a New School', goalAmount: 5000000),
+    GroupSavingGoal(goalName: 'Community Health Fund', goalAmount: 3000000),
+  ];
+
+  GroupInfoPage({Key? key, required this.groupName, required this.profilePic})
       : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    GroupSavingGoal groupGoal = GroupSavingGoal(
-      goalName: 'Buy land for gand mum',
-      goalAmount: 500000.0,
-      currentAmount: 120000.0,
-    );
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0, // Remove shadow
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
       backgroundColor: const Color(0xFFF0F2F5),
       body: ListView(
         children: [
@@ -40,11 +33,14 @@ class GroupInfoPage extends StatelessWidget {
           TotalDepositsCard(),
           NetworthCard(),
           LoanCard(),
-          GroupSavingGoalsCard(groupGoal: groupGoal), // Pass groupName here
-          const GroupSettings(),
+          // Pass groupName here
+          GroupSavingGoalsSection(groupGoals: groupGoals),
           const GroupMedia(),
+          const GroupSettings(),
+
           const GroupMembers(),
           const DangerZone(),
+          // Add the saving goals section
         ],
       ),
     );
