@@ -11,6 +11,7 @@ class _AddGoalScreenState extends State<AddGoalScreen> {
   String? savingFrequency = 'Weekly';
   TextEditingController goalNameController = TextEditingController();
   TextEditingController amountController = TextEditingController();
+  TextEditingController durationController = TextEditingController();
   TimeOfDay reminderTime = TimeOfDay.now();
   String selectedDay = 'Monday';
   double progress = 0.0;
@@ -49,7 +50,7 @@ class _AddGoalScreenState extends State<AddGoalScreen> {
                   controller: _pageController,
                   onPageChanged: (page) {
                     setState(() {
-                      progress = (page + 1) / 6; // 6 steps in total
+                      progress = (page + 1) / 4; // 5 steps in total
                     });
                   },
                   children: [
@@ -57,8 +58,6 @@ class _AddGoalScreenState extends State<AddGoalScreen> {
                     _buildStep2(),
                     _buildStep3(),
                     _buildStep4(),
-                    _buildStep5(),
-                    _buildStep6(),
                   ],
                 ),
               ),
@@ -97,7 +96,7 @@ class _AddGoalScreenState extends State<AddGoalScreen> {
                           curve: Curves.easeInOut,
                         );
                       } else {
-                        _submitGoal();
+                        _showConfirmationDialog();
                       }
                     },
                     child: Text(progress == 1 ? "Submit" : "Next"),
@@ -187,56 +186,66 @@ class _AddGoalScreenState extends State<AddGoalScreen> {
 
   Widget _buildStep2() {
     return _buildCard(
-      title: "Enter your goal name:",
-      subtitle: "Give your goal a name to keep track of it easily.",
-      child: TextField(
-        controller: goalNameController,
-        decoration: InputDecoration(
-          hintText: "Goal Name",
-          border: UnderlineInputBorder(), // Adds a bottom border
-          enabledBorder: UnderlineInputBorder(
-            borderSide: BorderSide(
-                color: Colors.grey), // Bottom border color when not focused
+      title: "Enter your goal details:",
+      subtitle: "Provide a name, target amount, and duration for your goal.",
+      child: Column(
+        children: [
+          TextField(
+            controller: goalNameController,
+            decoration: InputDecoration(
+              hintText: "Goal Name",
+              border: UnderlineInputBorder(), // Adds a bottom border
+              enabledBorder: UnderlineInputBorder(
+                borderSide: BorderSide(
+                    color: Colors.grey), // Bottom border color when not focused
+              ),
+              focusedBorder: UnderlineInputBorder(
+                borderSide: BorderSide(
+                    color: primaryTwo), // Bottom border color when focused
+              ),
+            ),
           ),
-          focusedBorder: UnderlineInputBorder(
-            borderSide: BorderSide(
-                color: primaryTwo), // Bottom border color when focused
+          SizedBox(height: 16),
+          TextField(
+            controller: amountController,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(
+              hintText: "Target Amount",
+              border: UnderlineInputBorder(),
+              enabledBorder: UnderlineInputBorder(
+                borderSide: BorderSide(color: Colors.grey),
+              ),
+              focusedBorder: UnderlineInputBorder(
+                borderSide: BorderSide(color: primaryTwo),
+              ),
+            ),
           ),
-        ),
+          SizedBox(height: 16),
+          TextField(
+            controller: durationController,
+            keyboardType: TextInputType.number,
+            decoration: InputDecoration(
+              hintText: "Duration (in months)",
+              border: UnderlineInputBorder(),
+              enabledBorder: UnderlineInputBorder(
+                borderSide: BorderSide(color: Colors.grey),
+              ),
+              focusedBorder: UnderlineInputBorder(
+                borderSide: BorderSide(color: primaryTwo),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildStep3() {
     return _buildCard(
-      title: "How much do you want to save?",
-      subtitle: "Set a target amount to achieve your goal.",
-      child: TextField(
-        controller: amountController,
-        keyboardType: TextInputType.number,
-        decoration: InputDecoration(
-          hintText: "Amount to Save",
-          border: UnderlineInputBorder(), // Adds a bottom border
-          enabledBorder: UnderlineInputBorder(
-            borderSide: BorderSide(
-                color: Colors.grey), // Bottom border color when not focused
-          ),
-          focusedBorder: UnderlineInputBorder(
-            borderSide: BorderSide(
-                color: primaryTwo), // Bottom border color when focused
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStep4() {
-    return _buildCard(
-      title: "When do you want to be reminded to save?",
-      subtitle: "Set a reminder to stay consistent with your savings.",
+      title: "Set a reminder to save:",
+      subtitle: "Choose a day and time to stay consistent with your savings.",
       child: Column(
         children: [
-          // Day Picker (Dropdown)
           DropdownButtonFormField<String>(
             value: selectedDay,
             onChanged: (String? newValue) {
@@ -267,7 +276,6 @@ class _AddGoalScreenState extends State<AddGoalScreen> {
           ),
           SizedBox(height: 16), // Add spacing between the two pickers
 
-          // Time Picker (Button)
           ElevatedButton(
             onPressed: () async {
               final TimeOfDay? time = await showTimePicker(
@@ -295,59 +303,100 @@ class _AddGoalScreenState extends State<AddGoalScreen> {
     );
   }
 
-  Widget _buildStep5() {
+  Widget _buildStep4() {
+    double targetAmount = double.tryParse(amountController.text) ?? 0.0;
+    int durationMonths = int.tryParse(durationController.text) ?? 1;
+    double weeklySavings = targetAmount / (durationMonths * 4.33);
+    double monthlySavings = targetAmount / durationMonths;
+    double interestRate = 0.05; // Example interest rate of 5%
+    double projectedSavings = targetAmount * (1 + interestRate);
+
     return _buildCard(
-      title: "Review your goal details:",
-      subtitle: "Confirm all the details before saving your goal.",
+      title: "Review and Calculate Savings:",
+      subtitle:
+          "Ensure all details are correct and see your savings breakdown.",
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             "Goal Name: ${goalNameController.text}",
+            style: TextStyle(fontSize: 16),
           ),
           Text(
-            "Amount to Save: ${amountController.text}",
+            "Target Amount: ${amountController.text}",
+            style: TextStyle(fontSize: 16),
+          ),
+          Text(
+            "Duration: $durationMonths months",
+            style: TextStyle(fontSize: 16),
           ),
           Text(
             "Saving Frequency: $savingFrequency",
+            style: TextStyle(fontSize: 16),
           ),
           Text(
             "Reminder: $selectedDay at ${reminderTime.format(context)}",
+            style: TextStyle(fontSize: 16),
+          ),
+          SizedBox(height: 16),
+          Divider(),
+          SizedBox(height: 16),
+          Text(
+            "Savings Breakdown:",
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+          ),
+          SizedBox(height: 8),
+          if (savingFrequency == 'Weekly')
+            Text(
+              "You need to save approximately ${weeklySavings.toStringAsFixed(2)} per week.",
+              style: TextStyle(fontSize: 16, color: Colors.green),
+            ),
+          if (savingFrequency == 'Monthly')
+            Text(
+              "You need to save approximately ${monthlySavings.toStringAsFixed(2)} per month.",
+              style: TextStyle(fontSize: 16, color: Colors.green),
+            ),
+          SizedBox(height: 8),
+          Text(
+            "With our interest rate of ${interestRate * 100}%, you will save approximately ${projectedSavings.toStringAsFixed(2)} by the end of your goal.",
+            style: TextStyle(fontSize: 16, color: Colors.blueAccent),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildStep6() {
-    return _buildCard(
-      title: "Would you like to start depositing now?",
-      subtitle:
-          "You can choose a payment method to make your first deposit immediately.",
-      child: Column(
-        children: [
-          ElevatedButton(
-            onPressed: () {
-              _showPaymentMethods();
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.green,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
+  void _showConfirmationDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text("Start Depositing Now?"),
+          content: Text("Do you want to start depositing now?"),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _submitGoal();
+              },
+              child: Text("No"),
             ),
-            child: Text(
-              "Deposit Now",
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _submitGoal();
+                Navigator.of(context).pushNamed('/depositScreen');
+              },
+              child: Text("Yes"),
             ),
-          ),
-        ],
-      ),
+          ],
+        );
+      },
     );
   }
 
   void _submitGoal() {
     // Implement the logic to submit the goal
-    // For example, save the goal details to a database or state management
     print("Goal Name: ${goalNameController.text}");
     print("Amount to Save: ${amountController.text}");
     print("Saving Frequency: $savingFrequency");
@@ -360,44 +409,6 @@ class _AddGoalScreenState extends State<AddGoalScreen> {
           "Goal submitted successfully!",
         ),
       ),
-    );
-  }
-
-  void _showPaymentMethods() {
-    // Implement the logic to show payment methods
-    // For example, show a dialog or navigate to a payment screen
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text(
-            "Choose Payment Method",
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                title: Text(
-                  "Credit Card",
-                ),
-                onTap: () {
-                  // Handle credit card payment
-                  Navigator.pop(context);
-                },
-              ),
-              ListTile(
-                title: Text(
-                  "PayPal",
-                ),
-                onTap: () {
-                  // Handle PayPal payment
-                  Navigator.pop(context);
-                },
-              ),
-            ],
-          ),
-        );
-      },
     );
   }
 }

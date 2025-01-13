@@ -5,7 +5,58 @@ import 'package:cyanase/screens/home/deposit.dart';
 import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:vibration/vibration.dart';
 
-class GoalScreen extends StatelessWidget {
+class GoalScreen extends StatefulWidget {
+  @override
+  _GoalScreenState createState() => _GoalScreenState();
+}
+
+class _GoalScreenState extends State<GoalScreen> {
+  @override
+  void initState() {
+    super.initState();
+    _initializeNotifications();
+
+    // Set up notification listeners
+    AwesomeNotifications().setListeners(
+      onActionReceivedMethod: (ReceivedAction receivedAction) async {
+        print('Notification action received: ${receivedAction.body}');
+        // Handle notification actions here
+        return Future.value(); // Return a Future<void>
+      },
+      onNotificationCreatedMethod:
+          (ReceivedNotification receivedNotification) async {
+        print('Notification created: ${receivedNotification.body}');
+        // Handle notification creation here
+        return Future.value(); // Return a Future<void>
+      },
+      onNotificationDisplayedMethod:
+          (ReceivedNotification receivedNotification) async {
+        print('Notification displayed: ${receivedNotification.body}');
+        // Handle notification display here
+        return Future.value(); // Return a Future<void>
+      },
+    );
+  }
+
+  Future<void> _initializeNotifications() async {
+    await AwesomeNotifications().initialize(
+      null, // Use null for default app icon
+      [
+        NotificationChannel(
+          channelKey: 'scheduled_notifications',
+          channelName: 'Scheduled Notifications',
+          channelDescription: 'Notifications for saving goal reminders',
+          defaultColor: Color(0xFF9D50DD),
+          ledColor: Colors.white,
+          importance: NotificationImportance.High,
+        ),
+      ],
+    );
+
+    // Request notification permissions
+    await AwesomeNotifications().requestPermissionToSendNotifications();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -55,17 +106,22 @@ class GoalCard extends StatelessWidget {
     required this.reminderSet,
   });
 
+  int _getUniqueID() {
+    return DateTime.now().microsecondsSinceEpoch.remainder(100000);
+  }
+
   Future<void> _scheduleNotification(
       String title, String body, DateTime scheduledTime) async {
     await AwesomeNotifications().createNotification(
       content: NotificationContent(
-        id: 1, // Unique ID for the notification
-        channelKey: 'scheduled_notifications', // Channel key
+        id: _getUniqueID(),
+        channelKey: 'scheduled_notifications',
         title: title,
         body: body,
       ),
       schedule: NotificationCalendar.fromDate(
-          date: scheduledTime), // Schedule the notification
+        date: scheduledTime, // Use the scheduled time
+      ),
     );
   }
 
@@ -78,13 +134,20 @@ class GoalCard extends StatelessWidget {
 
     if (pickedTime != null) {
       final now = DateTime.now();
-      final scheduledTime = DateTime(
+      var pickedDateTime = DateTime(
         now.year,
         now.month,
         now.day,
         pickedTime.hour,
         pickedTime.minute,
       );
+
+      // If the selected time is in the past, schedule it for the next day
+      if (pickedDateTime.isBefore(now)) {
+        pickedDateTime = pickedDateTime.add(Duration(days: 1));
+      }
+
+      final scheduledTime = pickedDateTime;
 
       // Schedule the notification
       await _scheduleNotification(

@@ -1,9 +1,45 @@
 import 'package:flutter/material.dart';
+import 'package:awesome_notifications/awesome_notifications.dart'; // Add this import
 import '/screens/splash.dart';
 import 'screens/auth/login_with_passcode.dart'; // Import your LoginScreen
 import 'theme/theme.dart'; // Import the centralized theme
 
-void main() {
+// Class to handle background notification actions
+class NotificationHandler {
+  // Static method to handle background actions
+  @pragma('vm:entry-point')
+  static Future<void> onActionReceivedMethod(
+      ReceivedAction receivedAction) async {
+    print('Notification action received in background: ${receivedAction.body}');
+    // Handle background actions here
+  }
+}
+
+void main() async {
+  WidgetsFlutterBinding
+      .ensureInitialized(); // Ensure Flutter binding is initialized
+
+  // Initialize AwesomeNotifications
+  await AwesomeNotifications().initialize(
+    null, // Use null for default app icon
+    [
+      NotificationChannel(
+        channelKey: 'scheduled_notifications',
+        channelName: 'Scheduled Notifications',
+        channelDescription: 'Notifications for saving goal reminders',
+        defaultColor: Color(0xFF9D50DD),
+        ledColor: Colors.white,
+        importance: NotificationImportance.High,
+      ),
+    ],
+    debug: true, // Enable debug logs
+  );
+
+  // Set the static method for background actions
+  AwesomeNotifications().setListeners(
+    onActionReceivedMethod: NotificationHandler.onActionReceivedMethod,
+  );
+
   runApp(const MyApp());
 }
 
