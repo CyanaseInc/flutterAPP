@@ -20,12 +20,20 @@ dependencies:
   provider: ^6.0.5
   image_picker: ^1.1.2
   image_cropper: ^8.1.0
-  audioplayers: ^6.1.0  # For playing audio
-  record: ^4.4.0    
-  path_provider: ^2.1.5 
+  audioplayers: ^6.1.0 # For playing audio
+  record: ^4.4.0
+  path_provider: ^2.1.5
   syncfusion_flutter_gauges: ^28.1.38
   awesome_notifications: ^0.10.0
   vibration: ^2.0.1
+  contacts_service: ^0.6.3
+  http: ^1.2.2
+  crypto: ^3.0.2
+  sqflite: ^2.2.1
+  path: ^1.8.3
+  libphonenumber: ^2.0.0
+  permission_handler: ^11.3.1
+  shared_preferences: ^2.2.2
 
 
 dev_dependencies:
@@ -38,11 +46,13 @@ flutter:
   # Include assets like images and icons
   assets:
     - assets/images/logo.png
+    - assets/images/avatar.png
     - assets/images/vian.jpg
     - assets/icons/person.svg
     - assets/icons/groups.svg
     - assets/icons/goal-icon.svg
     - assets/images/back.svg
+    - assets/images/new_user.svg
 
   # Include custom fonts like Montserrat
   fonts:

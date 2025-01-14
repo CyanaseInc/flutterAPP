@@ -3,6 +3,9 @@ import '../../theme/theme.dart'; // Import your theme file
 import 'login_first.dart';
 import 'signup.dart';
 import '../home/home.dart';
+import 'package:cyanase/helpers/database_helper.dart'; // Import the DatabaseHelper
+// For contacts permission
+import 'package:cyanase/screens/home/group/hash_numbers.dart'; // Import the file containing fetchAndHashContacts and getRegisteredContacts
 
 class NumericLoginScreen extends StatefulWidget {
   const NumericLoginScreen({Key? key}) : super(key: key);
@@ -35,14 +38,66 @@ class _NumericLoginScreenState extends State<NumericLoginScreen> {
     }
   }
 
-  void _verifyPasscode(String passcode) {
-    print("Entered Passcode: $passcode");
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => HomeScreen(),
+  Future<void> _verifyPasscode(String passcode) async {
+    final dbHelper = DatabaseHelper(); // Get the DatabaseHelper instance
+
+    // Show a loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(
+              color: primaryColor,
+              strokeWidth: 6,
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
       ),
     );
+
+    try {
+      // Initialize the database
+      await dbHelper.database;
+
+      // Fetch and process contacts using the existing function
+      List<Map<String, String>> contacts = await fetchAndHashContacts();
+      List<Map<String, String>> registeredContacts =
+          await getRegisteredContacts(contacts);
+
+      // Dismiss the loading indicator
+      Navigator.pop(context);
+
+      // Navigate to HomeScreen with registered contacts
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => HomeScreen(),
+        ),
+      );
+    } catch (e) {
+      print('Error: $e');
+      // Dismiss the loading indicator
+      Navigator.pop(context);
+
+      // Show an error dialog
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Error'),
+          content: Text('Failed to authenticate or fetch contacts: $e'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   @override

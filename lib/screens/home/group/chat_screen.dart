@@ -8,15 +8,20 @@ import 'dart:io'; // For file and directory operations
 import 'message_chat.dart';
 import 'package:cyanase/theme/theme.dart'; // Import the app theme
 import 'group_deposit.dart';
+import 'package:cyanase/helpers/database_helper.dart'; // Import your DatabaseHelper
 
 class MessageChatScreen extends StatefulWidget {
   final String name;
   final String profilePic;
+  final bool isGroup; // Add this to distinguish between user and group chats
+  final int? groupId; // Add this for group ID
 
   const MessageChatScreen({
     Key? key,
     required this.name,
     required this.profilePic,
+    this.isGroup = false, // Default to false (user chat)
+    this.groupId, // Add this for group ID
   }) : super(key: key);
 
   @override
@@ -24,41 +29,7 @@ class MessageChatScreen extends StatefulWidget {
 }
 
 class _MessageChatScreenState extends State<MessageChatScreen> {
-  final List<Map<String, dynamic>> messages = [
-    {
-      "id": UniqueKey().toString(),
-      "isMe": false,
-      "message": "Hello!",
-      "time": "10:00 AM",
-      "replyTo": null,
-      "isAudio": false
-    },
-    {
-      "id": UniqueKey().toString(),
-      "isMe": true,
-      "message": "Hi there!",
-      "time": "10:01 AM",
-      "replyTo": null,
-      "isAudio": false
-    },
-    {
-      "id": UniqueKey().toString(),
-      "isMe": false,
-      "message": "How are you? I hope you're doing well and enjoying your day!",
-      "time": "10:02 AM",
-      "replyTo": null,
-      "isAudio": false
-    },
-    {
-      "id": UniqueKey().toString(),
-      "isMe": true,
-      "message": "I'm good, thanks! How about you?",
-      "time": "10:03 AM",
-      "replyTo": "How are you? I hope you're doing well and enjoying your day!",
-      "isAudio": false
-    },
-  ];
-
+  final DatabaseHelper _dbHelper = DatabaseHelper();
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   String? _replyingToMessage;
@@ -77,27 +48,67 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
   Map<String, Duration> _audioDurationMap = {};
   Map<String, Duration> _audioPositionMap = {};
 
+  List<Map<String, dynamic>> _messages = [];
+
   @override
   void initState() {
     super.initState();
-    // No need to call _audioRecorder.init();
+    _loadMessages();
   }
 
-  void _sendMessage() {
+  // Load messages from the database
+  Future<void> _loadMessages() async {
+    final messages = await _dbHelper.getMessages(
+      groupId: widget.isGroup ? widget.groupId : null,
+    );
+
+    setState(() {
+      _messages = messages.map((msg) {
+        return {
+          "id": msg['id'].toString(),
+          "isMe": msg['sender_id'] ==
+              "current_user_id", // Replace with actual user ID
+          "message": msg['message'],
+          "time": msg['timestamp'],
+          "replyTo": null, // You can add reply functionality if needed
+          "isAudio": msg['type'] ==
+              'audio', // Assuming 'type' is stored in the database
+        };
+      }).toList();
+    });
+  }
+
+  void _sendMessage() async {
     if (_controller.text.isNotEmpty) {
+      final message = {
+        "sender_id": "current_user_id", // Replace with actual user ID
+        "message": _controller.text,
+        "timestamp": DateTime.now().toIso8601String(),
+        "type": "text",
+      };
+
+      if (widget.isGroup) {
+        message['group_id'] = widget.groupId.toString(); // Convert to String
+      } else {
+        message['receiver_id'] =
+            widget.name; // Assuming widget.name is the receiver's ID
+      }
+
+      await _dbHelper.insertMessage(message);
+
       setState(() {
-        messages.add({
+        _messages.add({
           "id": UniqueKey().toString(),
           "isMe": true,
           "message": _controller.text,
-          "time":
-              "${DateTime.now().hour}:${DateTime.now().minute.toString().padLeft(2, '0')}",
+          "time": DateTime.now().toIso8601String(),
           "replyTo": _replyingToMessage,
           "isAudio": false,
         });
         _controller.clear();
         _replyingToMessage = null;
       });
+
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _scrollController.animateTo(
           _scrollController.position.maxScrollExtent,
@@ -108,9 +119,12 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
     }
   }
 
-  void _deleteMessage(int index) {
+  void _deleteMessage(int index) async {
+    final messageId = _messages[index]["id"];
+    await _dbHelper.deleteMessage(int.parse(messageId));
+
     setState(() {
-      messages.removeAt(index);
+      _messages.removeAt(index);
     });
   }
 
@@ -193,13 +207,28 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
     final path = await _audioRecorder.stop();
 
     if (path != null) {
+      final message = {
+        "sender_id": "current_user_id", // Replace with actual user ID
+        "message": path,
+        "timestamp": DateTime.now().toIso8601String(),
+        "type": "audio",
+      };
+
+      if (widget.isGroup) {
+        message['group_id'] = widget.groupId.toString(); // Convert to String
+      } else {
+        message['receiver_id'] =
+            widget.name; // Assuming widget.name is the receiver's ID
+      }
+
+      await _dbHelper.insertMessage(message);
+
       setState(() {
-        messages.add({
+        _messages.add({
           "id": UniqueKey().toString(),
           "isMe": true,
           "message": path,
-          "time":
-              "${DateTime.now().hour}:${DateTime.now().minute.toString().padLeft(2, '0')}",
+          "time": DateTime.now().toIso8601String(),
           "replyTo": _replyingToMessage,
           "isAudio": true,
         });
@@ -426,11 +455,11 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
           ListView.builder(
             controller: _scrollController,
             padding: EdgeInsets.only(top: 16, bottom: 80),
-            itemCount: messages.length,
+            itemCount: _messages.length,
             itemBuilder: (context, index) {
-              final message = messages[index];
+              final message = _messages[index];
               final bool isSameSender =
-                  index > 0 && messages[index - 1]["isMe"] == message["isMe"];
+                  index > 0 && _messages[index - 1]["isMe"] == message["isMe"];
               return GestureDetector(
                 onHorizontalDragEnd: (details) {
                   if (details.primaryVelocity! < 0) {

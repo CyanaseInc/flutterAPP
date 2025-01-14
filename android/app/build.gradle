@@ -6,17 +6,18 @@ plugins {
 }
 
 android {
-    namespace = "com.cyanase.app"
-    compileSdk = flutter.compileSdkVersion.toInteger() // Ensure this is an integer
+    namespace = "com.cyanase.app" // Ensure the namespace is set
+    compileSdk = 35 // Explicitly set to 34
+
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17 // Use Java 17 or 21
-        targetCompatibility = JavaVersion.VERSION_17 // Use Java 17 or 21
+        sourceCompatibility = JavaVersion.VERSION_17 // Use Java 17
+        targetCompatibility = JavaVersion.VERSION_17 // Use Java 17
     }
 
     kotlinOptions {
-        jvmTarget = '17' // Use Java 17 or 21
+        jvmTarget = '17' // Use Java 17
     }
 
     defaultConfig {
@@ -25,7 +26,7 @@ android {
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = 23 // Explicitly set minSdkVersion to 23
-        targetSdk = flutter.targetSdkVersion.toInteger() // Ensure this is an integer
+        targetSdk = 35 // Explicitly set to 34
         versionCode = flutter.versionCode.toInteger() // Ensure this is an integer
         versionName = flutter.versionName
     }
