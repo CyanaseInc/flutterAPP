@@ -1,3 +1,4 @@
+import 'dart:async'; // Import for Timer
 import 'package:flutter/material.dart';
 import 'package:cyanase/screens/home/group/group_info.dart';
 import 'package:cyanase/theme/theme.dart';
@@ -12,6 +13,7 @@ import './functions/message_function.dart';
 import './functions/audio_player.dart';
 import 'functions/audio_function.dart';
 import 'functions/ui_function.dart';
+import 'package:cyanase/helpers/database_helper.dart';
 
 class MessageChatScreen extends StatefulWidget {
   final String name;
@@ -45,12 +47,13 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
 
   bool _isRecording = false;
   Duration _recordingDuration = Duration.zero;
-
+  final DatabaseHelper _dbHelper = DatabaseHelper();
   Map<String, bool> _isPlayingMap = {};
   Map<String, Duration> _audioDurationMap = {};
   Map<String, Duration> _audioPositionMap = {};
 
   List<Map<String, dynamic>> _messages = [];
+  Timer? _recordingTimer; // Declare the timer
 
   @override
   void initState() {
@@ -92,8 +95,6 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
         "timestamp": DateTime.now().toIso8601String(),
       };
 
-      // Print the message and group_id for debugging
-
       setState(() {
         _messages.add({
           "id": UniqueKey().toString(),
@@ -128,31 +129,101 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
     await _audioFunctions.startRecording();
     setState(() {
       _isRecording = true;
-      _recordingDuration = Duration.zero;
+      _recordingDuration = Duration.zero; // Reset the duration
+    });
+
+    // Start the timer
+    _recordingTimer = Timer.periodic(Duration(seconds: 1), (timer) {
+      setState(() {
+        _recordingDuration += Duration(seconds: 1); // Update the duration
+      });
     });
   }
 
   void _stopRecording() async {
     final path = await _audioFunctions.stopRecording();
     if (path != null) {
-      await _messageFunctions.sendMessage(
-        message: path,
-        isGroup: widget.isGroup,
-        groupId: widget.groupId,
-        receiverId: widget.name,
-      );
+      // Stop the timer
+      _recordingTimer?.cancel();
+      _recordingTimer = null;
 
-      setState(() {
-        _messages.add({
-          "id": UniqueKey().toString(),
-          "isMe": true,
-          "message": path,
-          "time": DateTime.now().toIso8601String(),
-          "replyTo": _replyingToMessage,
-          "isAudio": true,
+      // Ensure groupId is not null when isGroup is true
+      if (widget.isGroup && widget.groupId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Group ID is missing")),
+        );
+        return;
+      }
+
+      try {
+        // Generate a unique file path
+        final uniquePath = await _generateUniqueFilePath(path);
+
+        // Rename the recorded file to the unique path
+        final file = File(path);
+        if (await file.exists()) {
+          await file.rename(uniquePath);
+        } else {
+          print("Original file does not exist: $path");
+          return;
+        }
+
+        // Insert the audio file into the media table
+        final mediaId = await _dbHelper.insertAudioFile(uniquePath);
+
+        // Prepare the audio message data
+        final message = {
+          "group_id": widget.groupId,
+          "sender_id": "current_user_id", // Replace with actual user ID
+          "message": uniquePath, // Use the unique file path as the message
+          "type": "audio", // Set type to "audio"
+          "timestamp": DateTime.now().toIso8601String(),
+          "media_id": mediaId, // Link to the media entry (if applicable)
+        };
+
+        // Insert the audio message into the messages table
+        await _dbHelper.insertMessage(message);
+
+        // Update the UI
+        setState(() {
+          _messages.add({
+            "id": UniqueKey().toString(),
+            "isMe": true,
+            "message": uniquePath,
+            "time": DateTime.now().toIso8601String(),
+            "replyTo": _replyingToMessage,
+            "isAudio": true,
+          });
+          _isRecording = false; // Reset recording state
         });
-      });
+
+        // Scroll to the bottom of the chat
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_scrollController.hasClients) {
+            _scrollController.animateTo(
+              _scrollController.position.maxScrollExtent,
+              duration: Duration(milliseconds: 300),
+              curve: Curves.easeOut,
+            );
+          }
+        });
+      } catch (e) {
+        print("Error sending audio message: $e");
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text("Failed to send audio message: ${e.toString()}")),
+        );
+      }
     }
+  }
+
+  /// Generates a unique file path for the audio recording.
+  Future<String> _generateUniqueFilePath(String originalPath) async {
+    final directory =
+        Directory(originalPath).parent; // Get the parent directory
+    final timestamp = DateTime.now().millisecondsSinceEpoch; // Unique timestamp
+    final uniqueFileName = 'recording_$timestamp.m4a'; // Unique file name
+    return '${directory.path}/$uniqueFileName'; // Full unique path
   }
 
   void _playAudio(String messageId, String path) async {
