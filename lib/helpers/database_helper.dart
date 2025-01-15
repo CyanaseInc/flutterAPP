@@ -7,7 +7,12 @@ import 'package:permission_handler/permission_handler.dart';
 class DatabaseHelper {
   static final DatabaseHelper _instance = DatabaseHelper._internal();
   static Database? _database;
-
+  static const String tableUsers = 'users';
+  static const String tableGroups = 'groups';
+  static const String tableParticipants = 'participants';
+  static const String tableMedia = 'media';
+  static const String tableMessages = 'messages'; // Add this line
+  static const String tableContacts = 'contacts';
   // Singleton constructor
   DatabaseHelper._internal();
 
@@ -52,6 +57,24 @@ class DatabaseHelper {
       version: 3,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
+    );
+  }
+
+  ///Cyanase
+  Future<int> insertMedia(Map<String, dynamic> media) async {
+    final db = await database;
+    return await db.insert(
+      'media',
+      {
+        'file_path': media['file_path'],
+        'type': media['type'],
+        'mime_type': media['mime_type'],
+        'file_size': media['file_size'],
+        'duration': media['duration'],
+        'thumbnail_path': media['thumbnail_path'],
+        'created_at': DateTime.now().toIso8601String(),
+        'deleted': false,
+      },
     );
   }
 
@@ -119,23 +142,23 @@ class DatabaseHelper {
     ''');
 
     await db.execute('''
-      CREATE TABLE messages (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        group_id INTEGER NOT NULL,
-        sender_id TEXT NOT NULL,
-        message TEXT,
-        media_id INTEGER,
-        type TEXT NOT NULL,
-        status TEXT NOT NULL,
-        timestamp TEXT NOT NULL,
-        reply_to_id INTEGER,
-        forwarded BOOLEAN NOT NULL DEFAULT FALSE,
-        edited BOOLEAN NOT NULL DEFAULT FALSE,
-        deleted BOOLEAN NOT NULL DEFAULT FALSE,
-        FOREIGN KEY (group_id) REFERENCES groups (id) ON DELETE CASCADE,
-        FOREIGN KEY (sender_id) REFERENCES users (id) ON DELETE CASCADE,
-        FOREIGN KEY (media_id) REFERENCES media (id) ON DELETE SET NULL
-      )
+ CREATE TABLE messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  group_id INTEGER NOT NULL, -- Ensure NOT NULL constraint
+  sender_id TEXT NOT NULL,
+  message TEXT,
+  media_id INTEGER,
+  type TEXT NOT NULL,
+  status TEXT NOT NULL,
+  timestamp TEXT NOT NULL,
+  reply_to_id INTEGER,
+  forwarded BOOLEAN NOT NULL DEFAULT FALSE,
+  edited BOOLEAN NOT NULL DEFAULT FALSE,
+  deleted BOOLEAN NOT NULL DEFAULT FALSE,
+  FOREIGN KEY (group_id) REFERENCES groups (id) ON DELETE CASCADE,
+  FOREIGN KEY (sender_id) REFERENCES users (id) ON DELETE CASCADE,
+  FOREIGN KEY (media_id) REFERENCES media (id) ON DELETE SET NULL
+)
     ''');
 
     await db.execute('''
@@ -209,13 +232,56 @@ class DatabaseHelper {
   // Insert a message
   Future<int> insertMessage(Map<String, dynamic> message) async {
     final db = await database;
-    return await db.insert('messages', message);
+
+    // Ensure group_id is provided
+    if (message['group_id'] == null) {
+      throw ArgumentError('group_id cannot be null');
+    }
+
+    // Debug log
+
+    try {
+      final messageId = await db.insert(
+        tableMessages,
+        {
+          'group_id': message['group_id'],
+          'sender_id': message['sender_id'],
+          'message': message['message'],
+          'type': message['type'],
+          'status': 'sent', // Default status
+          'timestamp': message['timestamp'],
+          'reply_to_id': message['reply_to_id'] ?? null,
+          'forwarded': message['forwarded'] ?? false,
+          'edited': message['edited'] ?? false,
+          'deleted': message['deleted'] ?? false,
+          'media_id': message['media_id'] ?? null, // Link to the media entry
+        },
+      );
+
+      print("Message inserted with ID: $messageId"); // Debug log
+      return messageId;
+    } catch (e) {
+      print("Error inserting message: $e"); // Print the error
+      rethrow; // Rethrow the error to propagate it
+    }
   }
 
-  // Insert a media file
-  Future<int> insertMedia(Map<String, dynamic> media) async {
+  // Insert an audio file into the media table
+  Future<int> insertAudioFile(String filePath) async {
     final db = await database;
-    return await db.insert('media', media);
+    return await db.insert(
+      'media',
+      {
+        'file_path': filePath,
+        'type': 'audio',
+        'mime_type': 'audio/m4a', // Adjust based on the actual file type
+        'file_size': await File(filePath).length(),
+        'duration': 0, // You can calculate this if needed
+        'thumbnail_path': null, // Add a thumbnail path if applicable
+        'created_at': DateTime.now().toIso8601String(),
+        'deleted': false,
+      },
+    );
   }
 
   // Retrieve all users
@@ -240,27 +306,19 @@ class DatabaseHelper {
   // Retrieve all messages in a group
   Future<List<Map<String, dynamic>>> getMessages({int? groupId}) async {
     final db = await database;
+    final whereClause = groupId != null ? 'group_id = ?' : null;
+    final whereArgs = groupId != null ? [groupId] : null;
+
+    print(
+        "Querying messages with whereClause: $whereClause, whereArgs: $whereArgs"); // Debug log
+
     final messages = await db.query(
       'messages',
-      where: groupId != null ? 'group_id = ?' : null,
-      whereArgs: groupId != null ? [groupId] : null,
-      orderBy: 'timestamp ASC',
+      where: whereClause,
+      whereArgs: whereArgs,
     );
 
-    // Fetch media details for each message
-    for (var message in messages) {
-      if (message['media_id'] != null) {
-        final media = await db.query(
-          'media',
-          where: 'id = ?',
-          whereArgs: [message['media_id']],
-        );
-        if (media.isNotEmpty) {
-          message['media'] = media.first;
-        }
-      }
-    }
-
+    print("Retrieved messages from database: $messages"); // Debug log
     return messages;
   }
 

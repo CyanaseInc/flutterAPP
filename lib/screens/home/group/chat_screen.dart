@@ -1,27 +1,30 @@
-import 'package:cyanase/screens/home/group/group_info.dart';
 import 'package:flutter/material.dart';
+import 'package:cyanase/screens/home/group/group_info.dart';
+import 'package:cyanase/theme/theme.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:audioplayers/audioplayers.dart'; // For playing audio
-import 'package:record/record.dart'; // For recording audio
-import 'package:path_provider/path_provider.dart'; // For directory handling
-import 'dart:io'; // For file and directory operations
+import 'package:cyanase/screens/home/group/group_deposit.dart';
+import 'package:record/record.dart';
+import 'package:audioplayers/audioplayers.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
 import 'message_chat.dart';
-import 'package:cyanase/theme/theme.dart'; // Import the app theme
-import 'group_deposit.dart';
-import 'package:cyanase/helpers/database_helper.dart'; // Import your DatabaseHelper
+import './functions/message_function.dart';
+import './functions/audio_player.dart';
+import 'functions/audio_function.dart';
+import 'functions/ui_function.dart';
 
 class MessageChatScreen extends StatefulWidget {
   final String name;
   final String profilePic;
-  final bool isGroup; // Add this to distinguish between user and group chats
-  final int? groupId; // Add this for group ID
+  final bool isGroup;
+  final int? groupId;
 
   const MessageChatScreen({
     Key? key,
     required this.name,
     required this.profilePic,
-    this.isGroup = false, // Default to false (user chat)
-    this.groupId, // Add this for group ID
+    this.isGroup = false,
+    this.groupId,
   }) : super(key: key);
 
   @override
@@ -29,7 +32,9 @@ class MessageChatScreen extends StatefulWidget {
 }
 
 class _MessageChatScreenState extends State<MessageChatScreen> {
-  final DatabaseHelper _dbHelper = DatabaseHelper();
+  final MessageFunctions _messageFunctions = MessageFunctions();
+  final AudioFunctions _audioFunctions = AudioFunctions();
+  final AudioPlayerFunctions _audioPlayerFunctions = AudioPlayerFunctions();
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   String? _replyingToMessage;
@@ -38,11 +43,8 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
   bool _isOnline = true;
   DateTime _lastSeen = DateTime.now().subtract(Duration(minutes: 5));
 
-  final Record _audioRecorder = Record(); // No need to call init()
   bool _isRecording = false;
   Duration _recordingDuration = Duration.zero;
-
-  final AudioPlayer _audioPlayer = AudioPlayer();
 
   Map<String, bool> _isPlayingMap = {};
   Map<String, Duration> _audioDurationMap = {};
@@ -56,51 +58,47 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
     _loadMessages();
   }
 
-  // Load messages from the database
   Future<void> _loadMessages() async {
-    final messages = await _dbHelper.getMessages(
-      groupId: widget.isGroup ? widget.groupId : null,
-    );
-
+    final messages = await _messageFunctions.loadMessages(
+        groupId: widget.isGroup ? widget.groupId : null);
     setState(() {
-      _messages = messages.map((msg) {
-        return {
-          "id": msg['id'].toString(),
-          "isMe": msg['sender_id'] ==
-              "current_user_id", // Replace with actual user ID
-          "message": msg['message'],
-          "time": msg['timestamp'],
-          "replyTo": null, // You can add reply functionality if needed
-          "isAudio": msg['type'] ==
-              'audio', // Assuming 'type' is stored in the database
-        };
-      }).toList();
+      _messages = messages;
     });
   }
 
   void _sendMessage() async {
-    if (_controller.text.isNotEmpty) {
+    // Validate the message content
+    if (_controller.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Message cannot be empty")),
+      );
+      return;
+    }
+
+    // Ensure group_id is not null when isGroup is true
+    if (widget.isGroup && widget.groupId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Group ID is missing")),
+      );
+      return;
+    }
+
+    try {
       final message = {
+        "group_id": widget.groupId,
         "sender_id": "current_user_id", // Replace with actual user ID
-        "message": _controller.text,
-        "timestamp": DateTime.now().toIso8601String(),
+        "message": _controller.text.trim(),
         "type": "text",
+        "timestamp": DateTime.now().toIso8601String(),
       };
 
-      if (widget.isGroup) {
-        message['group_id'] = widget.groupId.toString(); // Convert to String
-      } else {
-        message['receiver_id'] =
-            widget.name; // Assuming widget.name is the receiver's ID
-      }
-
-      await _dbHelper.insertMessage(message);
+      // Print the message and group_id for debugging
 
       setState(() {
         _messages.add({
           "id": UniqueKey().toString(),
           "isMe": true,
-          "message": _controller.text,
+          "message": _controller.text.trim(),
           "time": DateTime.now().toIso8601String(),
           "replyTo": _replyingToMessage,
           "isAudio": false,
@@ -110,118 +108,39 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
       });
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
+        if (_scrollController.hasClients) {
+          _scrollController.animateTo(
+            _scrollController.position.maxScrollExtent,
+            duration: Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
+        }
       });
-    }
-  }
-
-  void _deleteMessage(int index) async {
-    final messageId = _messages[index]["id"];
-    await _dbHelper.deleteMessage(int.parse(messageId));
-
-    setState(() {
-      _messages.removeAt(index);
-    });
-  }
-
-  void _startReply(Map<String, dynamic> message) {
-    setState(() {
-      _replyingToMessage = message["message"];
-    });
-  }
-
-  void _cancelReply() {
-    setState(() {
-      _replyingToMessage = null;
-    });
-  }
-
-  void _toggleTyping() {
-    setState(() {
-      _isTyping = !_isTyping;
-    });
-  }
-
-  void _toggleOnlineStatus() {
-    setState(() {
-      _isOnline = !_isOnline;
-      if (!_isOnline) {
-        _lastSeen = DateTime.now();
-      }
-    });
-  }
-
-  String _formatLastSeen(DateTime lastSeen) {
-    final now = DateTime.now();
-    final difference = now.difference(lastSeen);
-
-    if (difference.inMinutes < 1) {
-      return "Last seen just now";
-    } else if (difference.inMinutes < 60) {
-      return "Last seen ${difference.inMinutes} minutes ago";
-    } else if (difference.inHours < 24) {
-      return "Last seen ${difference.inHours} hours ago";
-    } else {
-      return "Last seen ${difference.inDays} days ago";
+    } catch (e) {
+      print("Error sending message: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Failed to send message: ${e.toString()}")),
+      );
     }
   }
 
   void _startRecording() async {
-    if (!await _audioRecorder.hasPermission()) {
-      print("Microphone permission denied");
-      return;
-    }
-
+    await _audioFunctions.startRecording();
     setState(() {
       _isRecording = true;
       _recordingDuration = Duration.zero;
     });
-
-    final directory = await getApplicationDocumentsDirectory();
-    final folderPath = '${directory.path}/recordings';
-    final folder = Directory(folderPath);
-    if (!await folder.exists()) {
-      await folder.create(recursive: true);
-    }
-
-    final filePath =
-        '$folderPath/recording_${DateTime.now().millisecondsSinceEpoch}.m4a';
-
-    await _audioRecorder.start(
-      path: filePath,
-      encoder: AudioEncoder.aacLc,
-    );
-
-    _startRecordingTimer();
   }
 
   void _stopRecording() async {
-    setState(() {
-      _isRecording = false;
-    });
-
-    final path = await _audioRecorder.stop();
-
+    final path = await _audioFunctions.stopRecording();
     if (path != null) {
-      final message = {
-        "sender_id": "current_user_id", // Replace with actual user ID
-        "message": path,
-        "timestamp": DateTime.now().toIso8601String(),
-        "type": "audio",
-      };
-
-      if (widget.isGroup) {
-        message['group_id'] = widget.groupId.toString(); // Convert to String
-      } else {
-        message['receiver_id'] =
-            widget.name; // Assuming widget.name is the receiver's ID
-      }
-
-      await _dbHelper.insertMessage(message);
+      await _messageFunctions.sendMessage(
+        message: path,
+        isGroup: widget.isGroup,
+        groupId: widget.groupId,
+        receiverId: widget.name,
+      );
 
       setState(() {
         _messages.add({
@@ -236,65 +155,15 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
     }
   }
 
-  void _startRecordingTimer() {
-    Future.delayed(Duration(seconds: 1), () {
-      if (_isRecording) {
-        setState(() {
-          _recordingDuration += Duration(seconds: 1);
-        });
-        _startRecordingTimer();
-      }
-    });
-  }
-
   void _playAudio(String messageId, String path) async {
-    final isPlaying = _isPlayingMap[messageId] ?? false;
-    if (isPlaying) {
-      await _audioPlayer.pause();
-      setState(() {
-        _isPlayingMap[messageId] = false;
-      });
+    if (_isPlayingMap[messageId] ?? false) {
+      await _audioPlayerFunctions.pauseAudio();
     } else {
-      _isPlayingMap.forEach((key, value) {
-        if (value == true && key != messageId) {
-          _audioPlayer.pause();
-          setState(() {
-            _isPlayingMap[key] = false;
-          });
-        }
-      });
-
-      await _audioPlayer.play(DeviceFileSource(path));
-      setState(() {
-        _isPlayingMap[messageId] = true;
-      });
-
-      _audioPlayer.onDurationChanged.listen((duration) {
-        setState(() {
-          _audioDurationMap[messageId] = duration;
-        });
-      });
-
-      _audioPlayer.onPositionChanged.listen((position) {
-        setState(() {
-          _audioPositionMap[messageId] = position;
-        });
-      });
-
-      _audioPlayer.onPlayerComplete.listen((event) {
-        setState(() {
-          _isPlayingMap[messageId] = false;
-          _audioPositionMap[messageId] = Duration.zero;
-        });
-      });
+      await _audioPlayerFunctions.playAudio(path);
     }
-  }
-
-  String _formatDuration(Duration duration) {
-    String twoDigits(int n) => n.toString().padLeft(2, '0');
-    final minutes = twoDigits(duration.inMinutes.remainder(60));
-    final seconds = twoDigits(duration.inSeconds.remainder(60));
-    return "$minutes:$seconds";
+    setState(() {
+      _isPlayingMap[messageId] = !(_isPlayingMap[messageId] ?? false);
+    });
   }
 
   @override
@@ -304,13 +173,10 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
         titleSpacing: 0,
         leading: IconButton(
           icon: Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () {
-            Navigator.pop(context);
-          },
+          onPressed: () => Navigator.pop(context),
         ),
         title: GestureDetector(
           onTap: () {
-            // Navigate to GroupInfo page
             Navigator.push(
               context,
               MaterialPageRoute(
@@ -358,7 +224,7 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
                     )
                   else
                     Text(
-                      _formatLastSeen(_lastSeen),
+                      UIFunctions.formatLastSeen(_lastSeen),
                       style: TextStyle(
                         fontSize: 12,
                         color: Colors.black54,
@@ -382,30 +248,26 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
               );
             },
             style: OutlinedButton.styleFrom(
-              side: BorderSide(color: primaryTwo), // Border color
+              side: BorderSide(color: primaryTwo),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10), // Rounded corners
+                borderRadius: BorderRadius.circular(10),
               ),
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 20, vertical: 12), // Padding
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             ),
             child: const Text(
-              'Deposit', // Button label
+              'Deposit',
               style: TextStyle(
-                color: primaryTwo, // Text color matches the border
+                color: primaryTwo,
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
               ),
             ),
           ),
           PopupMenuButton<String>(
-            icon: Icon(Icons.more_vert,
-                color: Colors.black), // Vertical bars icon
+            icon: Icon(Icons.more_vert, color: Colors.black),
             onSelected: (String value) {
-              // Handle the selected action
               switch (value) {
                 case 'group_info':
-                  // Navigate to group info screen or show a dialog
                   Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -417,11 +279,9 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
                   );
                   break;
                 case 'edit_group':
-                  // Navigate to edit group screen
                   print('Edit Group Selected');
                   break;
                 case 'leave_group':
-                  // Handle leave group action
                   print('Leave Group Selected');
                   break;
               }
@@ -463,7 +323,9 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
               return GestureDetector(
                 onHorizontalDragEnd: (details) {
                   if (details.primaryVelocity! < 0) {
-                    _startReply(message);
+                    setState(() {
+                      _replyingToMessage = message["message"];
+                    });
                   }
                 },
                 child: MessageChat(
@@ -505,7 +367,7 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
                           SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              _truncateText(_replyingToMessage!),
+                              UIFunctions.truncateText(_replyingToMessage!),
                               style: TextStyle(
                                 color: Colors.black54,
                                 fontSize: 14,
@@ -514,7 +376,11 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
                           ),
                           IconButton(
                             icon: Icon(Icons.close, color: primaryColor),
-                            onPressed: _cancelReply,
+                            onPressed: () {
+                              setState(() {
+                                _replyingToMessage = null;
+                              });
+                            },
                           ),
                         ],
                       ),
@@ -581,11 +447,9 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
                                   EdgeInsets.symmetric(horizontal: 16),
                             ),
                             onChanged: (text) {
-                              if (text.isNotEmpty) {
-                                if (!_isTyping) _toggleTyping();
-                              } else {
-                                if (_isTyping) _toggleTyping();
-                              }
+                              setState(() {
+                                _isTyping = text.isNotEmpty;
+                              });
                             },
                           ),
                         ),
@@ -618,12 +482,5 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
         ],
       ),
     );
-  }
-
-  String _truncateText(String text, {int maxLength = 30}) {
-    if (text.length > maxLength) {
-      return text.substring(0, maxLength) + '...';
-    }
-    return text;
   }
 }

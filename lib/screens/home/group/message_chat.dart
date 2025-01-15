@@ -1,49 +1,41 @@
 import 'package:flutter/material.dart';
 import 'package:cyanase/theme/theme.dart';
+import 'package:cyanase/helpers/date_helper.dart'; // Import the date formatter
 
 class MessageChat extends StatelessWidget {
   final bool isMe;
-  final String message; // Expose the message text
-  final String time;
+  final String? message;
+  final String time; // Raw timestamp (e.g., "2023-10-15T10:30:00Z")
   final bool isSameSender;
   final String? replyTo;
   final bool isAudio;
-  final Function(String) onPlayAudio; // Accepts a String parameter (audio path)
   final bool isPlaying;
   final Duration audioDuration;
   final Duration audioPosition;
-
+  final void Function(String)? onPlayAudio;
   const MessageChat({
     Key? key,
     required this.isMe,
-    required this.message,
+    this.message,
     required this.time,
     required this.isSameSender,
     this.replyTo,
+    this.onPlayAudio,
     required this.isAudio,
-    required this.onPlayAudio,
-    required this.isPlaying,
-    required this.audioDuration,
-    required this.audioPosition,
+    this.isPlaying = false,
+    this.audioDuration = Duration.zero,
+    this.audioPosition = Duration.zero,
   }) : super(key: key);
-
-  // Helper function to truncate long text
-  String _truncateText(String text, {int maxLength = 30}) {
-    if (text.length > maxLength) {
-      return text.substring(0, maxLength) + '...';
-    }
-    return text;
-  }
 
   @override
   Widget build(BuildContext context) {
+    final formattedTime = formatTimestamp(time); // Format the timestamp
+
     return Padding(
       padding: EdgeInsets.only(
         left: isMe ? 64.0 : 8.0,
         right: isMe ? 8.0 : 64.0,
-        top: isSameSender
-            ? 2.0
-            : 8.0, // Reduce space between consecutive messages
+        top: isSameSender ? 2.0 : 8.0,
       ),
       child: Align(
         alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
@@ -53,8 +45,7 @@ class MessageChat extends StatelessWidget {
           children: [
             Container(
               constraints: BoxConstraints(
-                maxWidth: MediaQuery.of(context).size.width *
-                    0.75, // Increase bubble width
+                maxWidth: MediaQuery.of(context).size.width * 0.75,
               ),
               padding: EdgeInsets.symmetric(horizontal: 15, vertical: 10),
               decoration: BoxDecoration(
@@ -76,9 +67,7 @@ class MessageChat extends StatelessWidget {
                       padding: EdgeInsets.all(8),
                       margin: EdgeInsets.only(bottom: 8),
                       decoration: BoxDecoration(
-                        color: isMe
-                            ? primaryLight
-                            : Colors.grey[400], // Background color for replies
+                        color: isMe ? primaryLight : Colors.grey[400],
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Row(
@@ -89,15 +78,13 @@ class MessageChat extends StatelessWidget {
                             height: 40,
                             margin: EdgeInsets.only(right: 8),
                             decoration: BoxDecoration(
-                              color: isMe
-                                  ? Colors.teal[800]
-                                  : Colors.black, // Color for the quote bar
+                              color: isMe ? Colors.teal[800] : Colors.black,
                               borderRadius: BorderRadius.circular(2),
                             ),
                           ),
                           Expanded(
                             child: Text(
-                              _truncateText(replyTo!),
+                              replyTo!,
                               style: TextStyle(
                                 color: isMe ? Colors.black87 : Colors.black87,
                                 fontSize: 14,
@@ -108,6 +95,8 @@ class MessageChat extends StatelessWidget {
                       ),
                     ),
                   SizedBox(height: replyTo != null ? 8 : 0),
+
+                  // Handle audio messages
                   if (isAudio)
                     Row(
                       children: [
@@ -116,8 +105,9 @@ class MessageChat extends StatelessWidget {
                             isPlaying ? Icons.pause : Icons.play_arrow,
                             color: isMe ? Colors.white : Colors.black87,
                           ),
-                          onPressed: () =>
-                              onPlayAudio(message), // Pass the audio path
+                          onPressed: () {
+                            // Handle audio playback
+                          },
                         ),
                         SizedBox(width: 8),
                         Expanded(
@@ -133,8 +123,7 @@ class MessageChat extends StatelessWidget {
                               ),
                               SizedBox(height: 4),
                               Container(
-                                width: double
-                                    .infinity, // Full width for progress bar
+                                width: double.infinity,
                                 child: LinearProgressIndicator(
                                   value: audioDuration.inSeconds > 0
                                       ? audioPosition.inSeconds /
@@ -163,7 +152,7 @@ class MessageChat extends StatelessWidget {
                     )
                   else
                     Text(
-                      message,
+                      message ?? "",
                       style: TextStyle(
                         color: isMe ? Colors.white : Colors.black87,
                         fontSize: 16,
@@ -174,7 +163,7 @@ class MessageChat extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        time,
+                        formattedTime, // Use the formatted timestamp
                         style: TextStyle(
                           fontSize: 12,
                           color: isMe ? Colors.white70 : Colors.black54,

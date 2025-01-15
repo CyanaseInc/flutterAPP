@@ -283,7 +283,6 @@ class _HomeScreenState extends State<HomeScreen>
       ],
     ).then((value) {
       if (value == 'settings') {
-        print("Settings selected");
       } else if (value == 'new_group_investment') {
         Navigator.push(
           context,
