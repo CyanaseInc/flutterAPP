@@ -23,6 +23,22 @@ class _ChatListState extends State<ChatList> {
     _loadChats();
   }
 
+  // Helper function to format timestamp to "HH:MM"
+  String _formatTime(String timestamp) {
+    DateTime dateTime = DateTime.parse(timestamp);
+    String formattedTime =
+        "${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}";
+    return formattedTime;
+  }
+
+  // Helper function to truncate long messages
+  String _truncateMessage(String message, {int maxLength = 30}) {
+    if (message.length > maxLength) {
+      return "${message.substring(0, maxLength)}...";
+    }
+    return message;
+  }
+
   // Load chats from the database
   Future<void> _loadChats() async {
     // Fetch users, groups, and messages from the database
@@ -46,9 +62,12 @@ class _ChatListState extends State<ChatList> {
         "id": user['id'],
         "name": user['name'],
         "profilePic": user['profile_pic'],
-        "lastMessage":
-            lastMessage != null ? lastMessage['message'] : "No messages yet",
-        "time": lastMessage != null ? lastMessage['timestamp'] : "Just now",
+        "lastMessage": lastMessage != null
+            ? _truncateMessage(lastMessage['message'])
+            : "No messages yet",
+        "time": lastMessage != null
+            ? _formatTime(lastMessage['timestamp'])
+            : "Just now",
         "unreadCount": unreadCount,
         "isGroup": false,
       });
@@ -68,9 +87,12 @@ class _ChatListState extends State<ChatList> {
         "id": group['id'],
         "name": group['name'],
         "profilePic": group['profile_pic'],
-        "lastMessage":
-            lastMessage != null ? lastMessage['message'] : "No messages yet",
-        "time": lastMessage != null ? lastMessage['timestamp'] : "Just now",
+        "lastMessage": lastMessage != null
+            ? _truncateMessage(lastMessage['message'])
+            : "No messages yet",
+        "time": lastMessage != null
+            ? _formatTime(lastMessage['timestamp'])
+            : "Just now",
         "unreadCount": unreadCount,
         "isGroup": true,
       });
@@ -207,7 +229,7 @@ class _ChatListState extends State<ChatList> {
             ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
-          // Step 3: Navigate to the new chat screen
+          // Navigate to the new chat screen
           Navigator.push(
             context,
             MaterialPageRoute(

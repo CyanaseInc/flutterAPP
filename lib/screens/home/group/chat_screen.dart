@@ -1,4 +1,4 @@
-import 'dart:async'; // Import for Timer
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cyanase/screens/home/group/group_info.dart';
 import 'package:cyanase/theme/theme.dart';
@@ -53,7 +53,7 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
   Map<String, Duration> _audioPositionMap = {};
 
   List<Map<String, dynamic>> _messages = [];
-  Timer? _recordingTimer; // Declare the timer
+  Timer? _recordingTimer;
 
   @override
   void initState() {
@@ -64,9 +64,27 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
   Future<void> _loadMessages() async {
     final messages = await _messageFunctions.loadMessages(
         groupId: widget.isGroup ? widget.groupId : null);
+    for (final message in messages) {
+      if (message["isAudio"] == true) {
+        final duration = await getAudioDuration(message["message"]);
+        _audioDurationMap[message["id"]] = duration;
+      }
+    }
     setState(() {
       _messages = messages;
     });
+  }
+
+  Future<Duration> getAudioDuration(String path) async {
+    final audioPlayer = AudioPlayer();
+    try {
+      await audioPlayer.setSource(DeviceFileSource(path));
+      final duration = await audioPlayer.getDuration();
+      return duration ?? Duration.zero;
+    } catch (e) {
+      print("Error getting audio duration: $e");
+      return Duration.zero;
+    }
   }
 
   void _sendMessage() async {
@@ -227,6 +245,7 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
   }
 
   void _playAudio(String messageId, String path) async {
+    print("Attempting to play audio from: $path");
     if (_isPlayingMap[messageId] ?? false) {
       await _audioPlayerFunctions.pauseAudio();
     } else {

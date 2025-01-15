@@ -87,7 +87,7 @@ class Portfolio extends StatelessWidget {
                 'Performance Overview',
                 style: TextStyle(
                   fontSize: 18,
-                  color: primaryTwo,
+                  color: primaryTwoLight,
                 ),
               ),
             ),
@@ -102,7 +102,7 @@ class Portfolio extends StatelessWidget {
                 'Investment Distribution',
                 style: TextStyle(
                   fontSize: 18,
-                  color: primaryTwo,
+                  color: primaryTwoLight,
                 ),
               ),
             ),

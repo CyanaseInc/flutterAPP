@@ -5,6 +5,7 @@ import './personal/personal.dart';
 import './group/group.dart';
 import './goal/goal.dart';
 import './group/new_group.dart';
+import '../settings/settings.dart';
 
 class HomeScreen extends StatefulWidget {
   @override
@@ -183,35 +184,23 @@ class _HomeScreenState extends State<HomeScreen>
               ),
               tabs: [
                 Tab(
-                  icon: SvgPicture.asset(
-                    'assets/icons/person.svg',
-                    color: _tabController.index == 0
-                        ? primaryTwo
-                        : primaryTwoLight.withOpacity(0.6),
-                    width: 24,
-                    height: 24,
+                  icon: _buildTabIcon(
+                    iconPath: 'assets/icons/person.svg',
+                    isActive: _tabController.index == 0,
                   ),
                   text: 'Personal',
                 ),
                 Tab(
-                  icon: SvgPicture.asset(
-                    'assets/icons/groups.svg',
-                    color: _tabController.index == 1
-                        ? primaryTwo
-                        : primaryTwoLight.withOpacity(0.6),
-                    width: 24,
-                    height: 24,
+                  icon: _buildTabIcon(
+                    iconPath: 'assets/icons/groups.svg',
+                    isActive: _tabController.index == 1,
                   ),
                   text: 'Groups',
                 ),
                 Tab(
-                  icon: SvgPicture.asset(
-                    'assets/icons/goal-icon.svg',
-                    color: _tabController.index == 2
-                        ? primaryTwo
-                        : primaryTwoLight.withOpacity(0.6),
-                    width: 24,
-                    height: 24,
+                  icon: _buildTabIcon(
+                    iconPath: 'assets/icons/goal-icon.svg',
+                    isActive: _tabController.index == 2,
                   ),
                   text: 'Goals',
                 ),
@@ -219,6 +208,25 @@ class _HomeScreenState extends State<HomeScreen>
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildTabIcon({
+    required String iconPath,
+    required bool isActive,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: isActive ? primaryTwoLight.withOpacity(0.2) : Colors.transparent,
+        shape: BoxShape.circle,
+      ),
+      child: SvgPicture.asset(
+        iconPath,
+        color: isActive ? primaryTwo : primaryTwoLight.withOpacity(0.6),
+        width: 24,
+        height: 24,
       ),
     );
   }
@@ -272,8 +280,8 @@ class _HomeScreenState extends State<HomeScreen>
       context: context,
       position: const RelativeRect.fromLTRB(1000, 80, 10, 0),
       items: [
-        PopupMenuItem(
-          child: const Text('Settings'),
+        const PopupMenuItem(
+          child: Text('Settings'),
           value: 'settings',
         ),
         PopupMenuItem(
@@ -283,6 +291,12 @@ class _HomeScreenState extends State<HomeScreen>
       ],
     ).then((value) {
       if (value == 'settings') {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => SettingsPage(),
+          ),
+        );
       } else if (value == 'new_group_investment') {
         Navigator.push(
           context,

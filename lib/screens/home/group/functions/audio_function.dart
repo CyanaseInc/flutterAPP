@@ -1,5 +1,4 @@
-import 'dart:async'; // Add this line
-import 'package:flutter/material.dart';
+import 'dart:async';
 import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -48,7 +47,6 @@ class AudioFunctions {
 
       // Start the timer
       _recordingTimer = Timer.periodic(Duration(seconds: 1), (timer) {
-        // Update the recording duration here
         print("Recording duration: ${timer.tick} seconds");
       });
     } catch (e) {

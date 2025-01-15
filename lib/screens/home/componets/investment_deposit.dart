@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../theme/theme.dart';
+import 'package:cyanase/screens/settings/riskprofiler.dart';
 
 class Deposit extends StatefulWidget {
   @override
@@ -78,6 +79,32 @@ class _DepositState extends State<Deposit> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            OutlinedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => RiskProfilerForm(),
+                  ),
+                );
+              },
+              style: OutlinedButton.styleFrom(
+                side: BorderSide(
+                    color: primaryTwo, width: 2), // Border color and width
+                padding: EdgeInsets.symmetric(
+                    horizontal: 20, vertical: 10), // Button padding
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8), // Rounded corners
+                ),
+              ),
+              child: Text(
+                'Edit Risk Profile',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: primaryTwo, // Text color
+                ),
+              ),
+            ),
             Expanded(
               child: PageView(
                 controller: _pageController,
