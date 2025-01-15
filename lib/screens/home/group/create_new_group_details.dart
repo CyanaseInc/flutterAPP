@@ -3,7 +3,7 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:cyanase/helpers/database_helper.dart';
 import 'package:cyanase/theme/theme.dart';
-import 'chat_list.dart';
+import '';
 
 class GroupDetailsScreen extends StatefulWidget {
   final List<Map<String, dynamic>> selectedContacts;
