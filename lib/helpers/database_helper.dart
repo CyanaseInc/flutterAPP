@@ -188,10 +188,6 @@ class DatabaseHelper {
     }
   }
 
-  // Add other CRUD methods...
-
-  // Add other CRUD methods...
-
   // Insert a user
   Future<int> insertUser(Map<String, dynamic> user) async {
     final db = await database;
@@ -216,6 +212,12 @@ class DatabaseHelper {
     return await db.insert('messages', message);
   }
 
+  // Insert a media file
+  Future<int> insertMedia(Map<String, dynamic> media) async {
+    final db = await database;
+    return await db.insert('media', media);
+  }
+
   // Retrieve all users
   Future<List<Map<String, dynamic>>> getUsers() async {
     final db = await database;
@@ -238,12 +240,39 @@ class DatabaseHelper {
   // Retrieve all messages in a group
   Future<List<Map<String, dynamic>>> getMessages({int? groupId}) async {
     final db = await database;
-    if (groupId != null) {
-      return await db
-          .query('messages', where: 'group_id = ?', whereArgs: [groupId]);
-    } else {
-      return await db.query('messages');
+    final messages = await db.query(
+      'messages',
+      where: groupId != null ? 'group_id = ?' : null,
+      whereArgs: groupId != null ? [groupId] : null,
+      orderBy: 'timestamp ASC',
+    );
+
+    // Fetch media details for each message
+    for (var message in messages) {
+      if (message['media_id'] != null) {
+        final media = await db.query(
+          'media',
+          where: 'id = ?',
+          whereArgs: [message['media_id']],
+        );
+        if (media.isNotEmpty) {
+          message['media'] = media.first;
+        }
+      }
     }
+
+    return messages;
+  }
+
+  // Retrieve a single media file by ID
+  Future<Map<String, dynamic>?> getMedia(int mediaId) async {
+    final db = await database;
+    final media = await db.query(
+      'media',
+      where: 'id = ?',
+      whereArgs: [mediaId],
+    );
+    return media.isNotEmpty ? media.first : null;
   }
 
   // Delete a user
@@ -278,12 +307,6 @@ class DatabaseHelper {
         .delete('messages', where: 'group_id = ?', whereArgs: [groupId]);
   }
 
-  // Insert media metadata
-  Future<int> insertMedia(Map<String, dynamic> media) async {
-    final db = await database;
-    return await db.insert('media', media);
-  }
-
   // Retrieve all media for a group
   Future<List<Map<String, dynamic>>> getMediaForGroup(int groupId) async {
     final db = await database;
@@ -305,13 +328,13 @@ class DatabaseHelper {
     );
   }
 
-// Insert a contact
+  // Insert a contact
   Future<int> insertContact(Map<String, dynamic> contact) async {
     final db = await database;
     return await db.insert('contacts', contact);
   }
 
-// Insert multiple contacts
+  // Insert multiple contacts
   Future<void> insertContacts(List<Map<String, String>> contacts) async {
     final db = await database;
 
@@ -334,11 +357,11 @@ class DatabaseHelper {
             'last_synced': DateTime.now().toIso8601String(),
           },
         );
-      } else {}
+      }
     }
   }
 
-// Retrieve all contacts
+  // Retrieve all contacts
   Future<List<Map<String, dynamic>>> getContacts() async {
     final db = await database;
     return await db.query('contacts');

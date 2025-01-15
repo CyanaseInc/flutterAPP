@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'chat_screen.dart'; // Import your existing Message screen
 import 'package:cyanase/theme/theme.dart'; // Import your theme
+import 'hash_numbers.dart'; // Import the hash functions
 import 'new_group.dart'; // Import the new group screen
 import 'package:cyanase/helpers/database_helper.dart'; // Import your DatabaseHelper
 import 'package:cyanase/new_user.dart'; // Import the NewUserScreen
@@ -39,13 +40,12 @@ class _ChatListState extends State<ChatList> {
       final lastMessage = userMessages.isNotEmpty ? userMessages.last : null;
 
       // Calculate unread messages
-      final unreadCount =
-          _calculateUnreadCount(user['id'].toString(), userMessages);
+      final unreadCount = _calculateUnreadCount(user['id'], userMessages);
 
       chats.add({
         "id": user['id'],
-        "name": user['name'] ?? 'Unknown',
-        "profilePic": user['profile_pic'] ?? '',
+        "name": user['name'],
+        "profilePic": user['profile_pic'],
         "lastMessage":
             lastMessage != null ? lastMessage['message'] : "No messages yet",
         "time": lastMessage != null ? lastMessage['timestamp'] : "Just now",
@@ -66,8 +66,8 @@ class _ChatListState extends State<ChatList> {
 
       chats.add({
         "id": group['id'],
-        "name": group['name'] ?? 'Unknown',
-        "profilePic": group['profile_pic'] ?? '',
+        "name": group['name'],
+        "profilePic": group['profile_pic'],
         "lastMessage":
             lastMessage != null ? lastMessage['message'] : "No messages yet",
         "time": lastMessage != null ? lastMessage['timestamp'] : "Just now",
@@ -121,17 +121,6 @@ class _ChatListState extends State<ChatList> {
         ),
       );
     }
-  }
-
-  // Handle the "Create Group" button press
-  void _handleCreateGroup() {
-    // Navigate directly to the NewGroupScreen
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => NewGroupScreen(),
-      ),
-    );
   }
 
   @override
@@ -203,6 +192,9 @@ class _ChatListState extends State<ChatList> {
                         builder: (context) => MessageChatScreen(
                           name: chat["name"],
                           profilePic: chat["profilePic"],
+                          groupId: chat["isGroup"]
+                              ? chat["id"]
+                              : null, // Pass groupId if it's a group
                         ),
                       ),
                     ).then((_) {
@@ -214,7 +206,15 @@ class _ChatListState extends State<ChatList> {
               },
             ),
       floatingActionButton: FloatingActionButton(
-        onPressed: _handleCreateGroup, // Directly navigate on button press
+        onPressed: () async {
+          // Step 3: Navigate to the new chat screen
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => NewGroupScreen(),
+            ),
+          );
+        },
         child: Icon(
           Icons.group_add,
           color: primaryColor,

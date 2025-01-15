@@ -3,7 +3,7 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:cyanase/helpers/database_helper.dart';
 import 'package:cyanase/theme/theme.dart';
-import '';
+import 'package:cyanase/screens/home/home.dart';
 
 class GroupDetailsScreen extends StatefulWidget {
   final List<Map<String, dynamic>> selectedContacts;
@@ -69,11 +69,11 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
       });
     }
 
-    // Navigate back to the previous screen
+    // Navigate back to the preious screen
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => ChatList(),
+        builder: (context) => HomeScreen(),
       ),
     );
 

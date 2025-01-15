@@ -81,7 +81,7 @@ class _NewUserScreenState extends State<NewUserScreen> {
               ),
               onPressed:
                   _handleCreateGroup, // Directly navigate on button press
-              child: Row(
+              child: const Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(

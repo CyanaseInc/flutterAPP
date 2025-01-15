@@ -4,6 +4,7 @@ import '../../theme/theme.dart'; // Import your theme file for primaryTwo color
 import './personal/personal.dart';
 import './group/group.dart';
 import './goal/goal.dart';
+import './group/new_group.dart';
 
 class HomeScreen extends StatefulWidget {
   @override
@@ -284,7 +285,12 @@ class _HomeScreenState extends State<HomeScreen>
       if (value == 'settings') {
         print("Settings selected");
       } else if (value == 'new_group_investment') {
-        print("New Group Investment selected");
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => NewGroupScreen(),
+          ),
+        );
       }
     });
   }
