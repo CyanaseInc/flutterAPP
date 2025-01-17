@@ -233,16 +233,12 @@ class DatabaseHelper {
   Future<int> insertMessage(Map<String, dynamic> message) async {
     final db = await database;
 
-    // Ensure group_id is provided
-    if (message['group_id'] == null) {
-      throw ArgumentError('group_id cannot be null');
-    }
-
-    // Debug log
+    // Debug log: Print the message data
+    print("Inserting message: $message");
 
     try {
       final messageId = await db.insert(
-        tableMessages,
+        'messages',
         {
           'group_id': message['group_id'],
           'sender_id': message['sender_id'],
@@ -258,11 +254,13 @@ class DatabaseHelper {
         },
       );
 
-      print("Message inserted with ID: $messageId"); // Debug log
+      // Debug log: Print the inserted message ID
+      print("Message inserted with ID: $messageId");
       return messageId;
     } catch (e) {
-      print("Error inserting message: $e"); // Print the error
-      rethrow; // Rethrow the error to propagate it
+      // Debug log: Print the error
+      print("Error inserting message: $e");
+      rethrow;
     }
   }
 
@@ -308,9 +306,7 @@ class DatabaseHelper {
     final db = await database;
     final whereClause = groupId != null ? 'group_id = ?' : null;
     final whereArgs = groupId != null ? [groupId] : null;
-
-    print(
-        "Querying messages with whereClause: $whereClause, whereArgs: $whereArgs"); // Debug log
+    // Debug log
 
     final messages = await db.query(
       'messages',
@@ -318,8 +314,18 @@ class DatabaseHelper {
       whereArgs: whereArgs,
     );
 
-    print("Retrieved messages from database: $messages"); // Debug log
+    // Debug log
     return messages;
+  }
+
+  ///get         user       id
+  Future<String?> getCurrentUserId() async {
+    final db = await database;
+    final result = await db.query('users', limit: 1); // Fetch the first user
+    if (result.isNotEmpty) {
+      return result.first['id'] as String?;
+    }
+    return null;
   }
 
   // Retrieve a single media file by ID
@@ -392,7 +398,29 @@ class DatabaseHelper {
     return await db.insert('contacts', contact);
   }
 
-  // Insert multiple contacts
+//insert    image      files
+
+  Future<int> insertImageFile(String filePath) async {
+    final db = await database;
+
+    // Insert the image file into the media table
+    final mediaId = await db.insert(
+      'media',
+      {
+        'file_path': filePath,
+        'type': 'image',
+        'mime_type': 'image/jpeg', // Adjust based on the actual file type
+        'file_size': await File(filePath).length(),
+        'duration': 0, // Not applicable for images
+        'thumbnail_path': null, // Add a thumbnail path if applicable
+        'created_at': DateTime.now().toIso8601String(),
+        'deleted': false,
+      },
+    );
+
+    return mediaId;
+  } // Insert multiple contacts
+
   Future<void> insertContacts(List<Map<String, String>> contacts) async {
     final db = await database;
 

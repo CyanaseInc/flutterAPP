@@ -1,18 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:cyanase/theme/theme.dart';
 import 'package:cyanase/helpers/date_helper.dart'; // Import the date formatter
+import 'dart:io';
 
 class MessageChat extends StatelessWidget {
   final bool isMe;
   final String? message;
-  final String time; // Raw timestamp (e.g., "2023-10-15T10:30:00Z")
+  final String time;
   final bool isSameSender;
   final String? replyTo;
   final bool isAudio;
+  final bool isImage; // Add this flag
   final bool isPlaying;
   final Duration audioDuration;
   final Duration audioPosition;
   final void Function(String)? onPlayAudio;
+  final String messageId;
+
   const MessageChat({
     Key? key,
     required this.isMe,
@@ -22,14 +26,16 @@ class MessageChat extends StatelessWidget {
     this.replyTo,
     this.onPlayAudio,
     required this.isAudio,
+    this.isImage = false, // Default to false
     this.isPlaying = false,
     this.audioDuration = Duration.zero,
     this.audioPosition = Duration.zero,
+    required this.messageId,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    final formattedTime = formatTimestamp(time); // Format the timestamp
+    final formattedTime = formatTimestamp(time);
 
     return Padding(
       padding: EdgeInsets.only(
@@ -96,8 +102,21 @@ class MessageChat extends StatelessWidget {
                     ),
                   SizedBox(height: replyTo != null ? 8 : 0),
 
-                  // Handle audio messages
-                  if (isAudio)
+                  // Handle image messages
+                  if (isImage)
+                    Container(
+                      constraints: BoxConstraints(
+                        maxWidth: MediaQuery.of(context).size.width * 0.75,
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.file(
+                          File(message!),
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    )
+                  else if (isAudio)
                     Row(
                       children: [
                         IconButton(
@@ -106,7 +125,9 @@ class MessageChat extends StatelessWidget {
                             color: isMe ? Colors.white : Colors.black87,
                           ),
                           onPressed: () {
-                            // Handle audio playback
+                            if (onPlayAudio != null && message != null) {
+                              onPlayAudio!(message!);
+                            }
                           },
                         ),
                         SizedBox(width: 8),
@@ -125,15 +146,17 @@ class MessageChat extends StatelessWidget {
                               Container(
                                 width: double.infinity,
                                 child: LinearProgressIndicator(
-                                  value: audioDuration.inSeconds > 0
-                                      ? audioPosition.inSeconds /
-                                          audioDuration.inSeconds
+                                  value: isPlaying
+                                      ? (audioDuration.inSeconds > 0
+                                          ? audioPosition.inSeconds /
+                                              audioDuration.inSeconds
+                                          : 0)
                                       : 0,
                                   backgroundColor: isMe
                                       ? Colors.teal[800]
                                       : Colors.grey[500],
                                   valueColor: AlwaysStoppedAnimation<Color>(
-                                    isMe ? Colors.white : Colors.black87,
+                                    Colors.white,
                                   ),
                                 ),
                               ),
@@ -163,7 +186,7 @@ class MessageChat extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        formattedTime, // Use the formatted timestamp
+                        formattedTime,
                         style: TextStyle(
                           fontSize: 12,
                           color: isMe ? Colors.white70 : Colors.black54,

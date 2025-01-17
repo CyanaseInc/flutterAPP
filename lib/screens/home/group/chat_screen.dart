@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cyanase/screens/home/group/group_info.dart';
 import 'package:cyanase/theme/theme.dart';
@@ -7,13 +8,12 @@ import 'package:cyanase/screens/home/group/group_deposit.dart';
 import 'package:record/record.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:path_provider/path_provider.dart';
-import 'dart:io';
+import 'package:cyanase/helpers/database_helper.dart';
 import 'message_chat.dart';
+import './functions/ui_function.dart'; // Replace with the correct path
+import './functions/audio_function.dart';
 import './functions/message_function.dart';
 import './functions/audio_player.dart';
-import 'functions/audio_function.dart';
-import 'functions/ui_function.dart';
-import 'package:cyanase/helpers/database_helper.dart';
 
 class MessageChatScreen extends StatefulWidget {
   final String name;
@@ -36,7 +36,6 @@ class MessageChatScreen extends StatefulWidget {
 class _MessageChatScreenState extends State<MessageChatScreen> {
   final MessageFunctions _messageFunctions = MessageFunctions();
   final AudioFunctions _audioFunctions = AudioFunctions();
-  final AudioPlayerFunctions _audioPlayerFunctions = AudioPlayerFunctions();
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   String? _replyingToMessage;
@@ -109,10 +108,17 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
         "group_id": widget.groupId,
         "sender_id": "current_user_id", // Replace with actual user ID
         "message": _controller.text.trim(),
-        "type": "text",
+        "type": "text", // Ensure type is set to "text"
         "timestamp": DateTime.now().toIso8601String(),
       };
 
+      // Insert the message into the database
+      final messageId = await _dbHelper.insertMessage(message);
+
+      // Debug log: Print the inserted message ID
+      print("Text message inserted with ID: $messageId");
+
+      // Update the UI
       setState(() {
         _messages.add({
           "id": UniqueKey().toString(),
@@ -126,6 +132,7 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
         _replyingToMessage = null;
       });
 
+      // Scroll to the bottom of the chat
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_scrollController.hasClients) {
           _scrollController.animateTo(
@@ -136,9 +143,9 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
         }
       });
     } catch (e) {
-      print("Error sending message: $e");
+      print("Error sending text message: $e");
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Failed to send message: ${e.toString()}")),
+        SnackBar(content: Text("Failed to send text message: ${e.toString()}")),
       );
     }
   }
@@ -147,13 +154,13 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
     await _audioFunctions.startRecording();
     setState(() {
       _isRecording = true;
-      _recordingDuration = Duration.zero; // Reset the duration
+      _recordingDuration = Duration.zero;
     });
 
     // Start the timer
     _recordingTimer = Timer.periodic(Duration(seconds: 1), (timer) {
       setState(() {
-        _recordingDuration += Duration(seconds: 1); // Update the duration
+        _recordingDuration += Duration(seconds: 1);
       });
     });
   }
@@ -161,10 +168,6 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
   void _stopRecording() async {
     final path = await _audioFunctions.stopRecording();
     if (path != null) {
-      // Stop the timer
-      _recordingTimer?.cancel();
-      _recordingTimer = null;
-
       // Ensure groupId is not null when isGroup is true
       if (widget.isGroup && widget.groupId == null) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -174,29 +177,17 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
       }
 
       try {
-        // Generate a unique file path
-        final uniquePath = await _generateUniqueFilePath(path);
-
-        // Rename the recorded file to the unique path
-        final file = File(path);
-        if (await file.exists()) {
-          await file.rename(uniquePath);
-        } else {
-          print("Original file does not exist: $path");
-          return;
-        }
-
         // Insert the audio file into the media table
-        final mediaId = await _dbHelper.insertAudioFile(uniquePath);
+        final mediaId = await _dbHelper.insertAudioFile(path);
 
         // Prepare the audio message data
         final message = {
           "group_id": widget.groupId,
           "sender_id": "current_user_id", // Replace with actual user ID
-          "message": uniquePath, // Use the unique file path as the message
-          "type": "audio", // Set type to "audio"
+          "message": path,
+          "type": "audio",
           "timestamp": DateTime.now().toIso8601String(),
-          "media_id": mediaId, // Link to the media entry (if applicable)
+          "media_id": mediaId,
         };
 
         // Insert the audio message into the messages table
@@ -207,12 +198,12 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
           _messages.add({
             "id": UniqueKey().toString(),
             "isMe": true,
-            "message": uniquePath,
+            "message": path,
             "time": DateTime.now().toIso8601String(),
             "replyTo": _replyingToMessage,
             "isAudio": true,
           });
-          _isRecording = false; // Reset recording state
+          _isRecording = false;
         });
 
         // Scroll to the bottom of the chat
@@ -235,25 +226,56 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
     }
   }
 
-  /// Generates a unique file path for the audio recording.
-  Future<String> _generateUniqueFilePath(String originalPath) async {
-    final directory =
-        Directory(originalPath).parent; // Get the parent directory
-    final timestamp = DateTime.now().millisecondsSinceEpoch; // Unique timestamp
-    final uniqueFileName = 'recording_$timestamp.m4a'; // Unique file name
-    return '${directory.path}/$uniqueFileName'; // Full unique path
-  }
-
   void _playAudio(String messageId, String path) async {
     print("Attempting to play audio from: $path");
+
     if (_isPlayingMap[messageId] ?? false) {
-      await _audioPlayerFunctions.pauseAudio();
+      // If audio is already playing, pause it
+      await _audioFunctions.pauseAudio();
+      setState(() {
+        _isPlayingMap[messageId] = false;
+      });
     } else {
-      await _audioPlayerFunctions.playAudio(path);
+      // If another audio is playing, pause it first
+      for (var id in _isPlayingMap.keys) {
+        if (_isPlayingMap[id] == true && id != messageId) {
+          await _audioFunctions.pauseAudio();
+          setState(() {
+            _isPlayingMap[id] = false;
+            _audioPositionMap[id] = Duration.zero; // Reset progress bar
+          });
+        }
+      }
+
+      // Start playback for the selected audio
+      await _audioFunctions.playAudio(path);
+
+      // Listen for position changes
+      _audioFunctions.onPositionChanged((position) {
+        setState(() {
+          _audioPositionMap[messageId] = position;
+        });
+      });
+
+      // Listen for duration changes
+      _audioFunctions.onDurationChanged((duration) {
+        setState(() {
+          _audioDurationMap[messageId] = duration;
+        });
+      });
+
+      // Listen for playback completion
+      _audioFunctions.onPlayerComplete(() {
+        setState(() {
+          _isPlayingMap[messageId] = false;
+          _audioPositionMap[messageId] = Duration.zero; // Reset progress bar
+        });
+      });
+
+      setState(() {
+        _isPlayingMap[messageId] = true;
+      });
     }
-    setState(() {
-      _isPlayingMap[messageId] = !(_isPlayingMap[messageId] ?? false);
-    });
   }
 
   @override
@@ -431,6 +453,7 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
                       _audioDurationMap[message["id"]] ?? Duration.zero,
                   audioPosition:
                       _audioPositionMap[message["id"]] ?? Duration.zero,
+                  messageId: message["id"], // Pass the unique messageId
                 ),
               );
             },
