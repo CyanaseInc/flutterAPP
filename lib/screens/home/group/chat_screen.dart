@@ -14,6 +14,7 @@ import './functions/ui_function.dart'; // Replace with the correct path
 import './functions/audio_function.dart';
 import './functions/message_function.dart';
 import './functions/audio_player.dart';
+import './functions/image _functions.dart';
 
 class MessageChatScreen extends StatefulWidget {
   final String name;
@@ -64,6 +65,11 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
     final messages = await _messageFunctions.loadMessages(
         groupId: widget.isGroup ? widget.groupId : null);
     for (final message in messages) {
+      if (message["type"] == "image") {
+        message["isImage"] = true;
+      } else {
+        message["isImage"] = false;
+      }
       if (message["isAudio"] == true) {
         final duration = await getAudioDuration(message["message"]);
         _audioDurationMap[message["id"]] = duration;
@@ -86,6 +92,66 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
     }
   }
 
+  void _sendImageMessage(String imagePath) async {
+    try {
+      // Insert the image into the media table
+      final mediaId = await _dbHelper.insertImageFile(imagePath);
+
+      // Prepare the message data
+      final message = {
+        "group_id": widget.groupId,
+        "sender_id": "current_user_id", // Replace with actual user ID
+        "message": imagePath,
+        "type": "image",
+        "status": "sent",
+        "timestamp": DateTime.now().toIso8601String(),
+        "media_id": mediaId, // Link to the media entry
+      };
+
+      // Insert the message into the messages table
+      final messageId = await _dbHelper.insertMessage(message);
+
+      // Debug log: Print the inserted message ID
+      print("Image message inserted with ID: $messageId");
+
+      // Create the message object to add to _messages
+      final newMessage = {
+        "id": UniqueKey().toString(),
+        "isMe": true,
+        "message": imagePath,
+        "time": DateTime.now().toIso8601String(),
+        "replyTo": _replyingToMessage,
+        "isImage": true, // Explicitly set to true
+        "isAudio": false, // Explicitly set to false
+      };
+
+      // Debug log: Print the message being added to _messages
+      print("Added message to _messages: $newMessage");
+
+      // Update the UI
+      setState(() {
+        _messages.add(newMessage);
+      });
+
+      // Scroll to the bottom of the chat
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scrollController.hasClients) {
+          _scrollController.animateTo(
+            _scrollController.position.maxScrollExtent,
+            duration: Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+          );
+        }
+      });
+    } catch (e) {
+      print("Error sending image message: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text("Failed to send image message: ${e.toString()}")),
+      );
+    }
+  }
+
   void _sendMessage() async {
     // Validate the message content
     if (_controller.text.trim().isEmpty) {
@@ -104,19 +170,7 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
     }
 
     try {
-      final message = {
-        "group_id": widget.groupId,
-        "sender_id": "current_user_id", // Replace with actual user ID
-        "message": _controller.text.trim(),
-        "type": "text", // Ensure type is set to "text"
-        "timestamp": DateTime.now().toIso8601String(),
-      };
-
-      // Insert the message into the database
-      final messageId = await _dbHelper.insertMessage(message);
-
       // Debug log: Print the inserted message ID
-      print("Text message inserted with ID: $messageId");
 
       // Update the UI
       setState(() {
@@ -127,6 +181,7 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
           "time": DateTime.now().toIso8601String(),
           "replyTo": _replyingToMessage,
           "isAudio": false,
+          "isImage": false, // //
         });
         _controller.clear();
         _replyingToMessage = null;
@@ -447,6 +502,7 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
                   isSameSender: isSameSender,
                   replyTo: message["replyTo"],
                   isAudio: message["isAudio"],
+                  isImage: message["isImage"] ?? false, // Add this line
                   onPlayAudio: (path) => _playAudio(message["id"], path),
                   isPlaying: _isPlayingMap[message["id"]] ?? false,
                   audioDuration:
@@ -566,6 +622,18 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
                             },
                           ),
                         ),
+                      IconButton(
+                        icon: Icon(Icons.image, color: primaryColor),
+                        onPressed: () async {
+                          final imageFile =
+                              await ImageFunctions().pickImageFromGallery();
+                          if (imageFile != null) {
+                            final imagePath = await ImageFunctions()
+                                .saveImageToStorage(imageFile);
+                            _sendImageMessage(imagePath);
+                          }
+                        },
+                      ),
                       SizedBox(width: 8),
                       IconButton(
                         icon: Icon(

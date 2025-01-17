@@ -399,12 +399,9 @@ class DatabaseHelper {
   }
 
 //insert    image      files
-
   Future<int> insertImageFile(String filePath) async {
     final db = await database;
-
-    // Insert the image file into the media table
-    final mediaId = await db.insert(
+    return await db.insert(
       'media',
       {
         'file_path': filePath,
@@ -417,9 +414,22 @@ class DatabaseHelper {
         'deleted': false,
       },
     );
+  }
 
-    return mediaId;
-  } // Insert multiple contacts
+  Future<int> insertImageMessage(Map<String, dynamic> message) async {
+    final db = await database;
+    return await db.insert(
+      'messages',
+      {
+        'group_id': message['group_id'],
+        'sender_id': message['sender_id'],
+        'message': message['message'],
+        'type': 'image',
+        'timestamp': message['timestamp'],
+        'media_id': message['media_id'],
+      },
+    );
+  }
 
   Future<void> insertContacts(List<Map<String, String>> contacts) async {
     final db = await database;

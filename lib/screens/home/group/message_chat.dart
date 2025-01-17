@@ -2,20 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:cyanase/theme/theme.dart';
 import 'package:cyanase/helpers/date_helper.dart'; // Import the date formatter
 import 'dart:io';
+import 'full_screen_image_viewer.dart';
 
 class MessageChat extends StatelessWidget {
   final bool isMe;
   final String? message;
-  final String time;
+  final String time; // Raw timestamp (e.g., "2023-10-15T10:30:00Z")
   final bool isSameSender;
   final String? replyTo;
   final bool isAudio;
-  final bool isImage; // Add this flag
+  final bool isImage; // Add this
   final bool isPlaying;
   final Duration audioDuration;
   final Duration audioPosition;
   final void Function(String)? onPlayAudio;
-  final String messageId;
+  final String messageId; // Unique identifier for the message
 
   const MessageChat({
     Key? key,
@@ -26,7 +27,7 @@ class MessageChat extends StatelessWidget {
     this.replyTo,
     this.onPlayAudio,
     required this.isAudio,
-    this.isImage = false, // Default to false
+    required this.isImage, // Add this
     this.isPlaying = false,
     this.audioDuration = Duration.zero,
     this.audioPosition = Duration.zero,
@@ -35,7 +36,7 @@ class MessageChat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final formattedTime = formatTimestamp(time);
+    final formattedTime = formatTimestamp(time); // Format the timestamp
 
     return Padding(
       padding: EdgeInsets.only(
@@ -102,21 +103,8 @@ class MessageChat extends StatelessWidget {
                     ),
                   SizedBox(height: replyTo != null ? 8 : 0),
 
-                  // Handle image messages
-                  if (isImage)
-                    Container(
-                      constraints: BoxConstraints(
-                        maxWidth: MediaQuery.of(context).size.width * 0.75,
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.file(
-                          File(message!),
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                    )
-                  else if (isAudio)
+                  // Handle audio messages
+                  if (isAudio)
                     Row(
                       children: [
                         IconButton(
@@ -126,7 +114,7 @@ class MessageChat extends StatelessWidget {
                           ),
                           onPressed: () {
                             if (onPlayAudio != null && message != null) {
-                              onPlayAudio!(message!);
+                              onPlayAudio!(message!); // Trigger the callback
                             }
                           },
                         ),
@@ -151,12 +139,12 @@ class MessageChat extends StatelessWidget {
                                           ? audioPosition.inSeconds /
                                               audioDuration.inSeconds
                                           : 0)
-                                      : 0,
+                                      : 0, // Reset progress bar for non-playing audios
                                   backgroundColor: isMe
                                       ? Colors.teal[800]
                                       : Colors.grey[500],
                                   valueColor: AlwaysStoppedAnimation<Color>(
-                                    Colors.white,
+                                    Colors.white, // White progress indicator
                                   ),
                                 ),
                               ),
@@ -172,8 +160,49 @@ class MessageChat extends StatelessWidget {
                           ),
                         ),
                       ],
-                    )
-                  else
+                    ),
+
+                  // Handle image messages
+                  if (isImage && message != null)
+                    GestureDetector(
+                      onTap: () {
+                        // Open the image in full screen
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                FullScreenImage(imagePath: message!),
+                          ),
+                        );
+                      },
+                      child: FutureBuilder<bool>(
+                        future: File(message!).exists(),
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState ==
+                              ConnectionState.waiting) {
+                            return CircularProgressIndicator(); // Show a loading indicator
+                          } else if (snapshot.hasData && snapshot.data!) {
+                            return Container(
+                              width: 200,
+                              height: 200,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                                image: DecorationImage(
+                                  image: FileImage(File(message!)),
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                            );
+                          } else {
+                            return Text(
+                                "Image not found"); // Show an error message
+                          }
+                        },
+                      ),
+                    ),
+
+                  // Handle text messages
+                  if (!isAudio && !isImage)
                     Text(
                       message ?? "",
                       style: TextStyle(
@@ -181,12 +210,13 @@ class MessageChat extends StatelessWidget {
                         fontSize: 16,
                       ),
                     ),
+
                   SizedBox(height: 5),
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        formattedTime,
+                        formattedTime, // Use the formatted timestamp
                         style: TextStyle(
                           fontSize: 12,
                           color: isMe ? Colors.white70 : Colors.black54,
