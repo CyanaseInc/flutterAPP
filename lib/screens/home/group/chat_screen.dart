@@ -87,7 +87,6 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
       final duration = await audioPlayer.getDuration();
       return duration ?? Duration.zero;
     } catch (e) {
-      print("Error getting audio duration: $e");
       return Duration.zero;
     }
   }
@@ -109,10 +108,6 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
       };
 
       // Insert the message into the messages table
-      final messageId = await _dbHelper.insertMessage(message);
-
-      // Debug log: Print the inserted message ID
-      print("Image message inserted with ID: $messageId");
 
       // Create the message object to add to _messages
       final newMessage = {
@@ -198,7 +193,6 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
         }
       });
     } catch (e) {
-      print("Error sending text message: $e");
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Failed to send text message: ${e.toString()}")),
       );
@@ -272,7 +266,6 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
           }
         });
       } catch (e) {
-        print("Error sending audio message: $e");
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
               content: Text("Failed to send audio message: ${e.toString()}")),
@@ -282,8 +275,6 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
   }
 
   void _playAudio(String messageId, String path) async {
-    print("Attempting to play audio from: $path");
-
     if (_isPlayingMap[messageId] ?? false) {
       // If audio is already playing, pause it
       await _audioFunctions.pauseAudio();
@@ -446,10 +437,8 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
                   );
                   break;
                 case 'edit_group':
-                  print('Edit Group Selected');
                   break;
                 case 'leave_group':
-                  print('Leave Group Selected');
                   break;
               }
             },
