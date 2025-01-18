@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:io'; // Import for File and FileImage
 import 'chat_screen.dart'; // Import your existing Message screen
 import 'package:cyanase/theme/theme.dart'; // Import your theme
 import 'hash_numbers.dart'; // Import the hash functions
@@ -14,8 +15,7 @@ class ChatList extends StatefulWidget {
 class _ChatListState extends State<ChatList> {
   final DatabaseHelper _dbHelper = DatabaseHelper();
   List<Map<String, dynamic>> _chats = [];
-  Map<String, String> _lastSeenTimestamps =
-      {}; // Track last seen timestamps for each chat
+  Map<String, String> _lastSeenTimestamps = {};
 
   @override
   void initState() {
@@ -23,7 +23,6 @@ class _ChatListState extends State<ChatList> {
     _loadChats();
   }
 
-  // Helper function to format timestamp to "HH:MM"
   String _formatTime(String timestamp) {
     DateTime dateTime = DateTime.parse(timestamp);
     String formattedTime =
@@ -31,7 +30,6 @@ class _ChatListState extends State<ChatList> {
     return formattedTime;
   }
 
-  // Helper function to truncate long messages
   String _truncateMessage(String message, {int maxLength = 30}) {
     if (message.length > maxLength) {
       return "${message.substring(0, maxLength)}...";
@@ -39,57 +37,59 @@ class _ChatListState extends State<ChatList> {
     return message;
   }
 
-  // Load chats from the database
   Future<void> _loadChats() async {
-    // Fetch users, groups, and messages from the database
     final users = await _dbHelper.getUsers();
     final groups = await _dbHelper.getGroups();
     final messages = await _dbHelper.getMessages();
 
-    // Combine data into a list of chats
     List<Map<String, dynamic>> chats = [];
 
-    // Add user chats
     for (var user in users) {
       final userMessages =
           messages.where((msg) => msg['sender_id'] == user['id']).toList();
       final lastMessage = userMessages.isNotEmpty ? userMessages.last : null;
-
-      // Calculate unread messages
       final unreadCount = _calculateUnreadCount(user['id'], userMessages);
+
+      Widget lastMessagePreview = Text(
+        "No messages yet",
+        style: TextStyle(color: Colors.grey),
+      );
+      if (lastMessage != null) {
+        if (lastMessage['type'] == 'image') {
+          lastMessagePreview = Row(
+            children: [
+              Icon(Icons.image, color: Colors.grey, size: 16),
+              SizedBox(width: 4),
+              Text(
+                "Image",
+                style: TextStyle(color: Colors.grey),
+              ),
+            ],
+          );
+        } else if (lastMessage['type'] == 'audio') {
+          lastMessagePreview = Row(
+            children: [
+              Icon(Icons.mic, color: Colors.grey, size: 16),
+              SizedBox(width: 4),
+              Text(
+                "Audio",
+                style: TextStyle(color: Colors.grey),
+              ),
+            ],
+          );
+        } else {
+          lastMessagePreview = Text(
+            _truncateMessage(lastMessage['message']),
+            style: TextStyle(color: Colors.grey),
+          );
+        }
+      }
 
       chats.add({
         "id": user['id'],
         "name": user['name'],
         "profilePic": user['profile_pic'],
-        "lastMessage": lastMessage != null
-            ? _truncateMessage(lastMessage['message'])
-            : "No messages yet",
-        "time": lastMessage != null
-            ? _formatTime(lastMessage['timestamp'])
-            : "Just now",
-        "unreadCount": unreadCount,
-        "isGroup": false,
-      });
-    }
-
-    // Add group chats
-    for (var group in groups) {
-      final groupMessages =
-          messages.where((msg) => msg['group_id'] == group['id']).toList();
-      final lastMessage = groupMessages.isNotEmpty ? groupMessages.last : null;
-
-      // Calculate unread messages
-      final unreadCount =
-          _calculateUnreadCount(group['id'].toString(), groupMessages);
-
-      chats.add({
-        "id": group['id'],
-        "name": group['name'],
-        "profilePic": group['profile_pic'],
-        "lastMessage": lastMessage != null
-            ? _truncateMessage(lastMessage['message'])
-            : "No messages yet",
+        "lastMessage": lastMessagePreview,
         "time": lastMessage != null
             ? _formatTime(lastMessage['timestamp'])
             : "Just now",
@@ -98,41 +98,92 @@ class _ChatListState extends State<ChatList> {
       });
     }
 
-    // Sort chats by the timestamp of the last message (most recent first)
+    for (var group in groups) {
+      final groupMessages =
+          messages.where((msg) => msg['group_id'] == group['id']).toList();
+      final lastMessage = groupMessages.isNotEmpty ? groupMessages.last : null;
+      final unreadCount =
+          _calculateUnreadCount(group['id'].toString(), groupMessages);
+
+      Widget lastMessagePreview = Text(
+        "No messages yet",
+        style: TextStyle(color: Colors.grey),
+      );
+      if (lastMessage != null) {
+        if (lastMessage['type'] == 'image') {
+          lastMessagePreview = Row(
+            children: [
+              Icon(Icons.image, color: Colors.grey, size: 16),
+              SizedBox(width: 4),
+              Text(
+                "Image",
+                style: TextStyle(color: Colors.grey),
+              ),
+            ],
+          );
+        } else if (lastMessage['type'] == 'audio') {
+          lastMessagePreview = Row(
+            children: [
+              Icon(Icons.mic, color: Colors.grey, size: 16),
+              SizedBox(width: 4),
+              Text(
+                "Audio",
+                style: TextStyle(color: Colors.grey),
+              ),
+            ],
+          );
+        } else {
+          lastMessagePreview = Text(
+            _truncateMessage(lastMessage['message']),
+            style: TextStyle(color: Colors.grey),
+          );
+        }
+      }
+
+      chats.add({
+        "id": group['id'],
+        "name": group['name'],
+        "profilePic": group['profile_pic'],
+        "lastMessage": lastMessagePreview,
+        "time": lastMessage != null
+            ? _formatTime(lastMessage['timestamp'])
+            : "Just now",
+        "unreadCount": unreadCount,
+        "isGroup": true,
+      });
+    }
+
     chats.sort((a, b) => b["time"].compareTo(a["time"]));
 
-    // Update the state with the loaded chats
     setState(() {
       _chats = chats;
     });
   }
 
-  // Calculate unread messages for a chat
   int _calculateUnreadCount(
       String chatId, List<Map<String, dynamic>> messages) {
     final lastSeenTimestamp = _lastSeenTimestamps[chatId];
     if (lastSeenTimestamp == null) {
-      // If no last seen timestamp, assume all messages are unread
       return messages.length;
     }
 
-    // Count messages sent after the last seen timestamp
     return messages.where((msg) => msg['timestamp'] > lastSeenTimestamp).length;
   }
 
-  // Get a default avatar for users with no profile picture
-  Widget _getAvatar(String name, String? profilePic) {
+  Widget _getAvatar(String name, String? profilePic, bool isGroup) {
     if (profilePic != null && profilePic.isNotEmpty) {
+      // If a profile picture is available, use it
       return CircleAvatar(
-        backgroundImage: AssetImage(profilePic),
+        backgroundImage:
+            FileImage(File(profilePic)), // Use FileImage for file paths
         radius: 30,
       );
-    } else {
-      // Use initials as a fallback
-      final initials = name.isNotEmpty ? name[0].toUpperCase() : "U";
+    } else if (isGroup) {
+      // If it's a group with no profile picture, use the group's initials
+      final initials = name.isNotEmpty ? name[0].toUpperCase() : "G";
       return CircleAvatar(
         radius: 30,
-        backgroundColor: Colors.blue, // Replace with your primaryColor
+        backgroundColor: Colors.green, // Group avatar color
         child: Text(
           initials,
           style: TextStyle(
@@ -142,6 +193,13 @@ class _ChatListState extends State<ChatList> {
           ),
         ),
       );
+    } else {
+      // If it's a user with no profile picture, use the default avatar (avat.png)
+      return CircleAvatar(
+        radius: 30,
+        backgroundImage:
+            AssetImage('assets/avat.png'), // Default avatar for users
+      );
     }
   }
 
@@ -149,7 +207,7 @@ class _ChatListState extends State<ChatList> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: _chats.isEmpty
-          ? NewUserScreen() // Show NewUserScreen if there are no chats
+          ? NewUserScreen()
           : ListView.builder(
               itemCount: _chats.length,
               itemBuilder: (context, index) {
@@ -157,7 +215,8 @@ class _ChatListState extends State<ChatList> {
                 final hasUnreadMessages = chat["unreadCount"] > 0;
 
                 return ListTile(
-                  leading: _getAvatar(chat["name"], chat["profilePic"]),
+                  leading: _getAvatar(
+                      chat["name"], chat["profilePic"], chat["isGroup"]),
                   title: Text(
                     chat["name"],
                     style: TextStyle(
@@ -166,14 +225,7 @@ class _ChatListState extends State<ChatList> {
                           : FontWeight.normal,
                     ),
                   ),
-                  subtitle: Text(
-                    chat["lastMessage"],
-                    style: TextStyle(
-                      fontWeight: hasUnreadMessages
-                          ? FontWeight.bold
-                          : FontWeight.normal,
-                    ),
-                  ),
+                  subtitle: chat["lastMessage"], // Use the widget directly
                   trailing: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.end,
@@ -203,25 +255,21 @@ class _ChatListState extends State<ChatList> {
                     ],
                   ),
                   onTap: () {
-                    // Update the last seen timestamp for this chat
                     _lastSeenTimestamps[chat["id"].toString()] =
                         DateTime.now().toIso8601String();
 
-                    // Navigate to the Message screen
                     Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (context) => MessageChatScreen(
                           name: chat["name"],
                           profilePic: chat["profilePic"],
-                          groupId: chat["isGroup"]
-                              ? chat["id"]
-                              : null, // Pass groupId if it's a group
+                          groupId: chat["isGroup"] ? chat["id"] : null,
+                          onMessageSent: _loadChats, // Pass the callback
                         ),
                       ),
                     ).then((_) {
-                      // Reload chats when returning from the message screen
-                      _loadChats();
+                      _loadChats(); // Reload chats when returning
                     });
                   },
                 );
@@ -229,7 +277,6 @@ class _ChatListState extends State<ChatList> {
             ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
-          // Navigate to the new chat screen
           Navigator.push(
             context,
             MaterialPageRoute(
@@ -241,7 +288,7 @@ class _ChatListState extends State<ChatList> {
           Icons.group_add,
           color: primaryColor,
         ),
-        backgroundColor: primaryTwo, // Replace with your primaryColor
+        backgroundColor: primaryTwo,
       ),
     );
   }

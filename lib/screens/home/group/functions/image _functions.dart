@@ -25,24 +25,68 @@ class ImageFunctions {
     return null;
   }
 
-  /// Saves the image to the app's storage directory.
+  /// Saves the image to the app's private storage directory.
   Future<String> saveImageToStorage(File imageFile) async {
-    final directory = await getApplicationDocumentsDirectory();
-    final imagesDirectory = Directory('${directory.path}/images');
-
-    // Create the images directory if it doesn't exist
-    if (!await imagesDirectory.exists()) {
-      await imagesDirectory.create(recursive: true);
-      print("Created directory: ${imagesDirectory.path}");
+    // Get the app's private external storage directory
+    final directory = await getExternalStorageDirectory();
+    if (directory == null) {
+      throw Exception('External storage not available');
     }
 
-    // Define the file path for the image
-    final imagePath =
-        '${imagesDirectory.path}/${DateTime.now().millisecondsSinceEpoch}.jpg';
+    // Define the folder path
+    final appSpecificPath = Directory('${directory.path}/media');
+    if (!await appSpecificPath.exists()) {
+      await appSpecificPath.create(recursive: true);
+    }
 
-    // Copy the image to the new location
-    final savedImage = await imageFile.copy(imagePath);
-    print("Image saved at: ${savedImage.path}");
-    return savedImage.path;
+    // Generate a unique file name
+    final fileName = 'image_${DateTime.now().millisecondsSinceEpoch}.jpg';
+    final filePath = '${appSpecificPath.path}/$fileName';
+
+    // Copy the image file to the app's private storage
+    final savedFile = await imageFile.copy(filePath);
+
+    // Debug log: Confirm file was saved
+    print('File saved: ${savedFile.path}');
+
+    return savedFile.path;
+  }
+
+  /// Checks if a file exists at the given path.
+  Future<bool> doesFileExist(String filePath) async {
+    final file = File(filePath);
+    return await file.exists();
+  }
+
+  /// Deletes a file at the given path.
+  Future<void> deleteFile(String filePath) async {
+    final file = File(filePath);
+    if (await file.exists()) {
+      await file.delete();
+    }
+  }
+
+  /// Cleans up unused media files in the storage directory.
+  Future<void> cleanupUnusedMediaFiles(List<String> usedFilePaths) async {
+    final directory = await getExternalStorageDirectory();
+    if (directory == null) {
+      throw Exception('External storage not available');
+    }
+
+    final mediaFolder = Directory('${directory.path}/media');
+
+    if (await mediaFolder.exists()) {
+      // Recursively list all files in the Media folder
+      final files = await mediaFolder.list(recursive: true).toList();
+
+      for (var file in files) {
+        if (file is File) {
+          // Check if the file is in the list of used file paths
+          if (!usedFilePaths.contains(file.path)) {
+            await file.delete();
+          }
+        }
+      }
+    }
   }
 }

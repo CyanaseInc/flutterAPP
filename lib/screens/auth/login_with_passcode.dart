@@ -65,9 +65,8 @@ class _NumericLoginScreenState extends State<NumericLoginScreen> {
 
       // Fetch and process contacts using the existing function
       List<Map<String, String>> contacts = await fetchAndHashContacts();
-      List<Map<String, String>> registeredContacts =
+      List<Map<String, dynamic>> registeredContacts =
           await getRegisteredContacts(contacts);
-
       // Dismiss the loading indicator
       Navigator.pop(context);
 

@@ -50,7 +50,6 @@ class FullScreenImage extends StatelessWidget {
       final file = File(path);
       return await file.exists();
     } catch (e) {
-      print("Error checking image file: $e");
       return false;
     }
   }

@@ -80,7 +80,7 @@ Future<List<Map<String, String>>> fetchAndHashContacts() async {
 }
 
 // Function to send normalized contacts to the server
-Future<List<Map<String, String>>> getRegisteredContacts(
+Future<List<Map<String, dynamic>>> getRegisteredContacts(
     List<Map<String, String>> contactsWithHashes) async {
   final String apiUrl = "https://fund.cyanase.app/app/get_my_contacts.php";
 
@@ -95,14 +95,31 @@ Future<List<Map<String, String>>> getRegisteredContacts(
   );
 
   if (response.statusCode == 200) {
-    List<dynamic> registeredNumbers =
+    // Parse the response to get registered contacts with their IDs
+    List<dynamic> registeredNumbersWithIds =
         jsonDecode(response.body)["registeredContacts"];
 
-    // Filter the original contacts to only include registered ones
-    List<Map<String, String>> registeredContacts = contactsWithHashes
-        .where(
-            (contact) => registeredNumbers.contains(contact['normalizedPhone']))
-        .toList();
+    // Debug log: Print the server response
+
+    // Filter the original contacts to only include registered ones and add the ID
+    List<Map<String, dynamic>> registeredContacts = contactsWithHashes
+        .where((contact) => registeredNumbersWithIds.any((registered) =>
+            registered['phoneno'] == contact['normalizedPhone']))
+        .map((contact) {
+      // Find the corresponding ID from the server response
+      var registered = registeredNumbersWithIds.firstWhere(
+          (registered) => registered['phoneno'] == contact['normalizedPhone']);
+      return {
+        'id': int.parse(registered['id'].toString()), // Ensure the ID is an int
+        'user_id': registered['id'].toString(), // Use the ID as the user_id
+        'name': contact['name'],
+        'phone': contact['phone'],
+        'normalizedPhone': contact['normalizedPhone'],
+        'is_registered': true, // Mark as registered
+      };
+    }).toList();
+
+    // Debug log: Print the final list of registered contacts
 
     // Insert registered contacts into the database
     final dbHelper = DatabaseHelper();
@@ -110,9 +127,6 @@ Future<List<Map<String, String>>> getRegisteredContacts(
 
     return registeredContacts;
   } else {
-    print("Request failed with status: ${response.statusCode}");
-    print("Response body: ${response.body}");
-    print("Response headers: ${response.headers}");
     throw Exception("Failed to fetch registered contacts");
   }
 }

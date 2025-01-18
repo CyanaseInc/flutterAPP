@@ -18,6 +18,7 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
   final TextEditingController _groupNameController = TextEditingController();
   File? _groupImage;
   final DatabaseHelper _dbHelper = DatabaseHelper();
+  bool _isSaving = false; // To handle loading state
 
   Future<void> _pickImage() async {
     final picker = ImagePicker();
@@ -39,48 +40,68 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
       return;
     }
 
-    // Save group data to SQLite database
-    final groupId = await _dbHelper.insertGroup({
-      'name': groupName,
-      'description': '', // Add description if needed
-      'profile_pic': _groupImage?.path ?? '', // Save image path if available
-      'type': 'group', // Default type
-      'created_at': DateTime.now().toIso8601String(),
-      'created_by': 'current_user_id', // Replace with actual user ID
-      'last_activity': DateTime.now().toIso8601String(),
-      'settings': '', // Add settings if needed
+    setState(() {
+      _isSaving = true; // Show loading indicator
     });
 
-    // Save participants to the SQLite database
-    for (final contact in widget.selectedContacts) {
-      // Ensure each contact has a valid ID
-      final userId = contact['id'];
-      if (userId == null) {
-        print('Error: Contact does not have a valid ID: $contact');
-        continue;
+    try {
+      // Insert the group into the database
+      final groupId = await _dbHelper.insertGroup({
+        'name': groupName,
+        'description': '', // Add description if needed
+        'profile_pic': _groupImage?.path ?? '', // Save image path if available
+        'type': 'group', // Default type
+        'created_at': DateTime.now().toIso8601String(),
+        'created_by': 'current_user_id', // Replace with actual user ID
+        'last_activity': DateTime.now().toIso8601String(),
+        'settings': '', // Add settings if needed
+      });
+
+      // Debug log: Print the group ID
+
+      // Save participants to the SQLite database
+      for (final contact in widget.selectedContacts) {
+        // Ensure each contact has a valid ID
+        final userId = contact['id'];
+        if (userId == null) {
+          continue;
+        }
+
+        // Insert the participant into the participants table
+        await _dbHelper.insertParticipant({
+          'group_id': groupId,
+          'user_id': userId, // Use the ID from the contacts table
+          'role': 'member', // Default role
+          'joined_at': DateTime.now().toIso8601String(),
+          'muted':
+              0, // Use 0 for false, 1 for true (SQLite does not support bool directly)
+        });
+
+        // Debug log: Print the participant details
       }
 
-      await _dbHelper.insertParticipant({
-        'group_id': groupId,
-        'user_id': userId, // Ensure this is not null
-        'role': 'member', // Default role
-        'joined_at': DateTime.now().toIso8601String(),
-        'muted': false,
+      // Navigate to the group chat screen
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => HomeScreen(),
+        ),
+      );
+
+      // Show a success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Group created successfully!')),
+      );
+    } catch (e) {
+      print("Error creating group: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Failed to create group: ${e.toString()}")),
+      );
+    } finally {
+      setState(() {
+        _isSaving = false; // Hide loading indicator
       });
     }
-
-    // Navigate back to the preious screen
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => HomeScreen(),
-      ),
-    );
-
-    // Show a success message
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Group created successfully!')),
-    );
   }
 
   @override
@@ -95,8 +116,11 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
         iconTheme: IconThemeData(color: Colors.white),
         actions: [
           IconButton(
-            icon: Icon(Icons.check, color: Colors.white),
-            onPressed: _saveGroup,
+            icon: _isSaving
+                ? CircularProgressIndicator(color: Colors.white) // Show loader
+                : Icon(Icons.check, color: Colors.white),
+            onPressed:
+                _isSaving ? null : _saveGroup, // Disable button when saving
           ),
         ],
       ),

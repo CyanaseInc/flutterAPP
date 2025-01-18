@@ -1,5 +1,3 @@
-import 'package:flutter/material.dart';
-
 class UIFunctions {
   static String formatLastSeen(DateTime lastSeen) {
     final now = DateTime.now();

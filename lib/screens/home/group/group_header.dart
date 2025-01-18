@@ -104,7 +104,9 @@ class _GroupHeaderState extends State<GroupHeader> {
                     child: CircleAvatar(
                       backgroundImage: _profilePicFile != null
                           ? FileImage(_profilePicFile!)
-                          : AssetImage(widget.profilePic) as ImageProvider,
+                          : widget.profilePic.isNotEmpty
+                              ? FileImage(File(widget.profilePic))
+                              : AssetImage('assets/avat.png') as ImageProvider,
                       radius: 20,
                     ),
                   ),

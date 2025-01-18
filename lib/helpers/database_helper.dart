@@ -11,8 +11,9 @@ class DatabaseHelper {
   static const String tableGroups = 'groups';
   static const String tableParticipants = 'participants';
   static const String tableMedia = 'media';
-  static const String tableMessages = 'messages'; // Add this line
+  static const String tableMessages = 'messages';
   static const String tableContacts = 'contacts';
+
   // Singleton constructor
   DatabaseHelper._internal();
 
@@ -57,24 +58,6 @@ class DatabaseHelper {
       version: 3,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
-    );
-  }
-
-  ///Cyanase
-  Future<int> insertMedia(Map<String, dynamic> media) async {
-    final db = await database;
-    return await db.insert(
-      'media',
-      {
-        'file_path': media['file_path'],
-        'type': media['type'],
-        'mime_type': media['mime_type'],
-        'file_size': media['file_size'],
-        'duration': media['duration'],
-        'thumbnail_path': media['thumbnail_path'],
-        'created_at': DateTime.now().toIso8601String(),
-        'deleted': false,
-      },
     );
   }
 
@@ -142,31 +125,32 @@ class DatabaseHelper {
     ''');
 
     await db.execute('''
- CREATE TABLE messages (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  group_id INTEGER NOT NULL, -- Ensure NOT NULL constraint
-  sender_id TEXT NOT NULL,
-  message TEXT,
-  media_id INTEGER,
-  type TEXT NOT NULL,
-  status TEXT NOT NULL,
-  timestamp TEXT NOT NULL,
-  reply_to_id INTEGER,
-  forwarded BOOLEAN NOT NULL DEFAULT FALSE,
-  edited BOOLEAN NOT NULL DEFAULT FALSE,
-  deleted BOOLEAN NOT NULL DEFAULT FALSE,
-  FOREIGN KEY (group_id) REFERENCES groups (id) ON DELETE CASCADE,
-  FOREIGN KEY (sender_id) REFERENCES users (id) ON DELETE CASCADE,
-  FOREIGN KEY (media_id) REFERENCES media (id) ON DELETE SET NULL
-)
+      CREATE TABLE messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        group_id INTEGER NOT NULL,
+        sender_id TEXT NOT NULL,
+        message TEXT,
+        media_id INTEGER,
+        type TEXT NOT NULL,
+        status TEXT NOT NULL,
+        timestamp TEXT NOT NULL,
+        reply_to_id INTEGER,
+        forwarded BOOLEAN NOT NULL DEFAULT FALSE,
+        edited BOOLEAN NOT NULL DEFAULT FALSE,
+        deleted BOOLEAN NOT NULL DEFAULT FALSE,
+        FOREIGN KEY (group_id) REFERENCES groups (id) ON DELETE CASCADE,
+        FOREIGN KEY (sender_id) REFERENCES users (id) ON DELETE CASCADE,
+        FOREIGN KEY (media_id) REFERENCES media (id) ON DELETE SET NULL
+      )
     ''');
 
     await db.execute('''
       CREATE TABLE contacts (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT NOT NULL,
         name TEXT NOT NULL,
         phone_number TEXT NOT NULL UNIQUE,
-        is_registered BOOLEAN NOT NULL DEFAULT FALSE,
+        is_registered INTEGER NOT NULL DEFAULT 0,
         last_synced TEXT
       )
     ''');
@@ -232,39 +216,36 @@ class DatabaseHelper {
   // Insert a message
   Future<int> insertMessage(Map<String, dynamic> message) async {
     final db = await database;
+    return await db.insert('messages', message);
+  }
 
-    // Debug log: Print the message data
-    print("Inserting message: $message");
+  // Insert a contact
+  Future<int> insertContact(Map<String, dynamic> contact) async {
+    final db = await database;
+    return await db.insert('contacts', contact);
+  }
 
-    try {
-      final messageId = await db.insert(
-        'messages',
+  // Insert multiple contacts
+  Future<void> insertContacts(List<Map<String, dynamic>> contacts) async {
+    final db = await database;
+    for (var contact in contacts) {
+      await db.insert(
+        'contacts',
         {
-          'group_id': message['group_id'],
-          'sender_id': message['sender_id'],
-          'message': message['message'],
-          'type': message['type'],
-          'status': 'sent', // Default status
-          'timestamp': message['timestamp'],
-          'reply_to_id': message['reply_to_id'] ?? null,
-          'forwarded': message['forwarded'] ?? false,
-          'edited': message['edited'] ?? false,
-          'deleted': message['deleted'] ?? false,
-          'media_id': message['media_id'] ?? null, // Link to the media entry
+          'id': contact['id'], // Ensure the ID is an int
+          'user_id':
+              contact['id'] ?? 'unknown', // Provide a default value for user_id
+          'name': contact['name'],
+          'phone_number': contact['phone'],
+          'is_registered':
+              contact['is_registered'] == true ? 1 : 0, // Convert bool to int
         },
+        conflictAlgorithm: ConflictAlgorithm.replace,
       );
-
-      // Debug log: Print the inserted message ID
-      print("Message inserted with ID: $messageId");
-      return messageId;
-    } catch (e) {
-      // Debug log: Print the error
-      print("Error inserting message: $e");
-      rethrow;
     }
   }
 
-  // Insert an audio file into the media table
+  // Insert an audio file
   Future<int> insertAudioFile(String filePath) async {
     final db = await database;
     return await db.insert(
@@ -272,14 +253,54 @@ class DatabaseHelper {
       {
         'file_path': filePath,
         'type': 'audio',
-        'mime_type': 'audio/m4a', // Adjust based on the actual file type
+        'mime_type': 'audio/m4a',
         'file_size': await File(filePath).length(),
-        'duration': 0, // You can calculate this if needed
-        'thumbnail_path': null, // Add a thumbnail path if applicable
+        'duration': 0,
+        'thumbnail_path': null,
         'created_at': DateTime.now().toIso8601String(),
         'deleted': false,
       },
     );
+  }
+
+  // Insert an image file
+  Future<int> insertImageFile(String filePath) async {
+    final db = await database;
+    return await db.insert(
+      'media',
+      {
+        'file_path': filePath,
+        'type': 'image',
+        'mime_type': 'image/jpeg',
+        'file_size': await File(filePath).length(),
+        'duration': 0,
+        'thumbnail_path': null,
+        'created_at': DateTime.now().toIso8601String(),
+        'deleted': false,
+      },
+    );
+  }
+
+  // Insert an image message
+  Future<int> insertImageMessage(Map<String, dynamic> message) async {
+    final db = await database;
+    return await db.insert(
+      'messages',
+      {
+        'group_id': message['group_id'],
+        'sender_id': message['sender_id'],
+        'message': message['message'],
+        'type': 'image',
+        'timestamp': message['timestamp'],
+        'media_id': message['media_id'],
+      },
+    );
+  }
+
+  // Retrieve all contacts
+  Future<List<Map<String, dynamic>>> getContacts() async {
+    final db = await database;
+    return await db.query('contacts');
   }
 
   // Retrieve all users
@@ -306,26 +327,7 @@ class DatabaseHelper {
     final db = await database;
     final whereClause = groupId != null ? 'group_id = ?' : null;
     final whereArgs = groupId != null ? [groupId] : null;
-    // Debug log
-
-    final messages = await db.query(
-      'messages',
-      where: whereClause,
-      whereArgs: whereArgs,
-    );
-
-    // Debug log
-    return messages;
-  }
-
-  ///get         user       id
-  Future<String?> getCurrentUserId() async {
-    final db = await database;
-    final result = await db.query('users', limit: 1); // Fetch the first user
-    if (result.isNotEmpty) {
-      return result.first['id'] as String?;
-    }
-    return null;
+    return await db.query('messages', where: whereClause, whereArgs: whereArgs);
   }
 
   // Retrieve a single media file by ID
@@ -337,6 +339,18 @@ class DatabaseHelper {
       whereArgs: [mediaId],
     );
     return media.isNotEmpty ? media.first : null;
+  }
+
+  // Retrieve group member names
+  Future<List<String>> getGroupMemberNames(int groupId) async {
+    final db = await database;
+    final result = await db.rawQuery('''
+      SELECT contacts.name 
+      FROM participants
+      INNER JOIN contacts ON participants.user_id = contacts.user_id
+      WHERE participants.group_id = ?
+    ''', [groupId]);
+    return result.map((row) => row['name'] as String).toList();
   }
 
   // Delete a user
@@ -390,76 +404,5 @@ class DatabaseHelper {
       where: 'id = ?',
       whereArgs: [mediaId],
     );
-  }
-
-  // Insert a contact
-  Future<int> insertContact(Map<String, dynamic> contact) async {
-    final db = await database;
-    return await db.insert('contacts', contact);
-  }
-
-//insert    image      files
-  Future<int> insertImageFile(String filePath) async {
-    final db = await database;
-    return await db.insert(
-      'media',
-      {
-        'file_path': filePath,
-        'type': 'image',
-        'mime_type': 'image/jpeg', // Adjust based on the actual file type
-        'file_size': await File(filePath).length(),
-        'duration': 0, // Not applicable for images
-        'thumbnail_path': null, // Add a thumbnail path if applicable
-        'created_at': DateTime.now().toIso8601String(),
-        'deleted': false,
-      },
-    );
-  }
-
-  Future<int> insertImageMessage(Map<String, dynamic> message) async {
-    final db = await database;
-    return await db.insert(
-      'messages',
-      {
-        'group_id': message['group_id'],
-        'sender_id': message['sender_id'],
-        'message': message['message'],
-        'type': 'image',
-        'timestamp': message['timestamp'],
-        'media_id': message['media_id'],
-      },
-    );
-  }
-
-  Future<void> insertContacts(List<Map<String, String>> contacts) async {
-    final db = await database;
-
-    for (var contact in contacts) {
-      // Check if the contact already exists
-      final existingContact = await db.query(
-        'contacts',
-        where: 'phone_number = ?',
-        whereArgs: [contact['normalizedPhone']],
-      );
-
-      // If the contact doesn't exist, insert it
-      if (existingContact.isEmpty) {
-        await db.insert(
-          'contacts',
-          {
-            'name': contact['name'],
-            'phone_number': contact['normalizedPhone'],
-            'is_registered': true,
-            'last_synced': DateTime.now().toIso8601String(),
-          },
-        );
-      }
-    }
-  }
-
-  // Retrieve all contacts
-  Future<List<Map<String, dynamic>>> getContacts() async {
-    final db = await database;
-    return await db.query('contacts');
   }
 }

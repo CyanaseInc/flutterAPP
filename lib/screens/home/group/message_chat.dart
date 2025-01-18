@@ -17,6 +17,7 @@ class MessageChat extends StatelessWidget {
   final Duration audioPosition;
   final void Function(String)? onPlayAudio;
   final String messageId; // Unique identifier for the message
+  final VoidCallback? onMessageSent; // Callback for when a message is sent
 
   const MessageChat({
     Key? key,
@@ -32,6 +33,7 @@ class MessageChat extends StatelessWidget {
     this.audioDuration = Duration.zero,
     this.audioPosition = Duration.zero,
     required this.messageId,
+    this.onMessageSent, // Add this
   }) : super(key: key);
 
   @override
@@ -176,7 +178,7 @@ class MessageChat extends StatelessWidget {
                         );
                       },
                       child: FutureBuilder<bool>(
-                        future: File(message!).exists(),
+                        future: doesFileExist(message!),
                         builder: (context, snapshot) {
                           if (snapshot.connectionState ==
                               ConnectionState.waiting) {
@@ -245,5 +247,11 @@ class MessageChat extends StatelessWidget {
     final minutes = twoDigits(duration.inMinutes.remainder(60));
     final seconds = twoDigits(duration.inSeconds.remainder(60));
     return "$minutes:$seconds";
+  }
+
+  /// Checks if a file exists at the given path.
+  Future<bool> doesFileExist(String filePath) async {
+    final file = File(filePath);
+    return await file.exists();
   }
 }

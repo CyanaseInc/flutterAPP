@@ -1,19 +1,19 @@
+// message_chat_screen.dart
 import 'dart:async';
-import 'dart:io';
+
 import 'package:flutter/material.dart';
-import 'package:cyanase/screens/home/group/group_info.dart';
 import 'package:cyanase/theme/theme.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:cyanase/screens/home/group/group_deposit.dart';
 import 'package:record/record.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:cyanase/helpers/database_helper.dart';
+import 'chat_app_bar.dart'; // Import the AppBar
 import 'message_chat.dart';
-import './functions/ui_function.dart'; // Replace with the correct path
+import './functions/ui_function.dart';
 import './functions/audio_function.dart';
 import './functions/message_function.dart';
-import './functions/audio_player.dart';
+import 'package:cyanase/screens/home/group/group_deposit.dart';
 import './functions/image _functions.dart';
 
 class MessageChatScreen extends StatefulWidget {
@@ -21,13 +21,15 @@ class MessageChatScreen extends StatefulWidget {
   final String profilePic;
   final bool isGroup;
   final int? groupId;
+  final VoidCallback? onMessageSent;
 
   const MessageChatScreen({
     Key? key,
     required this.name,
     required this.profilePic,
-    this.isGroup = false,
+    this.isGroup = true,
     this.groupId,
+    this.onMessageSent,
   }) : super(key: key);
 
   @override
@@ -41,13 +43,10 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
   final ScrollController _scrollController = ScrollController();
   String? _replyingToMessage;
 
-  bool _isTyping = false;
-  bool _isOnline = true;
-  DateTime _lastSeen = DateTime.now().subtract(Duration(minutes: 5));
-
   bool _isRecording = false;
   Duration _recordingDuration = Duration.zero;
   final DatabaseHelper _dbHelper = DatabaseHelper();
+  List<String> _memberNames = [];
   Map<String, bool> _isPlayingMap = {};
   Map<String, Duration> _audioDurationMap = {};
   Map<String, Duration> _audioPositionMap = {};
@@ -59,6 +58,7 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
   void initState() {
     super.initState();
     _loadMessages();
+    _loadGroupMembers();
   }
 
   Future<void> _loadMessages() async {
@@ -87,48 +87,42 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
       final duration = await audioPlayer.getDuration();
       return duration ?? Duration.zero;
     } catch (e) {
+      print("Error getting audio duration: $e");
       return Duration.zero;
     }
   }
 
   void _sendImageMessage(String imagePath) async {
     try {
-      // Insert the image into the media table
       final mediaId = await _dbHelper.insertImageFile(imagePath);
-
-      // Prepare the message data
       final message = {
         "group_id": widget.groupId,
-        "sender_id": "current_user_id", // Replace with actual user ID
+        "sender_id": "current_user_id",
         "message": imagePath,
         "type": "image",
         "status": "sent",
         "timestamp": DateTime.now().toIso8601String(),
-        "media_id": mediaId, // Link to the media entry
+        "media_id": mediaId,
       };
+      final messageId = await _dbHelper.insertMessage(message);
+      print("Image message inserted with ID: $messageId");
 
-      // Insert the message into the messages table
-
-      // Create the message object to add to _messages
       final newMessage = {
         "id": UniqueKey().toString(),
         "isMe": true,
         "message": imagePath,
         "time": DateTime.now().toIso8601String(),
         "replyTo": _replyingToMessage,
-        "isImage": true, // Explicitly set to true
-        "isAudio": false, // Explicitly set to false
+        "isImage": true,
+        "isAudio": false,
       };
 
-      // Debug log: Print the message being added to _messages
       print("Added message to _messages: $newMessage");
 
-      // Update the UI
       setState(() {
         _messages.add(newMessage);
       });
 
-      // Scroll to the bottom of the chat
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_scrollController.hasClients) {
           _scrollController.animateTo(
@@ -138,6 +132,10 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
           );
         }
       });
+
+      if (widget.onMessageSent != null) {
+        widget.onMessageSent!();
+      }
     } catch (e) {
       print("Error sending image message: $e");
       ScaffoldMessenger.of(context).showSnackBar(
@@ -148,7 +146,6 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
   }
 
   void _sendMessage() async {
-    // Validate the message content
     if (_controller.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Message cannot be empty")),
@@ -156,7 +153,6 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
       return;
     }
 
-    // Ensure group_id is not null when isGroup is true
     if (widget.isGroup && widget.groupId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Group ID is missing")),
@@ -165,9 +161,16 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
     }
 
     try {
-      // Debug log: Print the inserted message ID
+      await _dbHelper.insertMessage({
+        "group_id": widget.groupId,
+        "sender_id": "current_user_id",
+        "message": _controller.text.trim(),
+        "type": "text",
+        "timestamp": DateTime.now().toIso8601String(),
+      });
 
-      // Update the UI
+      _controller.clear();
+
       setState(() {
         _messages.add({
           "id": UniqueKey().toString(),
@@ -176,13 +179,11 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
           "time": DateTime.now().toIso8601String(),
           "replyTo": _replyingToMessage,
           "isAudio": false,
-          "isImage": false, // //
+          "isImage": false,
         });
-        _controller.clear();
         _replyingToMessage = null;
       });
 
-      // Scroll to the bottom of the chat
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_scrollController.hasClients) {
           _scrollController.animateTo(
@@ -192,7 +193,12 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
           );
         }
       });
+
+      if (widget.onMessageSent != null) {
+        widget.onMessageSent!();
+      }
     } catch (e) {
+      print("Error sending text message: $e");
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Failed to send text message: ${e.toString()}")),
       );
@@ -206,7 +212,6 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
       _recordingDuration = Duration.zero;
     });
 
-    // Start the timer
     _recordingTimer = Timer.periodic(Duration(seconds: 1), (timer) {
       setState(() {
         _recordingDuration += Duration(seconds: 1);
@@ -217,7 +222,6 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
   void _stopRecording() async {
     final path = await _audioFunctions.stopRecording();
     if (path != null) {
-      // Ensure groupId is not null when isGroup is true
       if (widget.isGroup && widget.groupId == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("Group ID is missing")),
@@ -226,23 +230,18 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
       }
 
       try {
-        // Insert the audio file into the media table
         final mediaId = await _dbHelper.insertAudioFile(path);
-
-        // Prepare the audio message data
         final message = {
           "group_id": widget.groupId,
-          "sender_id": "current_user_id", // Replace with actual user ID
+          "sender_id": "current_user_id",
           "message": path,
           "type": "audio",
           "timestamp": DateTime.now().toIso8601String(),
           "media_id": mediaId,
         };
 
-        // Insert the audio message into the messages table
         await _dbHelper.insertMessage(message);
 
-        // Update the UI
         setState(() {
           _messages.add({
             "id": UniqueKey().toString(),
@@ -255,7 +254,6 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
           _isRecording = false;
         });
 
-        // Scroll to the bottom of the chat
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (_scrollController.hasClients) {
             _scrollController.animateTo(
@@ -265,7 +263,12 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
             );
           }
         });
+
+        if (widget.onMessageSent != null) {
+          widget.onMessageSent!();
+        }
       } catch (e) {
+        print("Error sending audio message: $e");
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
               content: Text("Failed to send audio message: ${e.toString()}")),
@@ -275,46 +278,42 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
   }
 
   void _playAudio(String messageId, String path) async {
+    print("Attempting to play audio from: $path");
+
     if (_isPlayingMap[messageId] ?? false) {
-      // If audio is already playing, pause it
       await _audioFunctions.pauseAudio();
       setState(() {
         _isPlayingMap[messageId] = false;
       });
     } else {
-      // If another audio is playing, pause it first
       for (var id in _isPlayingMap.keys) {
         if (_isPlayingMap[id] == true && id != messageId) {
           await _audioFunctions.pauseAudio();
           setState(() {
             _isPlayingMap[id] = false;
-            _audioPositionMap[id] = Duration.zero; // Reset progress bar
+            _audioPositionMap[id] = Duration.zero;
           });
         }
       }
 
-      // Start playback for the selected audio
       await _audioFunctions.playAudio(path);
 
-      // Listen for position changes
       _audioFunctions.onPositionChanged((position) {
         setState(() {
           _audioPositionMap[messageId] = position;
         });
       });
 
-      // Listen for duration changes
       _audioFunctions.onDurationChanged((duration) {
         setState(() {
           _audioDurationMap[messageId] = duration;
         });
       });
 
-      // Listen for playback completion
       _audioFunctions.onPlayerComplete(() {
         setState(() {
           _isPlayingMap[messageId] = false;
-          _audioPositionMap[messageId] = Duration.zero; // Reset progress bar
+          _audioPositionMap[messageId] = Duration.zero;
         });
       });
 
@@ -324,140 +323,50 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
     }
   }
 
+  Future<void> _loadGroupMembers() async {
+    print(
+        "isGroup: ${widget.isGroup}, groupId: ${widget.groupId}"); // Debug log
+    if (widget.isGroup && widget.groupId != null) {
+      try {
+        print("Fetching members for group ID: ${widget.groupId}"); // Debug log
+        final memberNames =
+            await _dbHelper.getGroupMemberNames(widget.groupId!);
+        print("Fetched member names: $memberNames"); // Debug log
+        setState(() {
+          _memberNames = memberNames;
+        });
+      } catch (e) {
+        print("Error loading group members: $e"); // Debug log
+      }
+    } else if (!widget.isGroup) {
+      // Handle one-on-one chat
+      print("This is a one-on-one chat"); // Debug log
+      setState(() {
+        _memberNames = [widget.name]; // Show the other user's name
+      });
+    } else {
+      print("Group ID is null or not a group chat"); // Debug log
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        titleSpacing: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Colors.black),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: GestureDetector(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => GroupInfoPage(
-                  groupName: widget.name,
-                  profilePic: widget.profilePic,
-                ),
-              ),
-            );
-          },
-          child: Row(
-            children: [
-              CircleAvatar(
-                backgroundImage: AssetImage(widget.profilePic),
-                radius: 20,
-              ),
-              SizedBox(width: 10),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.name,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black,
-                    ),
-                  ),
-                  SizedBox(height: 4),
-                  if (_isTyping)
-                    Text(
-                      "Typing...",
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.black54,
-                      ),
-                    )
-                  else if (_isOnline)
-                    Text(
-                      "Online",
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.black54,
-                      ),
-                    )
-                  else
-                    Text(
-                      UIFunctions.formatLastSeen(_lastSeen),
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.black54,
-                      ),
-                    ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          OutlinedButton(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => DepositScreen(
-                    groupName: widget.name,
-                  ),
-                ),
-              );
-            },
-            style: OutlinedButton.styleFrom(
-              side: BorderSide(color: primaryTwo),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            ),
-            child: const Text(
-              'Deposit',
-              style: TextStyle(
-                color: primaryTwo,
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
+      appBar: MessageAppBar(
+        name: widget.name,
+        profilePic: widget.profilePic,
+        memberNames: _memberNames,
+        onDepositPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => DepositScreen(
+                groupName: widget.name,
               ),
             ),
-          ),
-          PopupMenuButton<String>(
-            icon: Icon(Icons.more_vert, color: Colors.black),
-            onSelected: (String value) {
-              switch (value) {
-                case 'group_info':
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => GroupInfoPage(
-                        groupName: widget.name,
-                        profilePic: widget.profilePic,
-                      ),
-                    ),
-                  );
-                  break;
-                case 'edit_group':
-                  break;
-                case 'leave_group':
-                  break;
-              }
-            },
-            itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
-              const PopupMenuItem<String>(
-                value: 'group_info',
-                child: Text('Group Info'),
-              ),
-              const PopupMenuItem<String>(
-                value: 'edit_group',
-                child: Text('Edit Group'),
-              ),
-              const PopupMenuItem<String>(
-                value: 'leave_group',
-                child: Text('Leave Group'),
-              ),
-            ],
-          ),
-        ],
+          );
+        },
+        onBackPressed: () => Navigator.pop(context),
       ),
       body: Stack(
         children: [
@@ -491,14 +400,14 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
                   isSameSender: isSameSender,
                   replyTo: message["replyTo"],
                   isAudio: message["isAudio"],
-                  isImage: message["isImage"] ?? false, // Add this line
+                  isImage: message["isImage"] ?? false,
                   onPlayAudio: (path) => _playAudio(message["id"], path),
                   isPlaying: _isPlayingMap[message["id"]] ?? false,
                   audioDuration:
                       _audioDurationMap[message["id"]] ?? Duration.zero,
                   audioPosition:
                       _audioPositionMap[message["id"]] ?? Duration.zero,
-                  messageId: message["id"], // Pass the unique messageId
+                  messageId: message["id"],
                 ),
               );
             },
@@ -604,11 +513,6 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
                               contentPadding:
                                   EdgeInsets.symmetric(horizontal: 16),
                             ),
-                            onChanged: (text) {
-                              setState(() {
-                                _isTyping = text.isNotEmpty;
-                              });
-                            },
                           ),
                         ),
                       IconButton(
