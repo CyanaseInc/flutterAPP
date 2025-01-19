@@ -1,49 +1,138 @@
 import 'package:flutter/material.dart';
-import 'dart:io'; // Import for File and FileImage
+import 'package:cyanase/helpers/database_helper.dart';
 import 'chat_screen.dart'; // Import your existing Message screen
 import 'package:cyanase/theme/theme.dart'; // Import your theme
-import 'hash_numbers.dart'; // Import the hash functions
 import 'new_group.dart'; // Import the new group screen
-import 'package:cyanase/helpers/database_helper.dart'; // Import your DatabaseHelper
-import 'package:cyanase/new_user.dart'; // Import the NewUserScreen
+import 'dart:io'; // Import for File and FileImage
+import 'dart:async';
 
 class ChatList extends StatefulWidget {
+  const ChatList({Key? key}) : super(key: key);
+
   @override
-  _ChatListState createState() => _ChatListState();
+  ChatListState createState() => ChatListState();
 }
 
-class _ChatListState extends State<ChatList> {
+class ChatListState extends State<ChatList> {
   final DatabaseHelper _dbHelper = DatabaseHelper();
-  List<Map<String, dynamic>> _chats = [];
-  Map<String, String> _lastSeenTimestamps = {};
+  final StreamController<void> _refreshController =
+      StreamController<void>.broadcast();
 
   @override
-  void initState() {
-    super.initState();
-    _loadChats();
+  void dispose() {
+    _refreshController.close(); // Close the stream controller
+    super.dispose();
   }
 
-  String _formatTime(String timestamp) {
-    DateTime dateTime = DateTime.parse(timestamp);
-    String formattedTime =
-        "${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}";
-    return formattedTime;
+  // Callback to reload the chat list
+  void _reloadChats() {
+    _refreshController.add(null); // Trigger a refresh
   }
 
-  String _truncateMessage(String message, {int maxLength = 30}) {
-    if (message.length > maxLength) {
-      return "${message.substring(0, maxLength)}...";
-    }
-    return message;
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: StreamBuilder<void>(
+        stream: _refreshController.stream,
+        builder: (context, snapshot) {
+          return FutureBuilder<List<Map<String, dynamic>>>(
+            future: _loadChats(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) {
+                return Center(child: CircularProgressIndicator());
+              }
+
+              final chats = snapshot.data!;
+              return ListView.builder(
+                itemCount: chats.length,
+                itemBuilder: (context, index) {
+                  final chat = chats[index];
+                  final hasUnreadMessages = chat["unreadCount"] > 0;
+
+                  return ListTile(
+                    leading: _getAvatar(
+                        chat["name"], chat["profilePic"], chat["isGroup"]),
+                    title: Text(
+                      chat["name"],
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    subtitle: chat["lastMessage"],
+                    trailing: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          chat["time"],
+                          style: TextStyle(
+                            color: Colors.grey,
+                            fontSize: 12,
+                          ),
+                        ),
+                        if (hasUnreadMessages)
+                          Container(
+                            padding: EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: primaryColor,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Text(
+                              chat["unreadCount"].toString(),
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => MessageChatScreen(
+                            name: chat["name"],
+                            profilePic: chat["profilePic"],
+                            groupId: chat["isGroup"] ? chat["id"] : null,
+                            onMessageSent: _reloadChats, // Pass the callback
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
+              );
+            },
+          );
+        },
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () async {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => NewGroupScreen(),
+            ),
+          );
+        },
+        child: Icon(
+          Icons.group_add,
+          color: primaryColor,
+        ),
+        backgroundColor: primaryTwo,
+      ),
+    );
   }
 
-  Future<void> _loadChats() async {
+  Future<List<Map<String, dynamic>>> _loadChats() async {
     final users = await _dbHelper.getUsers();
     final groups = await _dbHelper.getGroups();
     final messages = await _dbHelper.getMessages();
 
     List<Map<String, dynamic>> chats = [];
 
+    // Load user chats
     for (var user in users) {
       final userMessages =
           messages.where((msg) => msg['sender_id'] == user['id']).toList();
@@ -94,10 +183,11 @@ class _ChatListState extends State<ChatList> {
             ? _formatTime(lastMessage['timestamp'])
             : "Just now",
         "unreadCount": unreadCount,
-        "isGroup": true,
+        "isGroup": false,
       });
     }
 
+    // Load group chats
     for (var group in groups) {
       final groupMessages =
           messages.where((msg) => msg['group_id'] == group['id']).toList();
@@ -153,23 +243,36 @@ class _ChatListState extends State<ChatList> {
       });
     }
 
+    // Sort chats by time (most recent first)
     chats.sort((a, b) => b["time"].compareTo(a["time"]));
 
-    setState(() {
-      _chats = chats;
-    });
+    return chats;
   }
 
+  // Calculate unread message count
   int _calculateUnreadCount(
       String chatId, List<Map<String, dynamic>> messages) {
-    final lastSeenTimestamp = _lastSeenTimestamps[chatId];
-    if (lastSeenTimestamp == null) {
-      return messages.length;
-    }
-
-    return messages.where((msg) => msg['timestamp'] > lastSeenTimestamp).length;
+    // Example logic: Count messages not seen by the user
+    return messages.length; // Replace with your actual logic
   }
 
+  // Format timestamp to a readable time
+  String _formatTime(String timestamp) {
+    DateTime dateTime = DateTime.parse(timestamp);
+    String formattedTime =
+        "${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}";
+    return formattedTime;
+  }
+
+  // Truncate long messages
+  String _truncateMessage(String message, {int maxLength = 30}) {
+    if (message.length > maxLength) {
+      return "${message.substring(0, maxLength)}...";
+    }
+    return message;
+  }
+
+  // Get avatar for the chat
   Widget _getAvatar(String name, String? profilePic, bool isGroup) {
     if (profilePic != null && profilePic.isNotEmpty) {
       // If a profile picture is available, use it
@@ -201,95 +304,5 @@ class _ChatListState extends State<ChatList> {
             AssetImage('assets/avat.png'), // Default avatar for users
       );
     }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: _chats.isEmpty
-          ? NewUserScreen()
-          : ListView.builder(
-              itemCount: _chats.length,
-              itemBuilder: (context, index) {
-                final chat = _chats[index];
-                final hasUnreadMessages = chat["unreadCount"] > 0;
-
-                return ListTile(
-                  leading: _getAvatar(
-                      chat["name"], chat["profilePic"], chat["isGroup"]),
-                  title: Text(
-                    chat["name"],
-                    style: TextStyle(
-                      fontWeight: hasUnreadMessages
-                          ? FontWeight.bold
-                          : FontWeight.normal,
-                    ),
-                  ),
-                  subtitle: chat["lastMessage"], // Use the widget directly
-                  trailing: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        chat["time"],
-                        style: TextStyle(
-                          color: Colors.grey,
-                          fontSize: 12,
-                        ),
-                      ),
-                      if (hasUnreadMessages)
-                        Container(
-                          padding: EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: primaryColor,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Text(
-                            chat["unreadCount"].toString(),
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                  onTap: () {
-                    _lastSeenTimestamps[chat["id"].toString()] =
-                        DateTime.now().toIso8601String();
-
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => MessageChatScreen(
-                          name: chat["name"],
-                          profilePic: chat["profilePic"],
-                          groupId: chat["isGroup"] ? chat["id"] : null,
-                          onMessageSent: _loadChats, // Pass the callback
-                        ),
-                      ),
-                    ).then((_) {
-                      _loadChats(); // Reload chats when returning
-                    });
-                  },
-                );
-              },
-            ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => NewGroupScreen(),
-            ),
-          );
-        },
-        child: Icon(
-          Icons.group_add,
-          color: primaryColor,
-        ),
-        backgroundColor: primaryTwo,
-      ),
-    );
   }
 }

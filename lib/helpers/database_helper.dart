@@ -216,7 +216,19 @@ class DatabaseHelper {
   // Insert a message
   Future<int> insertMessage(Map<String, dynamic> message) async {
     final db = await database;
-    return await db.insert('messages', message);
+
+    // Ensure the timestamp is always set
+    final Map<String, dynamic> messageWithTimestamp = {
+      ...message,
+      'timestamp': message['timestamp'] ?? DateTime.now().toIso8601String(),
+    };
+
+    // Insert the message into the database
+    return await db.insert(
+      'messages',
+      messageWithTimestamp,
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
   }
 
   // Insert a contact

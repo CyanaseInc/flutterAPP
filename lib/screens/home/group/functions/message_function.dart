@@ -1,8 +1,51 @@
 import 'package:cyanase/helpers/database_helper.dart';
+import 'dart:async'; // For StreamController and Timer
 
 class MessageFunctions {
   final DatabaseHelper _dbHelper = DatabaseHelper();
 
+  // Fetch messages as a Stream for real-time updates
+  Stream<List<Map<String, dynamic>>> getMessagesStream({int? groupId}) {
+    final controller = StreamController<List<Map<String, dynamic>>>();
+
+    // Fetch initial messages
+    () async {
+      final messages = await _dbHelper.getMessages(groupId: groupId);
+      final formattedMessages = messages.map((msg) {
+        return {
+          "id": msg['id'].toString(),
+          "isMe": msg['sender_id'] == "current_user_id",
+          "message": msg['message'],
+          "time": msg['timestamp'],
+          "replyTo": null,
+          "isAudio": msg['type'] == 'audio',
+        };
+      }).toList();
+
+      controller.add(formattedMessages);
+
+      // Poll for updates (or use a better mechanism like triggers)
+      Timer.periodic(Duration(seconds: 1), (timer) async {
+        final updatedMessages = await _dbHelper.getMessages(groupId: groupId);
+        final formattedUpdatedMessages = updatedMessages.map((msg) {
+          return {
+            "id": msg['id'].toString(),
+            "isMe": msg['sender_id'] == "current_user_id",
+            "message": msg['message'],
+            "time": msg['timestamp'],
+            "replyTo": null,
+            "isAudio": msg['type'] == 'audio',
+          };
+        }).toList();
+
+        controller.add(formattedUpdatedMessages);
+      });
+    }();
+
+    return controller.stream;
+  }
+
+  // Fetch messages as a list (for one-time use)
   Future<List<Map<String, dynamic>>> loadMessages({int? groupId}) async {
     final messages = await _dbHelper.getMessages(groupId: groupId);
     return messages.map((msg) {
@@ -17,6 +60,7 @@ class MessageFunctions {
     }).toList();
   }
 
+  // Send a new message
   Future<void> sendMessage({
     required String message,
     required bool isGroup,
@@ -52,6 +96,7 @@ class MessageFunctions {
     await _dbHelper.insertMessage(messageData);
   }
 
+  // Delete a message
   Future<void> deleteMessage(int messageId) async {
     await _dbHelper.deleteMessage(messageId);
   }

@@ -1,6 +1,4 @@
-// message_chat_screen.dart
 import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:cyanase/theme/theme.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -10,11 +8,10 @@ import 'package:path_provider/path_provider.dart';
 import 'package:cyanase/helpers/database_helper.dart';
 import 'chat_app_bar.dart'; // Import the AppBar
 import 'message_chat.dart';
-import './functions/ui_function.dart';
 import './functions/audio_function.dart';
 import './functions/message_function.dart';
 import 'package:cyanase/screens/home/group/group_deposit.dart';
-import './functions/image _functions.dart';
+import 'chat_input.dart'; // Import the InputArea
 
 class MessageChatScreen extends StatefulWidget {
   final String name;
@@ -51,33 +48,38 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
   Map<String, Duration> _audioDurationMap = {};
   Map<String, Duration> _audioPositionMap = {};
 
-  List<Map<String, dynamic>> _messages = [];
   Timer? _recordingTimer;
 
   @override
   void initState() {
     super.initState();
-    _loadMessages();
     _loadGroupMembers();
   }
 
-  Future<void> _loadMessages() async {
-    final messages = await _messageFunctions.loadMessages(
-        groupId: widget.isGroup ? widget.groupId : null);
-    for (final message in messages) {
-      if (message["type"] == "image") {
-        message["isImage"] = true;
-      } else {
-        message["isImage"] = false;
+  Future<void> _loadGroupMembers() async {
+    print(
+        "isGroup: ${widget.isGroup}, groupId: ${widget.groupId}"); // Debug log
+    if (widget.isGroup && widget.groupId != null) {
+      try {
+        print("Fetching members for group ID: ${widget.groupId}"); // Debug log
+        final memberNames =
+            await _dbHelper.getGroupMemberNames(widget.groupId!);
+        print("Fetched member names: $memberNames"); // Debug log
+        setState(() {
+          _memberNames = memberNames;
+        });
+      } catch (e) {
+        print("Error loading group members: $e"); // Debug log
       }
-      if (message["isAudio"] == true) {
-        final duration = await getAudioDuration(message["message"]);
-        _audioDurationMap[message["id"]] = duration;
-      }
+    } else if (!widget.isGroup) {
+      // Handle one-on-one chat
+      print("This is a one-on-one chat"); // Debug log
+      setState(() {
+        _memberNames = [widget.name]; // Show the other user's name
+      });
+    } else {
+      print("Group ID is null or not a group chat"); // Debug log
     }
-    setState(() {
-      _messages = messages;
-    });
   }
 
   Future<Duration> getAudioDuration(String path) async {
@@ -95,44 +97,17 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
   void _sendImageMessage(String imagePath) async {
     try {
       final mediaId = await _dbHelper.insertImageFile(imagePath);
-      final message = {
+      await _dbHelper.insertMessage({
         "group_id": widget.groupId,
         "sender_id": "current_user_id",
         "message": imagePath,
         "type": "image",
-        "status": "sent",
         "timestamp": DateTime.now().toIso8601String(),
         "media_id": mediaId,
-      };
-      final messageId = await _dbHelper.insertMessage(message);
-      print("Image message inserted with ID: $messageId");
-
-      final newMessage = {
-        "id": UniqueKey().toString(),
-        "isMe": true,
-        "message": imagePath,
-        "time": DateTime.now().toIso8601String(),
-        "replyTo": _replyingToMessage,
-        "isImage": true,
-        "isAudio": false,
-      };
-
-      print("Added message to _messages: $newMessage");
-
-      setState(() {
-        _messages.add(newMessage);
+        "status": "sent", // Ensure the status field is included
       });
 
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_scrollController.hasClients) {
-          _scrollController.animateTo(
-            _scrollController.position.maxScrollExtent,
-            duration: Duration(milliseconds: 300),
-            curve: Curves.easeOut,
-          );
-        }
-      });
-
+      // Call the callback to refresh the chat list
       if (widget.onMessageSent != null) {
         widget.onMessageSent!();
       }
@@ -153,47 +128,23 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
       return;
     }
 
-    if (widget.isGroup && widget.groupId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Group ID is missing")),
-      );
-      return;
-    }
-
     try {
+      final String messageText = _controller.text.trim();
+
+      // Insert the message into the database
       await _dbHelper.insertMessage({
         "group_id": widget.groupId,
         "sender_id": "current_user_id",
-        "message": _controller.text.trim(),
+        "message": messageText,
         "type": "text",
         "timestamp": DateTime.now().toIso8601String(),
+        "status": "sent",
       });
 
+      // Clear the text field
       _controller.clear();
 
-      setState(() {
-        _messages.add({
-          "id": UniqueKey().toString(),
-          "isMe": true,
-          "message": _controller.text.trim(),
-          "time": DateTime.now().toIso8601String(),
-          "replyTo": _replyingToMessage,
-          "isAudio": false,
-          "isImage": false,
-        });
-        _replyingToMessage = null;
-      });
-
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_scrollController.hasClients) {
-          _scrollController.animateTo(
-            _scrollController.position.maxScrollExtent,
-            duration: Duration(milliseconds: 300),
-            curve: Curves.easeOut,
-          );
-        }
-      });
-
+      // Call the callback to refresh the chat list
       if (widget.onMessageSent != null) {
         widget.onMessageSent!();
       }
@@ -238,32 +189,12 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
           "type": "audio",
           "timestamp": DateTime.now().toIso8601String(),
           "media_id": mediaId,
+          "status": "sent", // Ensure the status field is included
         };
 
         await _dbHelper.insertMessage(message);
 
-        setState(() {
-          _messages.add({
-            "id": UniqueKey().toString(),
-            "isMe": true,
-            "message": path,
-            "time": DateTime.now().toIso8601String(),
-            "replyTo": _replyingToMessage,
-            "isAudio": true,
-          });
-          _isRecording = false;
-        });
-
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (_scrollController.hasClients) {
-            _scrollController.animateTo(
-              _scrollController.position.maxScrollExtent,
-              duration: Duration(milliseconds: 300),
-              curve: Curves.easeOut,
-            );
-          }
-        });
-
+        // Call the callback to refresh the chat list
         if (widget.onMessageSent != null) {
           widget.onMessageSent!();
         }
@@ -275,6 +206,14 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
         );
       }
     }
+  }
+
+  void _cancelRecording() async {
+    await _audioFunctions.stopRecording(); // Stop the recording
+    setState(() {
+      _isRecording = false;
+      _recordingDuration = Duration.zero;
+    });
   }
 
   void _playAudio(String messageId, String path) async {
@@ -323,32 +262,6 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
     }
   }
 
-  Future<void> _loadGroupMembers() async {
-    print(
-        "isGroup: ${widget.isGroup}, groupId: ${widget.groupId}"); // Debug log
-    if (widget.isGroup && widget.groupId != null) {
-      try {
-        print("Fetching members for group ID: ${widget.groupId}"); // Debug log
-        final memberNames =
-            await _dbHelper.getGroupMemberNames(widget.groupId!);
-        print("Fetched member names: $memberNames"); // Debug log
-        setState(() {
-          _memberNames = memberNames;
-        });
-      } catch (e) {
-        print("Error loading group members: $e"); // Debug log
-      }
-    } else if (!widget.isGroup) {
-      // Handle one-on-one chat
-      print("This is a one-on-one chat"); // Debug log
-      setState(() {
-        _memberNames = [widget.name]; // Show the other user's name
-      });
-    } else {
-      print("Group ID is null or not a group chat"); // Debug log
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -366,7 +279,12 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
             ),
           );
         },
-        onBackPressed: () => Navigator.pop(context),
+        onBackPressed: () {
+          if (widget.onMessageSent != null) {
+            widget.onMessageSent!(); // Call the callback when navigating back
+          }
+          Navigator.pop(context); // Navigate back
+        },
       ),
       body: Stack(
         children: [
@@ -377,38 +295,49 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
               color: Colors.grey[200],
             ),
           ),
-          ListView.builder(
-            controller: _scrollController,
-            padding: EdgeInsets.only(top: 16, bottom: 80),
-            itemCount: _messages.length,
-            itemBuilder: (context, index) {
-              final message = _messages[index];
-              final bool isSameSender =
-                  index > 0 && _messages[index - 1]["isMe"] == message["isMe"];
-              return GestureDetector(
-                onHorizontalDragEnd: (details) {
-                  if (details.primaryVelocity! < 0) {
-                    setState(() {
-                      _replyingToMessage = message["message"];
-                    });
-                  }
+          StreamBuilder<List<Map<String, dynamic>>>(
+            stream:
+                _messageFunctions.getMessagesStream(groupId: widget.groupId),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) {
+                return Center(child: CircularProgressIndicator());
+              }
+
+              final messages = snapshot.data!;
+              return ListView.builder(
+                controller: _scrollController,
+                padding: EdgeInsets.only(top: 16, bottom: 80),
+                itemCount: messages.length,
+                itemBuilder: (context, index) {
+                  final message = messages[index];
+                  final bool isSameSender = index > 0 &&
+                      messages[index - 1]["isMe"] == message["isMe"];
+                  return GestureDetector(
+                    onHorizontalDragEnd: (details) {
+                      if (details.primaryVelocity! < 0) {
+                        setState(() {
+                          _replyingToMessage = message["message"];
+                        });
+                      }
+                    },
+                    child: MessageChat(
+                      isMe: message["isMe"],
+                      message: message["message"],
+                      time: message["time"],
+                      isSameSender: isSameSender,
+                      replyTo: message["replyTo"],
+                      isAudio: message["isAudio"],
+                      isImage: message["isImage"] ?? false,
+                      onPlayAudio: (path) => _playAudio(message["id"], path),
+                      isPlaying: _isPlayingMap[message["id"]] ?? false,
+                      audioDuration:
+                          _audioDurationMap[message["id"]] ?? Duration.zero,
+                      audioPosition:
+                          _audioPositionMap[message["id"]] ?? Duration.zero,
+                      messageId: message["id"],
+                    ),
+                  );
                 },
-                child: MessageChat(
-                  isMe: message["isMe"],
-                  message: message["message"],
-                  time: message["time"],
-                  isSameSender: isSameSender,
-                  replyTo: message["replyTo"],
-                  isAudio: message["isAudio"],
-                  isImage: message["isImage"] ?? false,
-                  onPlayAudio: (path) => _playAudio(message["id"], path),
-                  isPlaying: _isPlayingMap[message["id"]] ?? false,
-                  audioDuration:
-                      _audioDurationMap[message["id"]] ?? Duration.zero,
-                  audioPosition:
-                      _audioPositionMap[message["id"]] ?? Duration.zero,
-                  messageId: message["id"],
-                ),
               );
             },
           ),
@@ -416,141 +345,21 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
             bottom: 0,
             left: 0,
             right: 0,
-            child: Container(
-              color: Colors.white,
-              padding: EdgeInsets.all(8),
-              child: Column(
-                children: [
-                  if (_replyingToMessage != null)
-                    Container(
-                      padding: EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.grey[200],
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.reply, color: primaryColor),
-                          SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              UIFunctions.truncateText(_replyingToMessage!),
-                              style: TextStyle(
-                                color: Colors.black54,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ),
-                          IconButton(
-                            icon: Icon(Icons.close, color: primaryColor),
-                            onPressed: () {
-                              setState(() {
-                                _replyingToMessage = null;
-                              });
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  Row(
-                    children: [
-                      if (_isRecording)
-                        Expanded(
-                          child: Row(
-                            children: [
-                              IconButton(
-                                icon: Icon(Icons.delete, color: Colors.red),
-                                onPressed: () {
-                                  _stopRecording();
-                                  setState(() {
-                                    _isRecording = false;
-                                  });
-                                },
-                              ),
-                              Expanded(
-                                child: Container(
-                                  padding: EdgeInsets.symmetric(
-                                      horizontal: 16, vertical: 10),
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey[200],
-                                    borderRadius: BorderRadius.circular(25),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.mic, color: Colors.red),
-                                      SizedBox(width: 8),
-                                      Text(
-                                        "Slide to cancel",
-                                        style: TextStyle(
-                                          color: Colors.black54,
-                                          fontSize: 14,
-                                        ),
-                                      ),
-                                      Spacer(),
-                                      Text(
-                                        "${_recordingDuration.inSeconds}s",
-                                        style: TextStyle(
-                                          color: Colors.black54,
-                                          fontSize: 14,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        )
-                      else
-                        Expanded(
-                          child: TextField(
-                            controller: _controller,
-                            decoration: InputDecoration(
-                              hintText: "Type a message...",
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(25),
-                              ),
-                              contentPadding:
-                                  EdgeInsets.symmetric(horizontal: 16),
-                            ),
-                          ),
-                        ),
-                      IconButton(
-                        icon: Icon(Icons.image, color: primaryColor),
-                        onPressed: () async {
-                          final imageFile =
-                              await ImageFunctions().pickImageFromGallery();
-                          if (imageFile != null) {
-                            final imagePath = await ImageFunctions()
-                                .saveImageToStorage(imageFile);
-                            _sendImageMessage(imagePath);
-                          }
-                        },
-                      ),
-                      SizedBox(width: 8),
-                      IconButton(
-                        icon: Icon(
-                          _isRecording
-                              ? Icons.stop
-                              : _controller.text.isEmpty
-                                  ? Icons.mic
-                                  : Icons.send,
-                          color: _isRecording ? Colors.red : primaryColor,
-                        ),
-                        onPressed: () {
-                          if (_isRecording) {
-                            _stopRecording();
-                          } else if (_controller.text.isEmpty) {
-                            _startRecording();
-                          } else {
-                            _sendMessage();
-                          }
-                        },
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+            child: InputArea(
+              controller: _controller,
+              isRecording: _isRecording,
+              recordingDuration: _recordingDuration,
+              onSendMessage: _sendMessage,
+              onStartRecording: _startRecording,
+              onStopRecording: _stopRecording,
+              onSendImageMessage: _sendImageMessage,
+              onCancelRecording: _cancelRecording,
+              replyingToMessage: _replyingToMessage,
+              onCancelReply: () {
+                setState(() {
+                  _replyingToMessage = null;
+                });
+              },
             ),
           ),
         ],

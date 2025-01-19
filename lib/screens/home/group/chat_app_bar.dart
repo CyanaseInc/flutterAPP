@@ -1,4 +1,3 @@
-// message_app_bar.dart
 import 'package:flutter/material.dart';
 import 'package:cyanase/screens/home/group/group_info.dart';
 import 'package:cyanase/theme/theme.dart';
@@ -24,26 +23,37 @@ class MessageAppBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Size get preferredSize => Size.fromHeight(kToolbarHeight);
 
-  // Helper function to truncate long text
-  String _truncateText(String text, {int maxLength = 9}) {
+  // Helper function to truncate long text to a maximum length
+  String _truncateText(String text, {int maxLength = 15}) {
     if (text.length <= maxLength) {
       return text;
     }
     return '${text.substring(0, maxLength)}...';
   }
 
-  // Helper function to format member names
-  String _formatMemberNames(List<String> members, {int maxNames = 2}) {
+  String _truncateMemberText(String text, {int maxLength = 3}) {
+    if (text.length <= maxLength) {
+      return text;
+    }
+    return '${text.substring(0, maxLength)}...';
+  }
+
+  // Helper function to format member names (separate from group name)
+  String _formatMemberNames(List<String> members, {int maxNames = 3}) {
     if (members.isEmpty) {
       return "No members";
     }
 
+    // Truncate each member's name to a maximum of 15 characters
+    final truncatedMembers =
+        members.map((name) => _truncateMemberText(name)).toList();
+
     // Join the first `maxNames` members with a comma
-    String formattedNames = members.take(maxNames).join(", ");
+    String formattedNames = truncatedMembers.take(maxNames).join(", ");
 
     // If there are more members, add "and X others..."
     if (members.length > maxNames) {
-      formattedNames += " and ${members.length - maxNames} others...";
+      formattedNames;
     }
 
     return formattedNames;
@@ -82,24 +92,29 @@ class MessageAppBar extends StatelessWidget implements PreferredSizeWidget {
             SizedBox(width: 10), // Spacing between avatar and text
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 // Group name (truncated if too long)
                 Text(
-                  _truncateText(name),
+                  _truncateText(name), // Truncate group name
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
                     color: Colors.black,
                   ),
+                  overflow: TextOverflow.ellipsis, // Truncate with ellipsis
+                  maxLines: 1, // Ensure text stays on one line
                 ),
                 SizedBox(height: 4), // Spacing between group name and members
                 // Group member names (truncated if too many)
                 Text(
-                  _formatMemberNames(memberNames),
+                  _formatMemberNames(memberNames), // Format member names
                   style: TextStyle(
                     fontSize: 12,
                     color: Colors.black54,
                   ),
+                  overflow: TextOverflow.ellipsis, // Truncate with ellipsis
+                  maxLines: 1, // Ensure text stays on one line
                 ),
               ],
             ),
@@ -142,27 +157,12 @@ class MessageAppBar extends StatelessWidget implements PreferredSizeWidget {
                     ),
                   ),
                 );
-                break;
-              case 'edit_group':
-                print('Edit Group Selected');
-                break;
-              case 'leave_group':
-                print('Leave Group Selected');
-                break;
             }
           },
           itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
             const PopupMenuItem<String>(
               value: 'group_info',
               child: Text('Group Info'),
-            ),
-            const PopupMenuItem<String>(
-              value: 'edit_group',
-              child: Text('Edit Group'),
-            ),
-            const PopupMenuItem<String>(
-              value: 'leave_group',
-              child: Text('Leave Group'),
             ),
           ],
         ),

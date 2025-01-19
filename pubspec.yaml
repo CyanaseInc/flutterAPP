@@ -36,6 +36,7 @@ dependencies:
   shared_preferences: ^2.2.2
   video_player: ^2.5.1 
   share_plus: ^10.1.4
+  rxdart: ^0.28.0
 
 dev_dependencies:
   flutter_test:
