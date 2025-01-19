@@ -54,6 +54,19 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
   void initState() {
     super.initState();
     _loadGroupMembers();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToLastMessage();
+    });
+  }
+
+  void _scrollToLastMessage() {
+    if (_scrollController.hasClients) {
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: Duration(milliseconds: 100),
+        curve: Curves.easeOut,
+      );
+    }
   }
 
   Future<void> _loadGroupMembers() async {
@@ -111,6 +124,8 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
       if (widget.onMessageSent != null) {
         widget.onMessageSent!();
       }
+
+      _scrollToLastMessage();
     } catch (e) {
       print("Error sending image message: $e");
       ScaffoldMessenger.of(context).showSnackBar(
@@ -148,6 +163,8 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
       if (widget.onMessageSent != null) {
         widget.onMessageSent!();
       }
+
+      _scrollToLastMessage();
     } catch (e) {
       print("Error sending text message: $e");
       ScaffoldMessenger.of(context).showSnackBar(
@@ -198,6 +215,8 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
         if (widget.onMessageSent != null) {
           widget.onMessageSent!();
         }
+
+        _scrollToLastMessage();
       } catch (e) {
         print("Error sending audio message: $e");
         ScaffoldMessenger.of(context).showSnackBar(
@@ -304,6 +323,9 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
               }
 
               final messages = snapshot.data!;
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                _scrollToLastMessage();
+              });
               return ListView.builder(
                 controller: _scrollController,
                 padding: EdgeInsets.only(top: 16, bottom: 80),
@@ -349,7 +371,10 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
               controller: _controller,
               isRecording: _isRecording,
               recordingDuration: _recordingDuration,
-              onSendMessage: _sendMessage,
+              onSendMessage: () {
+                _sendMessage();
+                _scrollToLastMessage();
+              },
               onStartRecording: _startRecording,
               onStopRecording: _stopRecording,
               onSendImageMessage: _sendImageMessage,

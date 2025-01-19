@@ -1,58 +1,49 @@
-import 'package:intl/intl.dart'; // For date formatting
+// message_utils.dart
 
-/// Represents a group of messages for a specific date.
-class MessageGroup {
-  final String date; // e.g., "Today", "Yesterday", or "15 October 2023"
-  final List<Map<String, dynamic>> messages; // List of messages for this date
+import 'package:intl/intl.dart';
 
-  MessageGroup({required this.date, required this.messages});
-}
+class MessageUtils {
+  // Sort messages by date (oldest to newest)
+  static List<Map<String, dynamic>> sortMessagesByDate(
+      List<Map<String, dynamic>> messages) {
+    messages.sort((a, b) {
+      final DateTime aDate = DateTime.parse(a["timestamp"]);
+      final DateTime bDate = DateTime.parse(b["timestamp"]);
+      return aDate.compareTo(bDate); // Sort in ascending order
+    });
+    return messages;
+  }
 
-/// Groups messages by date and sorts them by timestamp.
-List<MessageGroup> groupMessagesByDate(List<Map<String, dynamic>> messages) {
-  // Filter out messages with null timestamps
-  messages = messages.where((message) => message["timestamp"] != null).toList();
+  // Group messages by date (e.g., "Today", "Yesterday", etc.)
+  static Map<String, List<Map<String, dynamic>>> groupMessagesByDate(
+      List<Map<String, dynamic>> messages) {
+    final Map<String, List<Map<String, dynamic>>> groupedMessages = {};
 
-  // Sort messages by timestamp (oldest to newest)
-  messages.sort((a, b) =>
-      DateTime.parse(a["timestamp"]).compareTo(DateTime.parse(b["timestamp"])));
+    for (final message in messages) {
+      final DateTime messageDate = DateTime.parse(message["timestamp"]);
+      final String dateKey = _getDateKey(messageDate);
 
-  // Group messages by date
-  Map<String, List<Map<String, dynamic>>> groupedMessages = {};
-
-  for (var message in messages) {
-    final timestamp = DateTime.parse(message["timestamp"]);
-    final dateKey = getDateKey(timestamp);
-
-    if (!groupedMessages.containsKey(dateKey)) {
-      groupedMessages[dateKey] = [];
+      if (!groupedMessages.containsKey(dateKey)) {
+        groupedMessages[dateKey] = [];
+      }
+      groupedMessages[dateKey]!.add(message);
     }
-    groupedMessages[dateKey]!.add(message);
+
+    return groupedMessages;
   }
 
-  // Convert the map into a list of MessageGroup objects
-  return groupedMessages.entries.map((entry) {
-    return MessageGroup(date: entry.key, messages: entry.value);
-  }).toList();
-}
+  // Helper function to get a readable date key (e.g., "Today", "Yesterday", or a formatted date)
+  static String _getDateKey(DateTime date) {
+    final DateTime now = DateTime.now();
+    final DateTime today = DateTime(now.year, now.month, now.day);
+    final DateTime yesterday = DateTime(now.year, now.month, now.day - 1);
 
-/// Returns a formatted date key (e.g., "Today", "Yesterday", or "15 October 2023").
-String getDateKey(DateTime date) {
-  final now = DateTime.now();
-  final today = DateTime(now.year, now.month, now.day);
-  final yesterday = DateTime(now.year, now.month, now.day - 1);
-
-  if (date.isAfter(today)) {
-    return "Today";
-  } else if (date.isAfter(yesterday)) {
-    return "Yesterday";
-  } else {
-    return DateFormat('d MMMM y').format(date); // e.g., "15 October 2023"
+    if (date.isAfter(today)) {
+      return "Today";
+    } else if (date.isAfter(yesterday)) {
+      return "Yesterday";
+    } else {
+      return DateFormat('MMMM d, y').format(date); // Format: "October 10, 2023"
+    }
   }
-}
-
-/// Formats a timestamp into a human-readable string.
-String formatTimestamp(String timestamp) {
-  final date = DateTime.parse(timestamp);
-  return DateFormat('h:mm a').format(date); // e.g., "10:30 AM"
 }
