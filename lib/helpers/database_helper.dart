@@ -335,11 +335,20 @@ class DatabaseHelper {
   }
 
   // Retrieve all messages in a group
-  Future<List<Map<String, dynamic>>> getMessages({int? groupId}) async {
+  Future<List<Map<String, dynamic>>> getMessages({
+    int? groupId, // Named parameter
+    int limit = 20,
+    int offset = 0,
+  }) async {
     final db = await database;
-    final whereClause = groupId != null ? 'group_id = ?' : null;
-    final whereArgs = groupId != null ? [groupId] : null;
-    return await db.query('messages', where: whereClause, whereArgs: whereArgs);
+    final result = await db.query(
+      'messages',
+      where: groupId != null ? 'group_id = ?' : null,
+      whereArgs: groupId != null ? [groupId] : null,
+      limit: limit,
+      offset: offset,
+    );
+    return result;
   }
 
   // Retrieve a single media file by ID

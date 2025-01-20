@@ -16,11 +16,25 @@ class AudioFunctions {
         AssetSource('audio/beep.mp3')); // Add a beep sound file to your assets
   }
 
-  /// Starts audio recording.
-  Future<void> startRecording() async {
-    try {
-      // Check microphone permission
+  /// Ensures the folder exists at the given path.
+  Future<void> ensureFolderExists(String folderPath) async {
+    final folder = Directory(folderPath);
 
+    // Check if the folder exists
+    if (!await folder.exists()) {
+      // Create the folder if it doesn't exist
+      await folder.create(
+          recursive:
+              true); // `recursive: true` creates parent directories if needed
+      print("Folder created at: $folderPath");
+    } else {
+      print("Folder already exists at: $folderPath");
+    }
+  }
+
+  /// Starts audio recording.
+  Future<String?> startRecording() async {
+    try {
       // Get the application documents directory
       final directory = await getApplicationDocumentsDirectory();
       final folderPath = '${directory.path}/recordings';
@@ -40,12 +54,15 @@ class AudioFunctions {
         path: filePath,
         encoder: AudioEncoder.aacLc,
       );
+
+      print("Recording started at: $filePath");
+      return filePath;
     } catch (e) {
       print("Error starting recording: $e");
+      return null;
     }
   }
 
-  /// Stops audio recording and returns the file path.
   Future<String?> stopRecording() async {
     try {
       // Stop recording
@@ -71,6 +88,8 @@ class AudioFunctions {
     }
   }
 
+  /// Stops audio recording and returns the file path.
+
   /// Checks and requests microphone permission.
   Future<bool> _checkMicrophonePermission() async {
     final status = await Permission.microphone.status;
@@ -83,12 +102,20 @@ class AudioFunctions {
 
   /// Starts audio playback from the given file path.
   Future<void> playAudio(String path) async {
-    await _audioPlayer.play(DeviceFileSource(path));
+    try {
+      await _audioPlayer.play(DeviceFileSource(path));
+    } catch (e) {
+      print("Error playing audio: $e");
+    }
   }
 
   /// Pauses the currently playing audio.
   Future<void> pauseAudio() async {
-    await _audioPlayer.pause();
+    try {
+      await _audioPlayer.pause();
+    } catch (e) {
+      print("Error pausing audio: $e");
+    }
   }
 
   /// Listens for changes in the audio playback position.

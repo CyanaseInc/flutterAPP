@@ -7,17 +7,18 @@ import 'full_screen_image_viewer.dart';
 class MessageChat extends StatelessWidget {
   final bool isMe;
   final String? message;
-  final String time; // Raw timestamp (e.g., "2023-10-15T10:30:00Z")
+  final String time;
   final bool isSameSender;
   final String? replyTo;
   final bool isAudio;
-  final bool isImage; // Add this
+  final VoidCallback? onImageTap;
+  final bool isImage;
   final bool isPlaying;
   final Duration audioDuration;
   final Duration audioPosition;
-  final void Function(String)? onPlayAudio;
-  final String messageId; // Unique identifier for the message
-  final VoidCallback? onMessageSent; // Callback for when a message is sent
+  final void Function(String, String)? onPlayAudio;
+  final String messageId;
+  final VoidCallback? onMessageSent;
 
   const MessageChat({
     Key? key,
@@ -26,14 +27,15 @@ class MessageChat extends StatelessWidget {
     required this.time,
     required this.isSameSender,
     this.replyTo,
-    this.onPlayAudio,
+    this.onImageTap,
     required this.isAudio,
-    required this.isImage, // Add this
+    required this.onPlayAudio,
+    required this.isImage,
     this.isPlaying = false,
     this.audioDuration = Duration.zero,
     this.audioPosition = Duration.zero,
     required this.messageId,
-    this.onMessageSent, // Add this
+    this.onMessageSent,
   }) : super(key: key);
 
   @override
@@ -110,13 +112,20 @@ class MessageChat extends StatelessWidget {
                     Row(
                       children: [
                         IconButton(
-                          icon: Icon(
-                            isPlaying ? Icons.pause : Icons.play_arrow,
-                            color: isMe ? Colors.white : Colors.black87,
+                          icon: IconButton(
+                            icon: Icon(
+                                isPlaying ? Icons.pause : Icons.play_arrow),
+                            onPressed: () {
+                              if (onPlayAudio != null && message != null) {
+                                onPlayAudio!(messageId.toString(),
+                                    message!); // Ensure messageId is a String
+                              }
+                            },
                           ),
                           onPressed: () {
                             if (onPlayAudio != null && message != null) {
-                              onPlayAudio!(message!); // Trigger the callback
+                              onPlayAudio!(
+                                  messageId, message!); // Pass both arguments
                             }
                           },
                         ),

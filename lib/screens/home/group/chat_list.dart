@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cyanase/helpers/database_helper.dart';
 import 'chat_screen.dart'; // Import your existing Message screen
-import 'package:cyanase/theme/theme.dart'; // Import your theme
+import 'package:cyanase/theme/theme.dart';
+import 'package:flutter_svg/flutter_svg.dart'; // Import your theme
 import 'new_group.dart'; // Import the new group screen
 import 'dart:io'; // Import for File and FileImage
 import 'dart:async';
@@ -30,6 +31,8 @@ class ChatListState extends State<ChatList> {
   }
 
   @override
+  @override
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: StreamBuilder<void>(
@@ -37,12 +40,89 @@ class ChatListState extends State<ChatList> {
         builder: (context, snapshot) {
           return FutureBuilder<List<Map<String, dynamic>>>(
             future: _loadChats(),
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) {
+            builder: (context, futureSnapshot) {
+              if (!futureSnapshot.hasData) {
                 return Center(child: CircularProgressIndicator());
               }
 
-              final chats = snapshot.data!;
+              final chats = futureSnapshot.data!;
+
+              if (chats.isEmpty) {
+                // Display introduction message and button to create groups
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Add an image before the welcome text with a circular grey background
+                      Container(
+                        width: 140, // Adjust size as needed
+                        height: 140, // Adjust size as needed
+                        decoration: BoxDecoration(
+                          color: Colors.grey[200], // Grey background
+                          shape: BoxShape.circle, // Circular shape
+                        ),
+                        child: Center(
+                          child: SvgPicture.asset(
+                            'assets/images/new_user.svg', // Replace with your SVG path
+                            width: 100, // Adjust SVG size as needed
+                            height: 100,
+                            color: primaryColor, // Add color to the SVG
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: 16),
+                      // Welcome to Cyanase Groups
+                      Text(
+                        "Welcome to Cyanase Groups",
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black,
+                        ),
+                      ),
+                      SizedBox(height: 8),
+                      // Small text below the welcome note
+                      Text(
+                        "Start by creating a group to save and invest money with your friends or colleagues.",
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      SizedBox(height: 24),
+                      // Create a Group button with a plus icon
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => NewGroupScreen(),
+                            ),
+                          );
+                        },
+                        icon: Icon(
+                          Icons.add, // Plus icon
+                          color: primaryColor,
+                        ),
+                        label: Text(
+                          "Create a Group",
+                          style: TextStyle(
+                            color: primaryColor,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: primaryTwo,
+                          padding: EdgeInsets.symmetric(
+                              horizontal: 32, vertical: 16),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }
+
+              // Display the list of chats
               return ListView.builder(
                 itemCount: chats.length,
                 itemBuilder: (context, index) {
@@ -107,20 +187,29 @@ class ChatListState extends State<ChatList> {
           );
         },
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => NewGroupScreen(),
-            ),
-          );
+      // Show FloatingActionButton only when there are chats
+      floatingActionButton: FutureBuilder<List<Map<String, dynamic>>>(
+        future: _loadChats(),
+        builder: (context, futureSnapshot) {
+          if (futureSnapshot.hasData && futureSnapshot.data!.isNotEmpty) {
+            return FloatingActionButton(
+              onPressed: () async {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => NewGroupScreen(),
+                  ),
+                );
+              },
+              child: Icon(
+                Icons.group_add,
+                color: primaryColor,
+              ),
+              backgroundColor: primaryTwo,
+            );
+          }
+          return Container(); // Hide FloatingActionButton when there are no chats
         },
-        child: Icon(
-          Icons.group_add,
-          color: primaryColor,
-        ),
-        backgroundColor: primaryTwo,
       ),
     );
   }
@@ -301,7 +390,7 @@ class ChatListState extends State<ChatList> {
       return CircleAvatar(
         radius: 30,
         backgroundImage:
-            AssetImage('assets/avat.png'), // Default avatar for users
+            AssetImage('assets/images/avatar.png'), // Default avatar for users
       );
     }
   }
