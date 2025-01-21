@@ -7,7 +7,7 @@ class MessageUtils {
     messages.sort((a, b) {
       final DateTime aDate = DateTime.parse(a["timestamp"]);
       final DateTime bDate = DateTime.parse(b["timestamp"]);
-      return bDate.compareTo(aDate); // Sort in descending order
+      return aDate.compareTo(bDate); // Sort in ascending order
     });
     return messages;
   }
@@ -23,8 +23,7 @@ class MessageUtils {
           : null;
 
       if (messageDate == null) {
-        // Debug log
-        continue; // Skip messages with invalid or null times
+        continue; // Skip messages with invalid or null timestamps
       }
 
       final String dateKey = _getDateKey(messageDate);
@@ -35,7 +34,6 @@ class MessageUtils {
       groupedMessages[dateKey]!.add(message);
     }
 
-    // Debug log
     return groupedMessages;
   }
 

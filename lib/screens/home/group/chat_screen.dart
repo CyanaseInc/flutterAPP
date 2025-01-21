@@ -41,6 +41,7 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   String? _replyingToMessage;
+  final List<Map<String, dynamic>> messages = [];
   final String currentUserId = "current_user_id";
   bool _isRecording = false;
   Duration _recordingDuration = Duration.zero;
@@ -221,21 +222,38 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
     try {
       final String messageText = _controller.text.trim();
 
-      await _dbHelper.insertMessage({
+      // Create the new message data
+      final newMessage = {
+        "id": DateTime.now().millisecondsSinceEpoch, // Temporary ID
         "group_id": widget.groupId,
-        "sender_id": "current_user_id",
+        "sender_id": "current_user_id", // Replace with actual user ID
         "message": messageText,
         "type": "text",
         "timestamp": DateTime.now().toIso8601String(),
         "status": "sent",
-      });
+        "isMe": 1, // Mark as sent by the current user
+      };
 
+      // Add the new message to the local list immediately
+      setState(() {
+        _messages.add(newMessage); // Add to the main messages list
+        _groupedMessages = MessageUtils.groupMessagesByDate(
+            _messages); // Update grouped messages
+      });
+      // Clear the input field
+      _controller.clear();
+      // Clear the input field
       _controller.clear();
 
+      // Insert the message into the database
+      await _dbHelper.insertMessage(newMessage);
+
+      // Notify the parent widget (if needed)
       if (widget.onMessageSent != null) {
         widget.onMessageSent!();
       }
 
+      // Scroll to the last message
       _scrollToLastMessage();
     } catch (e) {
       print("Error sending text message: $e");
@@ -462,7 +480,9 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
                           }
                         },
                         child: MessageChat(
-                          isMe: message["isMe"] ?? false, // Ensure non-null
+                          isMe: true, // message["isMe"] ??
+
+                          //false, // Ensure non-null
                           message: message[
                               "message"], // The message content or file path
                           time: message[

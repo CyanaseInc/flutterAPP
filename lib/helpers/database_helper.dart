@@ -130,6 +130,7 @@ class DatabaseHelper {
         group_id INTEGER NOT NULL,
         sender_id TEXT NOT NULL,
         message TEXT,
+        isMe INTEGER NOT NULL DEFAULT 0, 
         media_id INTEGER,
         type TEXT NOT NULL,
         status TEXT NOT NULL,
@@ -158,40 +159,17 @@ class DatabaseHelper {
 
   // Handle schema upgrades
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    if (oldVersion < 3) {
-      await db.execute('''
-        CREATE TABLE media (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          file_path TEXT NOT NULL UNIQUE,
-          type TEXT NOT NULL,
-          mime_type TEXT,
-          file_size INTEGER,
-          duration INTEGER,
-          thumbnail_path TEXT,
-          created_at TEXT NOT NULL,
-          deleted BOOLEAN NOT NULL DEFAULT FALSE
-        )
-      ''');
+    if (oldVersion < 2) {
+      // Upgrade from version 1 to 2
+      await db.execute(
+          'ALTER TABLE messages ADD COLUMN isMe INTEGER NOT NULL DEFAULT 0');
+    }
 
-      await db.execute('''
-        CREATE TABLE messages (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          group_id INTEGER NOT NULL,
-          sender_id TEXT NOT NULL,
-          message TEXT,
-          media_id INTEGER,
-          type TEXT NOT NULL,
-          status TEXT NOT NULL,
-          timestamp TEXT NOT NULL,
-          reply_to_id INTEGER,
-          forwarded BOOLEAN NOT NULL DEFAULT FALSE,
-          edited BOOLEAN NOT NULL DEFAULT FALSE,
-          deleted BOOLEAN NOT NULL DEFAULT FALSE,
-          FOREIGN KEY (group_id) REFERENCES groups (id) ON DELETE CASCADE,
-          FOREIGN KEY (sender_id) REFERENCES users (id) ON DELETE CASCADE,
-          FOREIGN KEY (media_id) REFERENCES media (id) ON DELETE SET NULL
-        )
-      ''');
+    if (oldVersion < 3) {
+      // Upgrade from version 2 to 3
+      await db.execute(
+          'ALTER TABLE messages ADD COLUMN isMe INTEGER NOT NULL DEFAULT 0');
+      await db.execute('ALTER TABLE media ADD COLUMN thumbnail_path TEXT');
     }
   }
 
