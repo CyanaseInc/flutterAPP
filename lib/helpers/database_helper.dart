@@ -71,11 +71,12 @@ class DatabaseHelper {
   // Create tables
   Future<void> _onCreate(Database db, int version) async {
     await db.execute('''
-      CREATE TABLE users (
+      CREATE TABLE profile (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         profile_pic TEXT,
         phone_number TEXT,
+        email TEXT,
         last_seen TEXT,
         status TEXT,
         created_at TEXT NOT NULL,
@@ -173,10 +174,9 @@ class DatabaseHelper {
     }
   }
 
-  // Insert a user
   Future<int> insertUser(Map<String, dynamic> user) async {
     final db = await database;
-    return await db.insert('users', user);
+    return await db.insert('profile', user);
   }
 
   // Insert a group
@@ -314,7 +314,7 @@ class DatabaseHelper {
 
   // Retrieve all messages in a group
   Future<List<Map<String, dynamic>>> getMessages({
-    int? groupId, // Named parameter
+    int? groupId,
     int limit = 20,
     int offset = 0,
   }) async {
@@ -325,6 +325,7 @@ class DatabaseHelper {
       whereArgs: groupId != null ? [groupId] : null,
       limit: limit,
       offset: offset,
+      orderBy: 'timestamp ASC', // Fetch the most recent messages first
     );
     return result;
   }

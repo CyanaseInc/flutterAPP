@@ -7,7 +7,7 @@ class GroupMembers extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: Colors.white,
+      color: white,
       margin: const EdgeInsets.only(top: 8.0),
       child: ExpansionTile(
         title: const Text(
@@ -76,7 +76,7 @@ class GroupMembers extends StatelessWidget {
               style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
-                color: Colors.white,
+                color: white,
               ),
             ),
           );

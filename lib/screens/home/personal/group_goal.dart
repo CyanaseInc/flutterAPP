@@ -12,7 +12,7 @@ class GroupHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity, // Ensures the container takes full width
-      color: Colors.white,
+      color: white,
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -85,7 +85,7 @@ class GroupHeader extends StatelessWidget {
       child: const Text(
         'Deposit', // Button label
         style: TextStyle(
-            color: Colors.white, // Text color
+            color: white, // Text color
             fontSize: 12,
             fontWeight: FontWeight.bold),
       ),
@@ -107,8 +107,8 @@ class GroupHeader extends StatelessWidget {
       ),
       child: const Text(
         'Get Loan',
-        style: TextStyle(
-            color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+        style:
+            TextStyle(color: white, fontSize: 12, fontWeight: FontWeight.bold),
       ),
     );
   }

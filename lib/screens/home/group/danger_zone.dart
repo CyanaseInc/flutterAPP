@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cyanase/theme/theme.dart';
 
 class DangerZone extends StatelessWidget {
   const DangerZone({Key? key}) : super(key: key);
@@ -6,7 +7,7 @@ class DangerZone extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: Colors.white,
+      color: white,
       margin: const EdgeInsets.only(top: 8.0),
       child: Column(
         children: [

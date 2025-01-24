@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cyanase/theme/theme.dart';
 
 class GroupMedia extends StatelessWidget {
   const GroupMedia({Key? key}) : super(key: key);
@@ -15,7 +16,7 @@ class GroupMedia extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: Colors.white,
+      color: white,
       margin: const EdgeInsets.only(top: 8.0),
       child: ExpansionTile(
         title: const Text(

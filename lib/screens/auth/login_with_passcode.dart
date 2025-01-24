@@ -6,6 +6,7 @@ import '../home/home.dart';
 import 'package:cyanase/helpers/database_helper.dart'; // Import the DatabaseHelper
 // For contacts permission
 import 'package:cyanase/screens/home/group/hash_numbers.dart'; // Import the file containing fetchAndHashContacts and getRegisteredContacts
+import 'package:cyanase/helpers/loader.dart';
 
 class NumericLoginScreen extends StatefulWidget {
   const NumericLoginScreen({Key? key}) : super(key: key);
@@ -49,10 +50,7 @@ class _NumericLoginScreenState extends State<NumericLoginScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            CircularProgressIndicator(
-              color: primaryColor,
-              strokeWidth: 6,
-            ),
+            Loader(),
             const SizedBox(height: 20),
           ],
         ),

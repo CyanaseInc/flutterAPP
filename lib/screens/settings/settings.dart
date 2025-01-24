@@ -34,13 +34,13 @@ class _SettingsPageState extends State<SettingsPage> {
       appBar: AppBar(
         title: Text("Settings"),
         titleTextStyle: TextStyle(
-          color: Colors.white, // Custom color
+          color: white, // Custom color
           fontSize: 24,
         ),
         backgroundColor: primaryTwo, // WhatsApp green color
         elevation: 0,
         iconTheme: IconThemeData(
-          color: Colors.white, // Change the back arrow color to white
+          color: white, // Change the back arrow color to white
         ),
       ),
       body: SingleChildScrollView(
@@ -61,7 +61,7 @@ class _SettingsPageState extends State<SettingsPage> {
     return Container(
       padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: white,
         border: Border(
           bottom: BorderSide(
             color: Colors.grey.shade300,

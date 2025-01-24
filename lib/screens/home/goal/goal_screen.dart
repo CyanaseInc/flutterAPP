@@ -47,7 +47,7 @@ class _GoalScreenState extends State<GoalScreen> {
           channelName: 'Scheduled Notifications',
           channelDescription: 'Notifications for saving goal reminders',
           defaultColor: Color(0xFF9D50DD),
-          ledColor: Colors.white,
+          ledColor: white,
           importance: NotificationImportance.High,
         ),
       ],
@@ -60,7 +60,7 @@ class _GoalScreenState extends State<GoalScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: white,
       body: Column(
         children: [
           Expanded(

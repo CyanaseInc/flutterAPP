@@ -139,7 +139,7 @@ class _DepositState extends State<Deposit> {
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: primaryTwo,
-                          foregroundColor: Colors.white,
+                          foregroundColor: white,
                         ),
                         child: Text('Back'),
                       )
@@ -156,7 +156,7 @@ class _DepositState extends State<Deposit> {
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: primaryTwo,
-                    foregroundColor: Colors.white,
+                    foregroundColor: white,
                   ),
                   child: Text(currentStep == 6 ? 'Confirm Deposit' : 'Next'),
                 ),

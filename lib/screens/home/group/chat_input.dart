@@ -61,7 +61,7 @@ class _InputAreaState extends State<InputArea> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: Colors.white,
+      color: white,
       padding: EdgeInsets.all(8),
       child: Column(
         children: [

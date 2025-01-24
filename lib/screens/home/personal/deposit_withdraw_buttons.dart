@@ -20,7 +20,7 @@ class DepositWithdrawButtons extends StatelessWidget {
             );
           },
           style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.white,
+            backgroundColor: white,
             foregroundColor: primaryTwo,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),
@@ -52,7 +52,7 @@ class DepositWithdrawButtons extends StatelessWidget {
             );
           },
           style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.white,
+            backgroundColor: white,
             foregroundColor: primaryTwo,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),

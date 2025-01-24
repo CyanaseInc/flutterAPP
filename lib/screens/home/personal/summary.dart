@@ -39,7 +39,7 @@ class ActivitySummaryCard extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
-                  color: Colors.white,
+                  color: white,
                   letterSpacing: 1.1,
                 ),
               ),
@@ -70,7 +70,7 @@ class ActivitySummaryCard extends StatelessWidget {
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,
-            color: Colors.white, // Updated text color to white
+            color: white, // Updated text color to white
           ),
         ),
         const SizedBox(height: 4),
@@ -79,7 +79,7 @@ class ActivitySummaryCard extends StatelessWidget {
           style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w500,
-            color: Colors.white, // Updated text color to white
+            color: white, // Updated text color to white
           ),
         ),
       ],

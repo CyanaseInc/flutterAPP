@@ -193,7 +193,7 @@ class _DepositScreenState extends State<DepositScreen> {
                   child: Text('Back'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: primaryTwo,
-                    foregroundColor: Colors.white,
+                    foregroundColor: white,
                   ),
                 ),
                 ElevatedButton(
@@ -201,7 +201,7 @@ class _DepositScreenState extends State<DepositScreen> {
                   child: Text('Next'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: primaryTwo,
-                    foregroundColor: Colors.white,
+                    foregroundColor: white,
                   ),
                 ),
               ],

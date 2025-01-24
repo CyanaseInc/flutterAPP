@@ -81,12 +81,12 @@ Future<List<Map<String, String>>> fetchAndHashContacts() async {
 
 // Function to send normalized contacts to the server
 Future<List<Map<String, dynamic>>> getRegisteredContacts(
-    List<Map<String, String>> contactsWithHashes) async {
+    List<Map<String, dynamic>> contacts) async {
   final String apiUrl = "https://fund.cyanase.app/app/get_my_contacts.php";
 
   // Extract normalized phone numbers for the request
   List<String> phoneNumbers =
-      contactsWithHashes.map((contact) => contact['normalizedPhone']!).toList();
+      contacts.map((contact) => contact['phone'] as String).toList();
 
   final response = await http.post(
     Uri.parse(apiUrl),
@@ -99,27 +99,23 @@ Future<List<Map<String, dynamic>>> getRegisteredContacts(
     List<dynamic> registeredNumbersWithIds =
         jsonDecode(response.body)["registeredContacts"];
 
-    // Debug log: Print the server response
-
     // Filter the original contacts to only include registered ones and add the ID
-    List<Map<String, dynamic>> registeredContacts = contactsWithHashes
-        .where((contact) => registeredNumbersWithIds.any((registered) =>
-            registered['phoneno'] == contact['normalizedPhone']))
+    List<Map<String, dynamic>> registeredContacts = contacts
+        .where((contact) => registeredNumbersWithIds
+            .any((registered) => registered['phoneno'] == contact['phone']))
         .map((contact) {
       // Find the corresponding ID from the server response
       var registered = registeredNumbersWithIds.firstWhere(
-          (registered) => registered['phoneno'] == contact['normalizedPhone']);
+          (registered) => registered['phoneno'] == contact['phone']);
       return {
         'id': int.parse(registered['id'].toString()), // Ensure the ID is an int
         'user_id': registered['id'].toString(), // Use the ID as the user_id
         'name': contact['name'],
         'phone': contact['phone'],
-        'normalizedPhone': contact['normalizedPhone'],
+        'profilePic': contact['profilePic'],
         'is_registered': true, // Mark as registered
       };
     }).toList();
-
-    // Debug log: Print the final list of registered contacts
 
     // Insert registered contacts into the database
     final dbHelper = DatabaseHelper();

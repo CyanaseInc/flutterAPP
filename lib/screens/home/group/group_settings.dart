@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cyanase/theme/theme.dart';
 
 class GroupSettings extends StatefulWidget {
   const GroupSettings({Key? key}) : super(key: key);
@@ -324,7 +325,7 @@ class _GroupSettingsState extends State<GroupSettings> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: Colors.white,
+      color: white,
       margin: const EdgeInsets.only(top: 8.0),
       child: ExpansionTile(
         title: const Text(

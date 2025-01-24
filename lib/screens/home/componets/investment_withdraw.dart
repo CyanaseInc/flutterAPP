@@ -61,7 +61,7 @@ class _WithdrawState extends State<Withdraw> {
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: primaryTwo,
-                        foregroundColor: Colors.white,
+                        foregroundColor: white,
                       ),
                       child: Text('Back'),
                     )
@@ -91,11 +91,11 @@ class _WithdrawState extends State<Withdraw> {
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: primaryTwo,
-                  foregroundColor: Colors.white,
+                  foregroundColor: white,
                 ),
                 child: isLoading
                     ? CircularProgressIndicator(
-                        color: Colors.white,
+                        color: white,
                       ) // Show loader while processing
                     : Text(currentStep == 2 ? 'Confirm Withdraw' : 'Next'),
               ),
@@ -151,7 +151,7 @@ class _WithdrawState extends State<Withdraw> {
                           style: TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
-                            color: Colors.white,
+                            color: white,
                           ),
                         ),
                         SizedBox(height: 8),
@@ -159,7 +159,7 @@ class _WithdrawState extends State<Withdraw> {
                           'Deposit Amount: \$${portfoliosData[portfolio]!['deposit']!.toStringAsFixed(2)}', // Dynamic deposit amount
                           style: TextStyle(
                             fontSize: 16,
-                            color: Colors.white70,
+                            color: white,
                           ),
                         ),
                         SizedBox(height: 4),
@@ -167,7 +167,7 @@ class _WithdrawState extends State<Withdraw> {
                           'Net Worth: \$${portfoliosData[portfolio]!['netWorth']!.toStringAsFixed(2)}', // Dynamic net worth
                           style: TextStyle(
                             fontSize: 16,
-                            color: Colors.white70,
+                            color: white,
                           ),
                         ),
                       ],

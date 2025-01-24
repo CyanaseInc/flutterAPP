@@ -20,8 +20,8 @@ class LoanButton extends StatelessWidget {
       ),
       child: const Text(
         'Get Loan',
-        style: TextStyle(
-            color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+        style:
+            TextStyle(color: white, fontSize: 12, fontWeight: FontWeight.bold),
       ),
     );
   }

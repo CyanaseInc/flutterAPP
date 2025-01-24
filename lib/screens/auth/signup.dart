@@ -1,6 +1,3 @@
-// Refactor of the SignupScreen code to separate each slide into its own file
-
-// signup.dart
 import 'package:cyanase/screens/auth/verification.dart';
 import 'package:flutter/material.dart';
 import 'package:country_picker/country_picker.dart';
@@ -10,6 +7,9 @@ import 'first_name_slide.dart';
 import 'phone_country_slide.dart';
 import 'email_birth_slide.dart';
 import 'password_slide.dart';
+import 'package:cyanase/helpers/api_helper.dart';
+import 'package:cyanase/helpers/database_helper.dart';
+import 'package:cyanase/helpers/loader.dart'; // Import the Loader
 
 class SignupScreen extends StatefulWidget {
   @override
@@ -19,23 +19,26 @@ class SignupScreen extends StatefulWidget {
 class _SignupScreenState extends State<SignupScreen> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
+  bool _isLoading = false; // Track loading state
 
   // Form fields
   final TextEditingController _firstNameController = TextEditingController();
   final TextEditingController _lastNameController = TextEditingController();
   final TextEditingController _phoneNumberController = TextEditingController();
   final TextEditingController _countryController = TextEditingController();
-  String _selectedCountryCode = '+1'; // Default to US
+  String _selectedCountryCode = ''; // No default value needed
   final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _birthDateController = TextEditingController();
+  final TextEditingController _yearController = TextEditingController();
+  final TextEditingController _monthController = TextEditingController();
+  final TextEditingController _dayController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmPasswordController =
       TextEditingController();
+  String? _selectedGender; // Added for gender selection
 
   @override
   void initState() {
     super.initState();
-    _detectSimCountry();
     _setupValidationListeners();
   }
 
@@ -44,34 +47,11 @@ class _SignupScreenState extends State<SignupScreen> {
     _lastNameController.addListener(() => setState(() {}));
     _phoneNumberController.addListener(() => setState(() {}));
     _emailController.addListener(() => setState(() {}));
-    _birthDateController.addListener(() => setState(() {}));
+    _yearController.addListener(() => setState(() {}));
+    _monthController.addListener(() => setState(() {}));
+    _dayController.addListener(() => setState(() {}));
     _passwordController.addListener(() => setState(() {}));
     _confirmPasswordController.addListener(() => setState(() {}));
-  }
-
-  Future<void> _detectSimCountry() async {
-    try {
-      final simCardInfo = await SimCardInfo().getSimInfo();
-      if (simCardInfo != null && simCardInfo.isNotEmpty) {
-        final sim = simCardInfo.first;
-        setState(() {
-          _selectedCountryCode = "+${sim.countryPhonePrefix}";
-          _countryController.text = sim.countryIso.toUpperCase();
-        });
-      } else {
-        _setDefaultCountry();
-      }
-    } catch (e) {
-      print("Failed to detect SIM country: $e");
-      _setDefaultCountry();
-    }
-  }
-
-  void _setDefaultCountry() {
-    setState(() {
-      _selectedCountryCode = '+256'; // Default to Uganda
-      _countryController.text = 'Uganda';
-    });
   }
 
   void _selectCountry() {
@@ -94,10 +74,13 @@ class _SignupScreenState extends State<SignupScreen> {
             _lastNameController.text.trim().isNotEmpty;
       case 1:
         return _phoneNumberController.text.trim().isNotEmpty &&
-            _countryController.text.trim().isNotEmpty;
+            _countryController.text.trim().isNotEmpty &&
+            _emailController.text.trim().isNotEmpty;
       case 2:
-        return _emailController.text.trim().isNotEmpty &&
-            _birthDateController.text.trim().isNotEmpty;
+        return _yearController.text.trim().isNotEmpty &&
+            _monthController.text.trim().isNotEmpty &&
+            _dayController.text.trim().isNotEmpty &&
+            _selectedGender != null;
       case 3:
         return _passwordController.text.trim().isNotEmpty &&
             _confirmPasswordController.text.trim().isNotEmpty &&
@@ -136,66 +119,143 @@ class _SignupScreenState extends State<SignupScreen> {
     }
   }
 
-  void _submitForm() {
-    print("First Name: ${_firstNameController.text}");
-    print("Last Name: ${_lastNameController.text}");
-    print("Phone Number: ${_phoneNumberController.text}");
-    print("Country: ${_countryController.text}");
-    print("Email: ${_emailController.text}");
-    print("Birth Date: ${_birthDateController.text}");
-    print("Password: ${_passwordController.text}");
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => VerificationScreen(),
-      ),
+  void _submitForm() async {
+    setState(() {
+      _isLoading = true; // Show loader and disable button
+    });
+
+    // Combine year, month, and day into a single string (YYYY-MM-DD)
+    final birthDate =
+        '${_yearController.text}-${_monthController.text.padLeft(2, '0')}-${_dayController.text.padLeft(2, '0')}';
+
+    // Prepare the data to send
+    final Map<String, dynamic> userData = {
+      'firstName': _firstNameController.text,
+      'lastName': _lastNameController.text,
+      'email': _emailController.text,
+      'password': _passwordController.text,
+      'phoneNumber': '$_selectedCountryCode${_phoneNumberController.text}',
+      'country': _countryController.text,
+      'birthDate': birthDate,
+      'gender': _selectedGender, // Added gender field
+    };
+
+    try {
+      // Call the signup method from ApiService
+      final response = await ApiService.signup(userData);
+
+      // Check if the registration was successful
+      if (response['success'] == true) {
+        final Map<String, dynamic> profileData = {
+          'id': response['userId'], // Assuming the API returns a userId
+          'name': '${_firstNameController.text} ${_lastNameController.text}',
+          'phone_number': '$_selectedCountryCode${_phoneNumberController.text}',
+          'email': _emailController.text,
+          'created_at': DateTime.now().toIso8601String(),
+        };
+
+        // Insert the profile data into the database
+        final dbHelper = DatabaseHelper();
+        await dbHelper.insertUser(profileData);
+
+        // Success: Navigate to the verification screen
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => VerificationScreen(),
+          ),
+        );
+      } else {
+        // Handle server-side errors (e.g., email already exists)
+        _showErrorPopup(response['message'] ?? 'Registration failed');
+      }
+    } catch (e) {
+      // Handle network or other errors
+      _showErrorPopup('Signup failed: $e');
+    } finally {
+      setState(() {
+        _isLoading = false; // Hide loader and enable button
+      });
+    }
+  }
+
+  void _showErrorPopup(String message) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Error'),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      },
     );
   }
 
   @override
   Widget build(BuildContext context) {
     const Color yourPrimaryColor = primaryTwo;
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Signup'),
       ),
-      body: Column(
+      body: Stack(
         children: [
-          Expanded(
-            child: PageView(
-              controller: _pageController,
-              onPageChanged: (index) {
-                setState(() {
-                  _currentPage = index;
-                });
-              },
-              children: [
-                FirstNameSlide(
-                  firstNameController: _firstNameController,
-                  lastNameController: _lastNameController,
+          Column(
+            children: [
+              Expanded(
+                child: PageView(
+                  controller: _pageController,
+                  onPageChanged: (index) {
+                    setState(() {
+                      _currentPage = index;
+                    });
+                  },
+                  children: [
+                    FirstNameSlide(
+                      firstNameController: _firstNameController,
+                      lastNameController: _lastNameController,
+                    ),
+                    PhoneCountrySlide(
+                      phoneNumberController: _phoneNumberController,
+                      countryController: _countryController,
+                      emailController: _emailController,
+                      onPhoneChanged: (code) => setState(() {
+                        _selectedCountryCode = code;
+                      }),
+                      selectCountry: _selectCountry,
+                    ),
+                    EmailBirthSlide(
+                      yearController: _yearController,
+                      monthController: _monthController,
+                      dayController: _dayController,
+                      selectedGender: _selectedGender,
+                      onGenderSelected: (gender) => setState(() {
+                        _selectedGender = gender;
+                      }),
+                    ),
+                    PasswordSlide(
+                      passwordController: _passwordController,
+                      confirmPasswordController: _confirmPasswordController,
+                    ),
+                  ],
                 ),
-                PhoneCountrySlide(
-                  phoneNumberController: _phoneNumberController,
-                  countryController: _countryController,
-                  selectedCountryCode: _selectedCountryCode,
-                  onPhoneChanged: (code) => setState(() {
-                    _selectedCountryCode = code;
-                  }),
-                  selectCountry: _selectCountry,
-                ),
-                EmailBirthSlide(
-                  emailController: _emailController,
-                  birthDateController: _birthDateController,
-                ),
-                PasswordSlide(
-                  passwordController: _passwordController,
-                  confirmPasswordController: _confirmPasswordController,
-                ),
-              ],
-            ),
+              ),
+              _buildNavigationButtons(yourPrimaryColor),
+            ],
           ),
-          _buildNavigationButtons(yourPrimaryColor),
+          if (_isLoading) // Show transparent overlay and loader
+            Container(
+              color: Colors.black.withOpacity(0.5), // Transparent overlay
+              child: const Center(
+                child: Loader(), // Use the Loader widget
+              ),
+            ),
         ],
       ),
     );
@@ -209,19 +269,20 @@ class _SignupScreenState extends State<SignupScreen> {
         children: [
           if (_currentPage > 0)
             ElevatedButton(
-              onPressed: _previousPage,
+              onPressed:
+                  _isLoading ? null : _previousPage, // Disable if loading
               style: ElevatedButton.styleFrom(
                 backgroundColor: primaryColor,
-                foregroundColor: Colors.white,
+                foregroundColor: white,
               ),
               child: const Text('Previous'),
             ),
           ElevatedButton(
-            onPressed: _isCurrentSlideValid() ? _nextPage : null,
+            onPressed: _isLoading ? null : _nextPage, // Disable if loading
             style: ElevatedButton.styleFrom(
               backgroundColor:
                   _isCurrentSlideValid() ? primaryColor : Colors.grey,
-              foregroundColor: Colors.white,
+              foregroundColor: white,
             ),
             child: Text(_currentPage < 3 ? 'Next' : 'Submit'),
           ),
@@ -237,7 +298,9 @@ class _SignupScreenState extends State<SignupScreen> {
     _phoneNumberController.dispose();
     _countryController.dispose();
     _emailController.dispose();
-    _birthDateController.dispose();
+    _yearController.dispose();
+    _monthController.dispose();
+    _dayController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     _pageController.dispose();

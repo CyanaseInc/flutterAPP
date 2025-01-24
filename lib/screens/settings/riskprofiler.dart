@@ -94,7 +94,7 @@ class _RiskProfilerFormState extends State<RiskProfilerForm> {
         centerTitle: true,
         elevation: 0,
         iconTheme: IconThemeData(
-          color: Colors.white, // Change the back arrow color to white
+          color: white, // Change the back arrow color to white
         ),
       ),
       body: Column(
@@ -152,7 +152,7 @@ class _RiskProfilerFormState extends State<RiskProfilerForm> {
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: primaryTwo,
-                      foregroundColor: Colors.white,
+                      foregroundColor: white,
                     ),
                     child: Text("Previous"),
                   ),
@@ -166,7 +166,7 @@ class _RiskProfilerFormState extends State<RiskProfilerForm> {
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: primaryTwo,
-                      foregroundColor: Colors.white,
+                      foregroundColor: white,
                     ),
                     child: Text("Next"),
                   ),
@@ -199,7 +199,7 @@ class QuestionSlide extends StatelessWidget {
       padding: EdgeInsets.all(20),
       margin: EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: white,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -305,7 +305,7 @@ class ResultScreen extends StatelessWidget {
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: primaryTwo, // Use your theme color
-                foregroundColor: Colors.white,
+                foregroundColor: white,
 
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),

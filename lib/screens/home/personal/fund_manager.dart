@@ -99,7 +99,7 @@ class _FundManagerSliderState extends State<FundManagerSlider> {
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.white,
+                          color: white,
                           spreadRadius: 2,
                           blurRadius: 5,
                           offset: Offset(0, 3),

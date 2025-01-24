@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cyanase/helpers/database_helper.dart'; // Import the DatabaseHelper
 import 'package:cyanase/theme/theme.dart'; // Import your theme file
 import 'create_new_group_details.dart'; // Import the GroupDetailsScreen
+import 'hash_numbers.dart'; // Import the getRegisteredContacts function
 
 class NewGroupScreen extends StatefulWidget {
   @override
@@ -16,26 +17,45 @@ class _NewGroupScreenState extends State<NewGroupScreen> {
   @override
   void initState() {
     super.initState();
-    _loadContacts();
+    _refreshContacts(); // Refresh contacts when the screen is opened
   }
 
-  Future<void> _loadContacts() async {
-    final dbHelper = DatabaseHelper();
-    final fetchedContacts = await dbHelper.getContacts();
-
-    final formattedContacts = fetchedContacts.map((contact) {
-      return {
-        'id': contact['id'], // Ensure the ID is included
-        'name': contact['name'],
-        'phone': contact['phone_number'],
-        'profilePic': '', // Add profile picture logic if available
-      };
-    }).toList();
-
+  Future<void> _refreshContacts() async {
     setState(() {
-      contacts = formattedContacts;
-      isLoading = false;
+      isLoading = true; // Show loading indicator
     });
+
+    try {
+      // Fetch the latest contacts from the database
+      final dbHelper = DatabaseHelper();
+      final fetchedContacts = await dbHelper.getContacts();
+
+      // Format the contacts
+      final formattedContacts = fetchedContacts.map((contact) {
+        return {
+          'id': contact['id'],
+          'name': contact['name'],
+          'phone': contact['phone_number'],
+          'profilePic': '', // Add profile picture logic if available
+        };
+      }).toList();
+
+      // Fetch registered contacts from the server
+      final registeredContacts = await getRegisteredContacts(formattedContacts);
+
+      // Update the state with the registered contacts
+      setState(() {
+        contacts = registeredContacts;
+        isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        isLoading = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to refresh contacts: $e')),
+      );
+    }
   }
 
   @override
@@ -44,10 +64,10 @@ class _NewGroupScreenState extends State<NewGroupScreen> {
       appBar: AppBar(
         title: Text(
           "New Group",
-          style: TextStyle(color: Colors.white, fontSize: 20),
+          style: TextStyle(color: white, fontSize: 20),
         ),
         backgroundColor: primaryTwo,
-        iconTheme: IconThemeData(color: Colors.white), // Set icons to white
+        iconTheme: IconThemeData(color: white),
         actions: [
           IconButton(
             icon: Icon(Icons.search),
@@ -66,6 +86,13 @@ class _NewGroupScreenState extends State<NewGroupScreen> {
               );
             },
           ),
+          // Add a refresh button
+          IconButton(
+            icon: Icon(Icons.refresh),
+            onPressed: () async {
+              await _refreshContacts();
+            },
+          ),
         ],
       ),
       body: isLoading
@@ -75,7 +102,7 @@ class _NewGroupScreenState extends State<NewGroupScreen> {
                 // Display selected contacts at the top
                 if (selectedContacts.isNotEmpty)
                   Container(
-                    height: 120, // Increased height to accommodate the name
+                    height: 120,
                     child: ListView.builder(
                       scrollDirection: Axis.horizontal,
                       itemCount: selectedContacts.length,
@@ -100,13 +127,10 @@ class _NewGroupScreenState extends State<NewGroupScreen> {
                                             'assets/images/avatar.png'),
                                     child: contact['profilePic'] == null ||
                                             contact['profilePic']!.isEmpty
-                                        ? Icon(Icons.person,
-                                            color: Colors.white)
+                                        ? Icon(Icons.person, color: white)
                                         : null,
                                   ),
-                                  SizedBox(
-                                      height:
-                                          4), // Spacing between avatar and name
+                                  SizedBox(height: 4),
                                   Text(
                                     firstName,
                                     style: TextStyle(
@@ -129,8 +153,8 @@ class _NewGroupScreenState extends State<NewGroupScreen> {
                                 child: CircleAvatar(
                                   radius: 8,
                                   backgroundColor: Colors.red,
-                                  child: Icon(Icons.close,
-                                      size: 16, color: Colors.white),
+                                  child:
+                                      Icon(Icons.close, size: 16, color: white),
                                 ),
                               ),
                             ),
@@ -155,7 +179,7 @@ class _NewGroupScreenState extends State<NewGroupScreen> {
                               : AssetImage('assets/images/avatar.png'),
                           child: contact['profilePic'] == null ||
                                   contact['profilePic']!.isEmpty
-                              ? Icon(Icons.person, color: Colors.white)
+                              ? Icon(Icons.person, color: white)
                               : null,
                         ),
                         title: Text(contact['name'] ?? 'Unknown'),
@@ -180,8 +204,8 @@ class _NewGroupScreenState extends State<NewGroupScreen> {
             ),
       floatingActionButton: selectedContacts.isNotEmpty
           ? FloatingActionButton(
-              backgroundColor: Colors.green,
-              child: Icon(Icons.arrow_forward, color: Colors.white),
+              backgroundColor: primaryTwo,
+              child: Icon(Icons.arrow_forward, color: primaryColor),
               onPressed: () {
                 Navigator.push(
                   context,
@@ -249,7 +273,7 @@ class ContactSearchDelegate extends SearchDelegate {
                 : AssetImage('assets/images/avatar.png'),
             child:
                 contact['profilePic'] == null || contact['profilePic']!.isEmpty
-                    ? Icon(Icons.person, color: Colors.white)
+                    ? Icon(Icons.person, color: white)
                     : null,
           ),
           title: Text(contact['name'] ?? 'Unknown'),

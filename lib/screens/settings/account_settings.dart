@@ -8,13 +8,13 @@ class AccountSettingsPage extends StatelessWidget {
       appBar: AppBar(
         title: Text("Account"),
         titleTextStyle: TextStyle(
-          color: Colors.white, // Custom color
+          color: white, // Custom color
           fontSize: 24,
         ),
         backgroundColor: primaryTwo, // WhatsApp green color
         elevation: 0,
         iconTheme: IconThemeData(
-          color: Colors.white, // Change the back arrow color to white
+          color: white, // Change the back arrow color to white
         ),
       ),
       body: SingleChildScrollView(

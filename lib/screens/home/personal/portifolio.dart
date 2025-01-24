@@ -51,7 +51,7 @@ class Portfolio extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: white,
       appBar: AppBar(
         title: const Text(
           'Portfolio',
@@ -61,7 +61,7 @@ class Portfolio extends StatelessWidget {
             fontSize: 25,
           ),
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: white,
       ),
       body: SingleChildScrollView(
         // Wrap the Column with SingleChildScrollView
@@ -180,7 +180,7 @@ class Portfolio extends StatelessWidget {
                     radius: 3,
                     color: lineColors[index % lineColors.length],
                     strokeWidth: 1.5,
-                    strokeColor: Colors.white,
+                    strokeColor: white,
                   ),
                 ),
                 belowBarData: BarAreaData(
@@ -267,7 +267,7 @@ class Portfolio extends StatelessWidget {
               style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
-                color: Colors.white,
+                color: white,
               ),
               textAlign: TextAlign.right,
             ),
@@ -280,7 +280,7 @@ class Portfolio extends StatelessWidget {
                   'Deposit:',
                   style: const TextStyle(
                     fontSize: 12,
-                    color: Colors.white,
+                    color: white,
                   ),
                   textAlign: TextAlign.right,
                 ),
@@ -294,7 +294,7 @@ class Portfolio extends StatelessWidget {
                             'UGX',
                             style: const TextStyle(
                               fontSize: 8,
-                              color: Colors.white,
+                              color: white,
                             ),
                           ),
                         ),
@@ -303,7 +303,7 @@ class Portfolio extends StatelessWidget {
                         text: deposit,
                         style: const TextStyle(
                           fontSize: 20,
-                          color: Colors.white,
+                          color: white,
                         ),
                       ),
                     ],
@@ -315,7 +315,7 @@ class Portfolio extends StatelessWidget {
                   'Net Worth:',
                   style: const TextStyle(
                     fontSize: 12,
-                    color: Colors.white,
+                    color: white,
                   ),
                   textAlign: TextAlign.right,
                 ),
@@ -329,7 +329,7 @@ class Portfolio extends StatelessWidget {
                             'UGX',
                             style: const TextStyle(
                               fontSize: 10,
-                              color: Colors.white,
+                              color: white,
                             ),
                           ),
                         ),
@@ -338,7 +338,7 @@ class Portfolio extends StatelessWidget {
                         text: netWorth,
                         style: const TextStyle(
                           fontSize: 22,
-                          color: Colors.white,
+                          color: white,
                         ),
                       ),
                     ],

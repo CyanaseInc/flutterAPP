@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'chat_list.dart';
+import 'package:cyanase/theme/theme.dart';
 
 class GroupsTab extends StatefulWidget {
   @override
@@ -13,7 +14,7 @@ class _GroupsTabState extends State<GroupsTab> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white, // Set the background color to white
+      backgroundColor: white, // Set the background color to white
       body: ChatList(
         key: _chatListKey, // Pass the key to ChatList
       ),

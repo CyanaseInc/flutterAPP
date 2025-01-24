@@ -12,7 +12,7 @@ class MessageUtils {
     return messages;
   }
 
-  // Group messages by date (e.g., "Today", "Yesterday", etc.)
+  // Group messages by date (e.g., "Today", "Yesterday", "Thursday, October 12", etc.)
   static Map<String, List<Map<String, dynamic>>> groupMessagesByDate(
       List<Map<String, dynamic>> messages) {
     final Map<String, List<Map<String, dynamic>>> groupedMessages = {};
@@ -48,7 +48,8 @@ class MessageUtils {
     } else if (date.isAfter(yesterday)) {
       return "Yesterday";
     } else {
-      return DateFormat('MMMM d, y').format(date); // Format: "October 10, 2023"
+      return DateFormat('EEEE, MMMM d')
+          .format(date); // Format: "Thursday, October 12"
     }
   }
 }

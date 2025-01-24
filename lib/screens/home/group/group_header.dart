@@ -79,7 +79,7 @@ class _GroupHeaderState extends State<GroupHeader> {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      color: Colors.white,
+      color: white,
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
       child: Column(
         children: [

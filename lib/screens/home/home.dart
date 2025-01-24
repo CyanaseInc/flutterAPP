@@ -6,6 +6,7 @@ import './group/group.dart';
 import './goal/goal.dart';
 import './group/new_group.dart';
 import '../settings/settings.dart';
+import '../auth/login_with_passcode.dart';
 
 class HomeScreen extends StatefulWidget {
   @override
@@ -115,7 +116,7 @@ class _HomeScreenState extends State<HomeScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: white,
         title: _isSearching
             ? TextField(
                 controller: _searchController,
@@ -156,7 +157,7 @@ class _HomeScreenState extends State<HomeScreen>
           // Fancy TabBar
           Container(
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: white,
               boxShadow: [
                 BoxShadow(
                   color: Colors.grey.withOpacity(0.2),
@@ -233,35 +234,14 @@ class _HomeScreenState extends State<HomeScreen>
 
   List<Widget> _buildAppBarActions() {
     if (_tabController.index == 1) {
-      // Groups tab
-      return _isSearching
-          ? [
-              IconButton(
-                icon: const Icon(Icons.close, color: primaryTwo),
-                onPressed: () {
-                  setState(() {
-                    _searchController.clear(); // Clear search bar
-                    _isSearching = false; // Hide search bar
-                  });
-                },
-              ),
-            ]
-          : [
-              IconButton(
-                icon: const Icon(Icons.search, color: primaryTwo),
-                onPressed: () {
-                  setState(() {
-                    _isSearching = true; // Show search bar
-                  });
-                },
-              ),
-              IconButton(
-                icon: const Icon(Icons.more_vert, color: primaryTwo),
-                onPressed: () {
-                  _showMenu(context);
-                },
-              ),
-            ];
+      return [
+        IconButton(
+          icon: const Icon(Icons.more_vert, color: primaryTwo),
+          onPressed: () {
+            _showMenu(context);
+          },
+        ),
+      ];
     } else {
       // Personal and Goals tabs
       return [
@@ -288,6 +268,10 @@ class _HomeScreenState extends State<HomeScreen>
           child: const Text('New Group'),
           value: 'new_group_investment',
         ),
+        PopupMenuItem(
+          child: const Text('Logout'),
+          value: 'logout',
+        ),
       ],
     ).then((value) {
       if (value == 'settings') {
@@ -302,6 +286,13 @@ class _HomeScreenState extends State<HomeScreen>
           context,
           MaterialPageRoute(
             builder: (context) => NewGroupScreen(),
+          ),
+        );
+      } else if (value == 'logout') {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => NumericLoginScreen(),
           ),
         );
       }

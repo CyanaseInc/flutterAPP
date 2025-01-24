@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:cyanase/theme/theme.dart';
 
 class FullScreenImage extends StatelessWidget {
   final String imagePath;
@@ -17,7 +18,7 @@ class FullScreenImage extends StatelessWidget {
             if (snapshot.connectionState == ConnectionState.waiting) {
               // Show a loading indicator while checking if the image exists
               return CircularProgressIndicator(
-                color: Colors.white,
+                color: white,
               );
             } else if (snapshot.hasData && snapshot.data!) {
               // If the image exists, display it
@@ -33,7 +34,7 @@ class FullScreenImage extends StatelessWidget {
               return Text(
                 "Image not found",
                 style: TextStyle(
-                  color: Colors.white,
+                  color: white,
                   fontSize: 18,
                 ),
               );

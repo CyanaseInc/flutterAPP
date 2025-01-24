@@ -7,7 +7,7 @@ class GoalsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white, // Set the background color to white
+      backgroundColor: white, // Set the background color to white
       body: SafeArea(
         child: Column(
           children: [

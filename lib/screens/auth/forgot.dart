@@ -213,7 +213,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               ),
               child: const Text(
                 'Back',
-                style: TextStyle(color: Colors.white),
+                style: TextStyle(color: white),
               ),
             ),
           ElevatedButton(
@@ -224,7 +224,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             ),
             child: Text(
               _currentPage < 2 ? 'Next' : 'Reset Password',
-              style: const TextStyle(color: Colors.white),
+              style: const TextStyle(color: white),
             ),
           ),
         ],

@@ -8,7 +8,7 @@ class HelpPage extends StatelessWidget {
       appBar: AppBar(
         title: Text("Help"),
         titleTextStyle: TextStyle(
-          color: Colors.white, // Custom color
+          color: white, // Custom color
           fontSize: 24,
         ),
         backgroundColor: primaryTwo, // WhatsApp green color

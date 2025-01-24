@@ -137,7 +137,7 @@ class MessageChat extends StatelessWidget {
                               Text(
                                 "Audio",
                                 style: TextStyle(
-                                  color: isMe ? Colors.white : Colors.black87,
+                                  color: isMe ? white : Colors.black87,
                                   fontSize: 16,
                                 ),
                               ),
@@ -155,7 +155,7 @@ class MessageChat extends StatelessWidget {
                                       ? Colors.teal[800]
                                       : Colors.grey[500],
                                   valueColor: AlwaysStoppedAnimation<Color>(
-                                    Colors.white, // White progress indicator
+                                    white, // White progress indicator
                                   ),
                                 ),
                               ),
@@ -166,7 +166,7 @@ class MessageChat extends StatelessWidget {
                         Text(
                           _formatDuration(audioDuration),
                           style: TextStyle(
-                            color: isMe ? Colors.white70 : Colors.black54,
+                            color: isMe ? white : Colors.black54,
                             fontSize: 12,
                           ),
                         ),
@@ -217,7 +217,7 @@ class MessageChat extends StatelessWidget {
                     Text(
                       message ?? "",
                       style: TextStyle(
-                        color: isMe ? Colors.white : Colors.black87,
+                        color: isMe ? white : Colors.black87,
                         fontSize: 16,
                       ),
                     ),
@@ -230,14 +230,14 @@ class MessageChat extends StatelessWidget {
                         formattedTime, // Use the formatted timestamp
                         style: TextStyle(
                           fontSize: 12,
-                          color: isMe ? Colors.white70 : Colors.black54,
+                          color: isMe ? white : Colors.black54,
                         ),
                       ),
                       SizedBox(width: 5),
                       if (isMe)
                         const Icon(
                           Icons.done_all,
-                          color: Colors.white70,
+                          color: white,
                           size: 16,
                         ),
                     ],

@@ -43,49 +43,78 @@ class FirstNameSlide extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Center(
-            child: Image.asset(
-              'assets/images/logo.png',
-              height: 100,
-              width: 70,
-            ),
-          ),
-          const SizedBox(height: 16),
-          const Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              'Welcome to Cyanase!',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: primaryTwo,
+    return Scaffold(
+      body: SingleChildScrollView(
+        // Wrap the Column in a SingleChildScrollView
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Center(
+                child: Image.asset(
+                  'assets/images/logo.png',
+                  height: 100,
+                  width: 70,
+                ),
               ),
-            ),
+              const SizedBox(height: 16),
+              const Text(
+                'Welcome to Cyanase!',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: primaryTwo,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                "Enter your first and last name to continue.",
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 50),
+              // First Name TextField with bottom border only
+              SizedBox(
+                width: MediaQuery.of(context).size.width * 0.8,
+                child: TextField(
+                  controller: firstNameController,
+                  keyboardType: TextInputType.name,
+                  decoration: InputDecoration(
+                    labelText: 'First Name',
+                    labelStyle: TextStyle(color: primaryTwo),
+                    enabledBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(color: primaryTwo),
+                    ),
+                    focusedBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(color: primaryTwo),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              // Last Name TextField with bottom border only
+              SizedBox(
+                width: MediaQuery.of(context).size.width * 0.8,
+                child: TextField(
+                  controller: lastNameController,
+                  keyboardType: TextInputType.name,
+                  decoration: InputDecoration(
+                    labelText: 'Last Name',
+                    labelStyle: TextStyle(color: primaryTwo),
+                    enabledBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(color: primaryTwo),
+                    ),
+                    focusedBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(color: primaryTwo),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 16),
-          const Align(
-            alignment: Alignment.centerLeft,
-            child: Text("Enter your first and last name to continue."),
-          ),
-          const SizedBox(height: 50),
-          TextField(
-            controller: firstNameController,
-            keyboardType: TextInputType.name,
-            decoration: const InputDecoration(labelText: 'First Name'),
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: lastNameController,
-            keyboardType: TextInputType.name,
-            decoration: const InputDecoration(labelText: 'Last Name'),
-          ),
-        ],
+        ),
       ),
     );
   }

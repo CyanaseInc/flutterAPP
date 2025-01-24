@@ -2,6 +2,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:cyanase/theme/theme.dart';
 
 class ImagePickerHelper {
   static final ImagePicker _picker = ImagePicker();
@@ -49,7 +50,7 @@ class ImagePickerHelper {
           AndroidUiSettings(
             toolbarTitle: 'Crop Image',
             toolbarColor: Colors.deepOrange,
-            toolbarWidgetColor: Colors.white,
+            toolbarWidgetColor: white,
             initAspectRatio: CropAspectRatioPreset.square,
             lockAspectRatio: true,
           ),

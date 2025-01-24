@@ -13,46 +13,79 @@ class PasswordSlide extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Center(
-            child: Image.asset(
-              'assets/images/logo.png',
-              height: 100,
-              width: 70,
-            ),
-          ),
-          const Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              'Secure your account!',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: primaryTwo,
+    return Scaffold(
+      body: SingleChildScrollView(
+        // Make the content scrollable
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment:
+                CrossAxisAlignment.center, // Center all children horizontally
+            children: [
+              Center(
+                child: Image.asset(
+                  'assets/images/logo.png',
+                  height: 100,
+                  width: 70,
+                ),
               ),
-            ),
+              const SizedBox(height: 16),
+              const Text(
+                'Secure your account!',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: primaryTwo,
+                ),
+                textAlign: TextAlign.center, // Center the text
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                "Add your password to continue.",
+                textAlign: TextAlign.center, // Center the text
+              ),
+              const SizedBox(height: 50),
+              // Password field with bottom border only
+              SizedBox(
+                width: MediaQuery.of(context).size.width * 0.8,
+                child: TextField(
+                  controller: passwordController,
+                  obscureText: true,
+                  decoration: InputDecoration(
+                    labelText: 'Password',
+                    labelStyle: TextStyle(color: primaryTwo),
+                    enabledBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(color: primaryTwo),
+                    ),
+                    focusedBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(color: primaryTwo),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              // Confirm password field with bottom border only
+              SizedBox(
+                width: MediaQuery.of(context).size.width * 0.8,
+                child: TextField(
+                  controller: confirmPasswordController,
+                  obscureText: true,
+                  decoration: InputDecoration(
+                    labelText: 'Confirm Password',
+                    labelStyle: TextStyle(color: primaryTwo),
+                    enabledBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(color: primaryTwo),
+                    ),
+                    focusedBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(color: primaryTwo),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 16),
-          const Align(
-            alignment: Alignment.centerLeft,
-            child: Text("Add your password to continue."),
-          ),
-          TextField(
-            controller: passwordController,
-            obscureText: true,
-            decoration: const InputDecoration(labelText: 'Password'),
-          ),
-          TextField(
-            controller: confirmPasswordController,
-            obscureText: true,
-            decoration: const InputDecoration(labelText: 'Confirm Password'),
-          ),
-        ],
+        ),
       ),
     );
   }

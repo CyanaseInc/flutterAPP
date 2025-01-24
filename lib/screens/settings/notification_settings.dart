@@ -21,10 +21,10 @@ class _NotificationsSettingsPageState extends State<NotificationsSettingsPage> {
         backgroundColor: primaryTwo, // WhatsApp green color
         elevation: 0,
         iconTheme: IconThemeData(
-          color: Colors.white, // Change the back arrow color to white
+          color: white, // Change the back arrow color to white
         ),
         titleTextStyle: TextStyle(
-          color: Colors.white, // Custom color
+          color: white, // Custom color
           fontSize: 24,
         ),
       ),

@@ -9,7 +9,7 @@ class InviteFriendPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: white,
       appBar: AppBar(
         title: const Text(
           'Invite a Friend',
@@ -19,7 +19,7 @@ class InviteFriendPage extends StatelessWidget {
             fontSize: 22,
           ),
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: white,
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.black),
       ),
@@ -130,7 +130,7 @@ class InviteFriendPage extends StatelessWidget {
                         'Copy Invite Code',
                         style: TextStyle(
                           fontSize: 16,
-                          color: Colors.white,
+                          color: white,
                         ),
                       ),
                     ),
@@ -212,7 +212,7 @@ class InviteFriendPage extends StatelessWidget {
                         'Share Invite Link',
                         style: TextStyle(
                           fontSize: 16,
-                          color: Colors.white,
+                          color: white,
                         ),
                       ),
                     ),

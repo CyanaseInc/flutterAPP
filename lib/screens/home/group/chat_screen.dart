@@ -82,21 +82,6 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
     super.dispose();
   }
 
-  void _onScroll() {
-    if (_scrollController.position.pixels ==
-            _scrollController.position.minScrollExtent &&
-        !_isLoading &&
-        _hasMoreMessages) {
-      _loadMessages(); // Load older messages when scrolled to the top
-    }
-
-    // Show/hide scroll-to-bottom button
-    setState(() {
-      _showScrollToBottomButton = _scrollController.offset <
-          _scrollController.position.maxScrollExtent - 100;
-    });
-  }
-
   void _scrollToLastMessage() {
     if (_scrollController.hasClients) {
       _scrollController.animateTo(
@@ -133,6 +118,7 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
     });
 
     try {
+      // Fetch the next page of messages
       final newMessages = await _messageFunctions.getMessages(
         widget.groupId,
         limit: _messagesPerPage,
@@ -145,9 +131,9 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
         });
       } else {
         setState(() {
-          _messages.insertAll(0, newMessages); // Prepend older messages
-          _currentPage++;
+          _messages.addAll(newMessages); // Append new messages to the end
           _groupedMessages = MessageUtils.groupMessagesByDate(_messages);
+          _currentPage++;
         });
       }
     } catch (e) {
@@ -166,8 +152,17 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
       final duration = await audioPlayer.getDuration();
       return duration ?? Duration.zero;
     } catch (e) {
-      print("Error getting audio duration: $e");
       return Duration.zero;
+    }
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels ==
+            _scrollController.position.minScrollExtent &&
+        !_isLoading &&
+        _hasMoreMessages) {
+      // User has scrolled to the top, load older messages
+      _loadMessages();
     }
   }
 
@@ -192,6 +187,35 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
 
       // Scroll to the last message
       _scrollToLastMessage();
+      double _getMessageOffset(Map<String, dynamic> message) {
+        // Calculate the offset of a message in the list
+        // This is a simplified example; you may need to adjust it based on your UI
+        final index = _messages.indexOf(message);
+        return index * 100.0; // Adjust based on your message height
+      }
+
+      void _updateFloatingDateHeader() {
+        if (_scrollController.hasClients) {
+          final offset = _scrollController.offset;
+
+          // Find the visible messages and update the date header
+          for (final dateKey in _groupedMessages.keys) {
+            final messages = _groupedMessages[dateKey]!;
+            final firstMessage = messages.first;
+            final lastMessage = messages.last;
+
+            final firstMessageOffset = _getMessageOffset(firstMessage);
+            final lastMessageOffset = _getMessageOffset(lastMessage);
+
+            if (offset >= firstMessageOffset && offset <= lastMessageOffset) {
+              setState(() {
+                _currentDateHeader = dateKey;
+              });
+              break;
+            }
+          }
+        }
+      }
 
       // Insert the image into the database
       final mediaId = await _dbHelper.insertImageFile(imagePath);
@@ -275,6 +299,16 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
         _recordingDuration += Duration(seconds: 1);
       });
     });
+  }
+
+  void _scrollToBottom() {
+    if (_scrollController.hasClients) {
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    }
   }
 
   Future<void> _stopRecording() async {
@@ -543,7 +577,7 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
                           child: Text(
                             _currentDateHeader!,
                             style: TextStyle(
-                              color: Colors.white,
+                              color: white,
                               fontSize: 14, // Smaller font size
                               fontWeight:
                                   FontWeight.w500, // Lighter font weight

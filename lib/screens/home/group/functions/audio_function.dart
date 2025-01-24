@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'dart:async'; // For Timer
 import 'dart:io'; // For Directory and File
 import 'package:audioplayers/audioplayers.dart';
@@ -35,15 +36,22 @@ class AudioFunctions {
   /// Starts audio recording.
   Future<String?> startRecording() async {
     try {
+      // Check and request microphone permission
+      final status = await Permission.microphone.status;
+      if (!status.isGranted) {
+        final result = await Permission.microphone.request();
+        if (!result.isGranted) {
+          print("Microphone permission denied");
+          return null;
+        }
+      }
+
       // Get the application documents directory
       final directory = await getApplicationDocumentsDirectory();
       final folderPath = '${directory.path}/recordings';
-      final folder = Directory(folderPath);
 
-      // Create the recordings directory if it doesn't exist
-      if (!await folder.exists()) {
-        await folder.create(recursive: true);
-      }
+      // Ensure the recordings folder exists
+      await ensureFolderExists(folderPath);
 
       // Define the file path for the recording
       final filePath =
@@ -74,6 +82,7 @@ class AudioFunctions {
         if (await file.exists()) {
           print("Audio file exists at: $path");
           print("File size: ${await file.length()} bytes");
+          return path;
         } else {
           print("Audio file does not exist at: $path");
         }
@@ -81,9 +90,10 @@ class AudioFunctions {
         print("Recording path is null");
       }
 
-      return path;
+      return null;
     } catch (e) {
       print("Error stopping recording: $e");
+
       return null;
     }
   }

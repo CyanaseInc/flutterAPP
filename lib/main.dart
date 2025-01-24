@@ -50,7 +50,9 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Cyanase',
-      theme: appTheme, // Use the theme from theme.dart
+      theme: appTheme, // Use the light theme from theme.dart
+      //darkTheme: darkTheme, // Use the dark theme from theme.dart
+      //  themeMode: ThemeMode.system, // Automatically adapt to system theme
       home: const SplashScreenWrapper(), // Start with the Splash Screen Wrapper
     );
   }

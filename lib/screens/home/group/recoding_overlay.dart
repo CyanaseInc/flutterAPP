@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cyanase/theme/theme.dart';
 
 class RecordingOverlay extends StatelessWidget {
   final Duration recordingDuration;
@@ -23,11 +24,11 @@ class RecordingOverlay extends StatelessWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.mic, size: 48, color: Colors.white),
+                  Icon(Icons.mic, size: 48, color: white),
                   SizedBox(height: 16),
                   Text(
                     _formatDuration(recordingDuration),
-                    style: TextStyle(fontSize: 24, color: Colors.white),
+                    style: TextStyle(fontSize: 24, color: white),
                   ),
                   SizedBox(height: 16),
                   GestureDetector(
@@ -46,11 +47,11 @@ class RecordingOverlay extends StatelessWidget {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.delete, color: Colors.white),
+                          Icon(Icons.delete, color: white),
                           SizedBox(width: 8),
                           Text(
                             "Slide to cancel",
-                            style: TextStyle(color: Colors.white),
+                            style: TextStyle(color: white),
                           ),
                         ],
                       ),

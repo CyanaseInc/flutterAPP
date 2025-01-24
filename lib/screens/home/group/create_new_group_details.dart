@@ -110,15 +110,15 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
       appBar: AppBar(
         title: Text(
           "New Group",
-          style: TextStyle(color: Colors.white, fontSize: 20),
+          style: TextStyle(color: white, fontSize: 20),
         ),
         backgroundColor: primaryTwo,
-        iconTheme: IconThemeData(color: Colors.white),
+        iconTheme: IconThemeData(color: white),
         actions: [
           IconButton(
             icon: _isSaving
-                ? CircularProgressIndicator(color: Colors.white) // Show loader
-                : Icon(Icons.check, color: Colors.white),
+                ? CircularProgressIndicator(color: white) // Show loader
+                : Icon(Icons.check, color: white),
             onPressed:
                 _isSaving ? null : _saveGroup, // Disable button when saving
           ),
@@ -173,7 +173,7 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                               as ImageProvider,
                       child: contact['profilePic'] == null ||
                               contact['profilePic']!.isEmpty
-                          ? Icon(Icons.person, color: Colors.white)
+                          ? Icon(Icons.person, color: white)
                           : null,
                     ),
                     title: Text(contact['name'] ?? 'Unknown'),

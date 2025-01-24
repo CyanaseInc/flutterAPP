@@ -31,7 +31,7 @@ class GroupSavingGoalsSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: Colors.white, // White background for the section
+      color: white, // White background for the section
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -183,8 +183,7 @@ class GroupSavingGoalsCard extends StatelessWidget {
                         TextEditingController();
 
                     return AlertDialog(
-                      backgroundColor:
-                          Colors.white, // White background for the modal
+                      backgroundColor: white, // White background for the modal
                       title: Text(
                         'Enter Amount',
                         style: TextStyle(

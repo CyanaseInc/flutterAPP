@@ -22,7 +22,7 @@ class TotalDepositsCard extends StatelessWidget {
                   'Total Deposits',
                   style: TextStyle(
                     fontSize: 16,
-                    color: Colors.white,
+                    color: white,
                   ),
                 ),
                 SizedBox(height: 10),
@@ -36,7 +36,7 @@ class TotalDepositsCard extends StatelessWidget {
                             'UGX',
                             style: TextStyle(
                               fontSize: 16,
-                              color: Colors.white,
+                              color: white,
                             ),
                           ),
                         ),
@@ -45,7 +45,7 @@ class TotalDepositsCard extends StatelessWidget {
                         text: ' 5,000',
                         style: TextStyle(
                           fontSize: 32,
-                          color: Colors.white,
+                          color: white,
                         ),
                       ),
                     ],
@@ -62,7 +62,7 @@ class TotalDepositsCard extends StatelessWidget {
               '\$13.50',
               style: TextStyle(
                 fontSize: 12,
-                color: Colors.white70,
+                color: white,
               ),
             ),
           ),
@@ -79,7 +79,7 @@ class NetworthCard extends StatelessWidget {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(15),
       ),
-      color: Colors.white,
+      color: white,
       elevation: 4,
       child: Stack(
         children: [

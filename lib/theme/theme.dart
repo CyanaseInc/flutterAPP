@@ -9,6 +9,7 @@ const Color primaryDark = Color(0xFFB57F0A);
 const Color primaryTwoLight = Color(0xFF4B5188); // Lighter shade
 const Color primaryTwoDark = Color(0xFF1A1E3A);
 const Color highliter = Color(0xFFeff6ff);
+const Color white = Color(0xFFFFFFFF);
 
 // Create a ThemeData instance to be used throughout the app
 final ThemeData appTheme = ThemeData(
@@ -21,5 +22,5 @@ final ThemeData appTheme = ThemeData(
   useMaterial3: true, // Optional, for Material 3 design
 
   // Set white background for all screens by default
-  scaffoldBackgroundColor: Colors.white,
+  scaffoldBackgroundColor: white,
 );

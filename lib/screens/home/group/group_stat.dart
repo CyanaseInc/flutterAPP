@@ -8,7 +8,7 @@ class TotalDepositsCard extends StatelessWidget {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(15),
       ),
-      color: Colors.white,
+      color: white,
       elevation: 4,
       child: Stack(
         children: [
@@ -96,16 +96,14 @@ class NetworthCard extends StatelessWidget {
                 const Text(
                   'Group investments',
                   style: TextStyle(
-                      fontSize: 10,
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold),
+                      fontSize: 10, color: white, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 4),
                 const Text(
                   'Total investments made by the group',
                   style: TextStyle(
                     fontSize: 10,
-                    color: Colors.white70,
+                    color: white,
                   ),
                 ),
                 const SizedBox(height: 10),
@@ -119,7 +117,7 @@ class NetworthCard extends StatelessWidget {
                             'UGX',
                             style: TextStyle(
                                 fontSize: 14,
-                                color: Colors.white,
+                                color: white,
                                 fontWeight: FontWeight.bold),
                           ),
                         ),
@@ -128,7 +126,7 @@ class NetworthCard extends StatelessWidget {
                         text: ' 3,005,000',
                         style: TextStyle(
                             fontSize: 20,
-                            color: Colors.white,
+                            color: white,
                             fontWeight: FontWeight.bold),
                       ),
                     ],
@@ -144,9 +142,7 @@ class NetworthCard extends StatelessWidget {
             child: Text(
               '\$13.50',
               style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold),
+                  fontSize: 14, color: white, fontWeight: FontWeight.bold),
             ),
           ),
         ],
@@ -162,7 +158,7 @@ class LoanCard extends StatelessWidget {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(15),
       ),
-      color: Colors.white,
+      color: white,
       elevation: 4,
       child: Stack(
         children: [
