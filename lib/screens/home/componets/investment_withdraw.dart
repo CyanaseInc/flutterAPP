@@ -186,6 +186,17 @@ class _WithdrawState extends State<Withdraw> {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
+        // Display Withdraw from as a heading
+        if (selectedPortfolio != null)
+          Text(
+            'Withdraw from $selectedPortfolio',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: primaryTwo,
+            ),
+          ),
+        SizedBox(height: 20),
         Text(
           'Select Withdraw Method',
           style: TextStyle(
@@ -222,6 +233,17 @@ class _WithdrawState extends State<Withdraw> {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
+        // Display Withdraw from as a heading
+        if (selectedPortfolio != null)
+          Text(
+            'Withdraw from: $selectedPortfolio',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: primaryTwo,
+            ),
+          ),
+        SizedBox(height: 20),
         Text(
           'Mobile Money Details',
           style: TextStyle(
@@ -261,6 +283,17 @@ class _WithdrawState extends State<Withdraw> {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
+        // Display Withdraw from as a heading
+        if (selectedPortfolio != null)
+          Text(
+            'Withdraw from: $selectedPortfolio',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: primaryTwo,
+            ),
+          ),
+        SizedBox(height: 20),
         Text(
           'Bank Details',
           style: TextStyle(
