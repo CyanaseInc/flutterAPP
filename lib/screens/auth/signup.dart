@@ -120,63 +120,71 @@ class _SignupScreenState extends State<SignupScreen> {
   }
 
   void _submitForm() async {
+    if (!_validateInputs()) return; // Validate inputs before proceeding.
+
     setState(() {
       _isLoading = true; // Show loader and disable button
     });
 
-    // Combine year, month, and day into a single string (YYYY-MM-DD)
     final birthDate =
         '${_yearController.text}-${_monthController.text.padLeft(2, '0')}-${_dayController.text.padLeft(2, '0')}';
 
-    // Prepare the data to send
     final Map<String, dynamic> userData = {
-      'firstName': _firstNameController.text,
-      'lastName': _lastNameController.text,
-      'email': _emailController.text,
+      'firstName': _firstNameController.text.trim(),
+      'lastName': _lastNameController.text.trim(),
+      'email': _emailController.text.trim(),
       'password': _passwordController.text,
-      'phoneNumber': '$_selectedCountryCode${_phoneNumberController.text}',
-      'country': _countryController.text,
+      'phoneNumber':
+          '$_selectedCountryCode${_phoneNumberController.text.trim()}',
+      'country': _countryController.text.trim(),
       'birthDate': birthDate,
-      'gender': _selectedGender, // Added gender field
+      'gender': _selectedGender,
     };
 
     try {
-      // Call the signup method from ApiService
       final response = await ApiService.signup(userData);
 
-      // Check if the registration was successful
       if (response['success'] == true) {
-        final Map<String, dynamic> profileData = {
-          'id': response['userId'], // Assuming the API returns a userId
-          'name': '${_firstNameController.text} ${_lastNameController.text}',
-          'phone_number': '$_selectedCountryCode${_phoneNumberController.text}',
-          'email': _emailController.text,
-          'created_at': DateTime.now().toIso8601String(),
-        };
-
-        // Insert the profile data into the database
-        final dbHelper = DatabaseHelper();
-        await dbHelper.insertUser(profileData);
-
-        // Success: Navigate to the verification screen
-        Navigator.push(
+        await _saveUserToDatabase(response);
+        Navigator.pushReplacement(
           context,
-          MaterialPageRoute(
-            builder: (context) => VerificationScreen(),
-          ),
+          MaterialPageRoute(builder: (context) => VerificationScreen()),
         );
       } else {
-        // Handle server-side errors (e.g., email already exists)
         _showErrorPopup(response['message'] ?? 'Registration failed');
       }
     } catch (e) {
-      // Handle network or other errors
       _showErrorPopup('Signup failed: $e');
     } finally {
       setState(() {
         _isLoading = false; // Hide loader and enable button
       });
     }
+  }
+
+  bool _validateInputs() {
+    if (_firstNameController.text.isEmpty ||
+        _lastNameController.text.isEmpty ||
+        !_emailController.text.contains('@') ||
+        _passwordController.text.length < 6 ||
+        _phoneNumberController.text.isEmpty) {
+      _showErrorPopup('Please fill all fields correctly.');
+      return false;
+    }
+    return true;
+  }
+
+  Future<void> _saveUserToDatabase(Map<String, dynamic> response) async {
+    final profileData = {
+      'id': response['userId'],
+      'name': '${_firstNameController.text} ${_lastNameController.text}',
+      'phone_number': '$_selectedCountryCode${_phoneNumberController.text}',
+      'email': _emailController.text,
+      'created_at': DateTime.now().toIso8601String(),
+    };
+
+    final dbHelper = DatabaseHelper();
+    await dbHelper.insertUser(profileData);
   }
 
   void _showErrorPopup(String message) {

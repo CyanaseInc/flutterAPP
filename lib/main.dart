@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:awesome_notifications/awesome_notifications.dart'; // Add this import
-import '/screens/splash.dart';
-import 'screens/auth/login_with_passcode.dart'; // Import your LoginScreen
-import 'theme/theme.dart'; // Import the centralized theme
+import '/screens/splash.dart'; // Splash screen widget
+import 'screens/auth/login_with_passcode.dart'; // Login screen
+import 'screens/auth/login_with_phone.dart'; // Your phone login screen (if needed)
+import 'theme/theme.dart'; // Centralized theme
+import 'package:cyanase/helpers/database_helper.dart'; // Database helper
 
 // Class to handle background notification actions
 class NotificationHandler {
@@ -51,8 +53,6 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Cyanase',
       theme: appTheme, // Use the light theme from theme.dart
-      //darkTheme: darkTheme, // Use the dark theme from theme.dart
-      //  themeMode: ThemeMode.system, // Automatically adapt to system theme
       home: const SplashScreenWrapper(), // Start with the Splash Screen Wrapper
     );
   }
@@ -69,17 +69,51 @@ class _SplashScreenWrapperState extends State<SplashScreenWrapper> {
   @override
   void initState() {
     super.initState();
-    _navigateToLogin();
+    _checkUserProfile(); // Initiating user profile check
   }
 
-  void _navigateToLogin() async {
-    await Future.delayed(const Duration(seconds: 3)); // Splash screen duration
-    if (mounted) {
+  Future<void> _checkUserProfile() async {
+    await Future.delayed(
+        const Duration(seconds: 3)); // Simulate splash screen duration
+
+    try {
+      final dbHelper = DatabaseHelper();
+      final db = await dbHelper.database;
+
+      // Query to check if the user profile exists
+      List<Map> result = await db.query(
+        'profile', // Assuming 'profile' is your table name
+        where: 'email IS NOT NULL AND phone_number IS NOT NULL',
+      );
+      print('result: $result');
+
+      // Navigate based on the result of the profile check
+      if (result.isNotEmpty) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) =>
+                const NumericLoginScreen(), // Navigate to NumericLoginScreen
+          ),
+        );
+      } else {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) =>
+                const LoginScreen(), // Navigate to LoginScreen
+          ),
+        );
+      }
+    } catch (e) {
+      // Handle errors (e.g., database not initialized, missing table, etc.)
+      print('Error checking user profile: $e');
+
+      // Fallback: Navigate to LoginScreen
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (context) =>
-              const NumericLoginScreen(), // Navigate to LoginScreen
+          builder: (context) => const LoginScreen(),
         ),
       );
     }
@@ -87,6 +121,6 @@ class _SplashScreenWrapperState extends State<SplashScreenWrapper> {
 
   @override
   Widget build(BuildContext context) {
-    return const SplashScreen(); // SplashScreen widget from screens/splash.dart
+    return const SplashScreen(); // The splash screen widget
   }
 }

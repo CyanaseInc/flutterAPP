@@ -53,7 +53,13 @@ class ApiService {
       Map<String, dynamic> credentials) async {
     try {
       final response = await post(ApiEndpoints.login, credentials);
-      return response;
+      // return response;
+      return {
+        'name': 'wasswa viannie',
+        'email': 'wasswaviannie@gmail.com',
+        'phone_number': '1234567890',
+        'is_verified': true, // Manually set this to false for testing
+      };
     } catch (e) {
       throw Exception('Login failed: $e');
     }
