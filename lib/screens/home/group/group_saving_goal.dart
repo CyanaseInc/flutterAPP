@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cyanase/theme/theme.dart';
+import 'test.dart';
 
 class GroupSavingGoal {
   final String goalName;
@@ -49,7 +50,12 @@ class GroupSavingGoalsSection extends StatelessWidget {
               ),
               ElevatedButton(
                 onPressed: () {
-                  // Handle Add Goal button action
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => Testa(), // Replace with actual page
+                    ),
+                  );
                 },
                 child: Text('Add Goal'),
                 style: ElevatedButton.styleFrom(

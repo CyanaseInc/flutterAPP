@@ -5,7 +5,7 @@ import 'login_with_passcode.dart'; // Import the NumericLoginScreen
 import 'signup.dart'; // Import the SignupScreen
 import 'forgot.dart';
 import '../home/home.dart';
-import 'package:cyanase/screens/home/group/hash_numbers.dart';
+import 'package:cyanase/helpers/hash_numbers.dart';
 import 'package:cyanase/theme/theme.dart';
 import 'package:cyanase/helpers/database_helper.dart'; // Import the file containing fetchAndHashContacts and getRegisteredContacts
 import 'package:cyanase/helpers/loader.dart';
@@ -53,6 +53,7 @@ class _LoginScreenState extends State<LoginScreen> {
         final email = loginResponse['email'];
         final phoneNumber = loginResponse['phone_number'];
         final userName = loginResponse['name'];
+        final userId = loginResponse['id'];
         final dateNow = DateTime.now().toIso8601String();
         final isVerified = loginResponse['is_verified'] ?? false;
 
@@ -63,6 +64,7 @@ class _LoginScreenState extends State<LoginScreen> {
           await db.insert(
             'profile',
             {
+              'id': userId,
               'email': email,
               'phone_number': phoneNumber,
               'name': userName,

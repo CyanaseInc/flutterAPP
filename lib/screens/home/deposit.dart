@@ -44,13 +44,26 @@ class _DepositScreenState extends State<DepositScreen> {
       appBar: AppBar(
         title: Text('Deposit'), // Update the title
       ),
-      body: PageView(
-        controller: _pageController,
-        physics: NeverScrollableScrollPhysics(),
+      body: Column(
         children: [
-          _buildChooseDepositMethod(),
-          _buildEnterAmount(),
-          _buildSuccessScreen(),
+          // Add your image here
+          Image.asset(
+            'assets/images/deposit.png', // Replace with your image path
+            width: 80, // Adjust the width as needed
+            height: 70, // Adjust the image fit
+          ),
+          // Add the PageView below the image
+          Expanded(
+            child: PageView(
+              controller: _pageController,
+              physics: NeverScrollableScrollPhysics(),
+              children: [
+                _buildChooseDepositMethod(),
+                _buildEnterAmount(),
+                _buildSuccessScreen(),
+              ],
+            ),
+          ),
         ],
       ),
     );

@@ -7,7 +7,7 @@ import 'package:permission_handler/permission_handler.dart';
 class DatabaseHelper {
   static final DatabaseHelper _instance = DatabaseHelper._internal();
   static Database? _database;
-  static const String tableUsers = 'users';
+  static const String tableUsers = 'profile';
   static const String tableGroups = 'groups';
   static const String tableParticipants = 'participants';
   static const String tableMedia = 'media';
@@ -106,8 +106,8 @@ class DatabaseHelper {
         role TEXT NOT NULL,
         joined_at TEXT NOT NULL,
         muted BOOLEAN NOT NULL DEFAULT FALSE,
-        FOREIGN KEY (group_id) REFERENCES groups (id) ON DELETE CASCADE,
-        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+        FOREIGN KEY (group_id) REFERENCES groups (id) ON DELETE CASCADE
+        
       )
     ''');
 
@@ -141,7 +141,7 @@ class DatabaseHelper {
         edited BOOLEAN NOT NULL DEFAULT FALSE,
         deleted BOOLEAN NOT NULL DEFAULT FALSE,
         FOREIGN KEY (group_id) REFERENCES groups (id) ON DELETE CASCADE,
-        FOREIGN KEY (sender_id) REFERENCES users (id) ON DELETE CASCADE,
+        FOREIGN KEY (sender_id) REFERENCES profile(id) ON DELETE CASCADE,
         FOREIGN KEY (media_id) REFERENCES media (id) ON DELETE SET NULL
       )
     ''');
@@ -296,7 +296,7 @@ class DatabaseHelper {
   // Retrieve all users
   Future<List<Map<String, dynamic>>> getUsers() async {
     final db = await database;
-    return await db.query('users');
+    return await db.query('profile');
   }
 
   // Retrieve all groups
@@ -356,7 +356,7 @@ class DatabaseHelper {
   // Delete a user
   Future<int> deleteUser(String userId) async {
     final db = await database;
-    return await db.delete('users', where: 'id = ?', whereArgs: [userId]);
+    return await db.delete('profile', where: 'id = ?', whereArgs: [userId]);
   }
 
   // Delete a group

@@ -441,12 +441,15 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
         name: widget.name,
         profilePic: widget.profilePic,
         memberNames: _memberNames,
+        groupId: widget.groupId,
         onDepositPressed: () {
           Navigator.push(
             context,
             MaterialPageRoute(
               builder: (context) => DepositScreen(
                 groupName: widget.name,
+                profilePic: widget.profilePic,
+                groupId: widget.groupId ?? 0,
               ),
             ),
           );

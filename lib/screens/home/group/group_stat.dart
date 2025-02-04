@@ -1,6 +1,101 @@
 import 'package:flutter/material.dart';
 import '../../../theme/theme.dart';
 
+class GroupFinancePage extends StatelessWidget {
+  final int groupId;
+
+  const GroupFinancePage({Key? key, required this.groupId}) : super(key: key);
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          'Group Summary',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: white,
+          ),
+        ),
+        backgroundColor: primaryTwo,
+        iconTheme: IconThemeData(color: white),
+      ),
+      body: Column(
+        children: [
+          SizedBox(height: 46),
+          Row(
+            children: [
+              Expanded(
+                child: Center(
+                  child: Text(
+                    'MY CONTRIBUTIONS',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ),
+              ),
+              // Menu icon on the right
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '\$12,900,345.',
+            style: TextStyle(
+              fontSize: 35,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey, // Using your primaryColor
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'INTREST EARNED',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey[600],
+            ),
+          ),
+          Text(
+            '\$1,234.56',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: primaryColor, // Using your primaryTwo
+            ),
+          ),
+          const SizedBox(width: 8), // Top padding
+          SizedBox(
+            width: double.infinity,
+            child: Padding(
+              padding:
+                  EdgeInsets.symmetric(horizontal: 8), // Small margin on sides
+              child: TotalDepositsCard(),
+            ),
+          ),
+          SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8),
+              child: NetworthCard(),
+            ),
+          ),
+          SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            child: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8),
+              child: LoanCard(),
+            ),
+          ),
+          SizedBox(height: 16), // Bottom padding
+        ],
+      ),
+    );
+  }
+}
+
 class TotalDepositsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -106,7 +201,7 @@ class NetworthCard extends StatelessWidget {
                     color: white,
                   ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 5),
                 Text.rich(
                   TextSpan(
                     children: [
@@ -132,7 +227,7 @@ class NetworthCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 5),
               ],
             ),
           ),

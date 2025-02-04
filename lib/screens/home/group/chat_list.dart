@@ -6,6 +6,7 @@ import 'package:flutter_svg/flutter_svg.dart'; // Import your theme
 import 'new_group.dart'; // Import the new group screen
 import 'dart:io'; // Import for File and FileImage
 import 'dart:async';
+import 'package:cyanase/helpers/loader.dart';
 
 class ChatList extends StatefulWidget {
   const ChatList({Key? key}) : super(key: key);
@@ -78,7 +79,7 @@ class ChatListState extends State<ChatList> {
                   future: _loadChats(),
                   builder: (context, futureSnapshot) {
                     if (!futureSnapshot.hasData) {
-                      return const Center(child: CircularProgressIndicator());
+                      return const Center(child: Loader());
                     }
 
                     _allChats = futureSnapshot.data!;
@@ -86,7 +87,7 @@ class ChatListState extends State<ChatList> {
                         ? _allChats
                         : _allChats
                             .where((chat) => chat["name"]
-                                .toLowerCase()
+                                .toSentenceCase()
                                 .contains(_searchController.text.toLowerCase()))
                             .toList();
 
@@ -262,66 +263,11 @@ class ChatListState extends State<ChatList> {
   }
 
   Future<List<Map<String, dynamic>>> _loadChats() async {
-    final users = await _dbHelper.getUsers();
+    // Remove the line that loads users
     final groups = await _dbHelper.getGroups();
     final messages = await _dbHelper.getMessages();
 
     List<Map<String, dynamic>> chats = [];
-
-    // Load user chats
-    for (var user in users) {
-      final userMessages =
-          messages.where((msg) => msg['sender_id'] == user['id']).toList();
-      final lastMessage = userMessages.isNotEmpty ? userMessages.last : null;
-      final unreadCount = _calculateUnreadCount(user['id'], userMessages);
-
-      Widget lastMessagePreview = const Text(
-        "No messages yet",
-        style: TextStyle(color: Colors.grey),
-      );
-      if (lastMessage != null) {
-        if (lastMessage['type'] == 'image') {
-          lastMessagePreview = Row(
-            children: const [
-              Icon(Icons.image, color: Colors.grey, size: 16),
-              SizedBox(width: 4),
-              Text(
-                "Image",
-                style: TextStyle(color: Colors.grey),
-              ),
-            ],
-          );
-        } else if (lastMessage['type'] == 'audio') {
-          lastMessagePreview = Row(
-            children: const [
-              Icon(Icons.mic, color: Colors.grey, size: 16),
-              SizedBox(width: 4),
-              Text(
-                "Audio",
-                style: TextStyle(color: Colors.grey),
-              ),
-            ],
-          );
-        } else {
-          lastMessagePreview = Text(
-            _truncateMessage(lastMessage['message']),
-            style: const TextStyle(color: Colors.grey),
-          );
-        }
-      }
-
-      chats.add({
-        "id": user['id'],
-        "name": user['name'],
-        "profilePic": user['profile_pic'],
-        "lastMessage": lastMessagePreview,
-        "time": lastMessage != null
-            ? _formatTime(lastMessage['timestamp'])
-            : "Just now",
-        "unreadCount": unreadCount,
-        "isGroup": false,
-      });
-    }
 
     // Load group chats
     for (var group in groups) {

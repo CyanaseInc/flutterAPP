@@ -4,17 +4,20 @@ import 'group_deposit_info_button.dart';
 import 'group_withdraw.dart';
 import 'package:cyanase/theme/theme.dart'; // Assuming this is where your colors are defined
 import 'dart:io';
+import 'change_group_name.dart';
 import 'package:image_picker/image_picker.dart'; // For image picking functionality
+import 'add_member.dart'; // Import the AddGroupMembersScreen file
 
 class GroupHeader extends StatefulWidget {
   final String groupName;
   final String profilePic;
-
-  const GroupHeader({
-    Key? key,
-    required this.groupName,
-    required this.profilePic,
-  }) : super(key: key);
+  final int groupId;
+  const GroupHeader(
+      {Key? key,
+      required this.groupName,
+      required this.profilePic,
+      required this.groupId})
+      : super(key: key);
 
   @override
   _GroupHeaderState createState() => _GroupHeaderState();
@@ -115,9 +118,23 @@ class _GroupHeaderState extends State<GroupHeader> {
                   PopupMenuButton<String>(
                     onSelected: (value) {
                       if (value == 'Add Members') {
-                        // Handle "Add Members" action
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => AddGroupMembersScreen(
+                              groupId: widget.groupId,
+                            ),
+                          ),
+                        ); // Handle "Add Members" action
                       } else if (value == 'Change Group Name') {
-                        // Handle "Change Group Name" action
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => ChangeGroupNameScreen(
+                              groupId: widget.groupId,
+                            ),
+                          ),
+                        );
                       }
                     },
                     itemBuilder: (context) => [
@@ -213,7 +230,7 @@ class _GroupHeaderState extends State<GroupHeader> {
 
           // Group Description
           const Text(
-            'This is a family saving group for us all',
+            'This is a family saving group for us all in the family of twins',
             style: TextStyle(
               color: Colors.grey,
               fontSize: 15,
@@ -223,10 +240,14 @@ class _GroupHeaderState extends State<GroupHeader> {
           const SizedBox(height: 10),
 
           // Action Buttons
-          const Row(
+          Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              DepositButton(),
+              DepositButton(
+                groupName: widget.groupName,
+                profilePic: widget.profilePic,
+                groupId: widget.groupId,
+              ),
               LoanButton(),
               WithdrawButton(),
             ],

@@ -16,6 +16,8 @@ class GroupDetailsScreen extends StatefulWidget {
 
 class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
   final TextEditingController _groupNameController = TextEditingController();
+  final TextEditingController _groupDescriptionController =
+      TextEditingController();
   File? _groupImage;
   final DatabaseHelper _dbHelper = DatabaseHelper();
   bool _isSaving = false; // To handle loading state
@@ -48,7 +50,8 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
       // Insert the group into the database
       final groupId = await _dbHelper.insertGroup({
         'name': groupName,
-        'description': '', // Add description if needed
+        'description':
+            _groupDescriptionController.text.trim(), // Add description
         'profile_pic': _groupImage?.path ?? '', // Save image path if available
         'type': 'group', // Default type
         'created_at': DateTime.now().toIso8601String(),
@@ -56,8 +59,6 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
         'last_activity': DateTime.now().toIso8601String(),
         'settings': '', // Add settings if needed
       });
-
-      // Debug log: Print the group ID
 
       // Save participants to the SQLite database
       for (final contact in widget.selectedContacts) {
@@ -76,8 +77,6 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
           'muted':
               0, // Use 0 for false, 1 for true (SQLite does not support bool directly)
         });
-
-        // Debug log: Print the participant details
       }
 
       // Navigate to the group chat screen
@@ -124,47 +123,92 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            GestureDetector(
-              onTap: _pickImage,
-              child: CircleAvatar(
-                radius: 50,
-                backgroundImage: _groupImage != null
-                    ? FileImage(_groupImage!)
-                    : AssetImage('assets/images/default_group.png')
-                        as ImageProvider,
-                child: _groupImage == null
-                    ? Icon(Icons.camera_alt, size: 40, color: Colors.grey[300])
-                    : null,
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            children: [
+              // Centered Profile Picture
+              Center(
+                child: GestureDetector(
+                  onTap: _pickImage,
+                  child: CircleAvatar(
+                    radius: 50,
+                    backgroundImage: _groupImage != null
+                        ? FileImage(_groupImage!)
+                        : AssetImage('assets/images/default_group.png')
+                            as ImageProvider,
+                    child: _groupImage == null
+                        ? Icon(Icons.camera_alt,
+                            size: 40, color: Colors.grey[300])
+                        : null,
+                  ),
+                ),
               ),
-            ),
-            SizedBox(height: 20),
-            TextField(
-              controller: _groupNameController,
-              decoration: InputDecoration(
-                labelText: 'Group Name',
-                border: OutlineInputBorder(),
+              SizedBox(height: 20),
+              // Left-Aligned Group Name
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Group Name',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: primaryTwo,
+                  ),
+                ),
               ),
-            ),
-            SizedBox(height: 20),
-            Text(
-              'Selected Members:',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: primaryTwo,
+              SizedBox(height: 8),
+              TextField(
+                controller: _groupNameController,
+                decoration: InputDecoration(
+                  border: OutlineInputBorder(),
+                ),
+                textAlign: TextAlign.left,
               ),
-              textAlign: TextAlign.left,
-            ),
-            Expanded(
-              child: ListView.builder(
+              SizedBox(height: 20),
+              // Left-Aligned Group Description
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Group Description',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: primaryTwo,
+                  ),
+                ),
+              ),
+              SizedBox(height: 8),
+              TextField(
+                controller: _groupDescriptionController,
+                decoration: InputDecoration(
+                  border: OutlineInputBorder(),
+                ),
+                textAlign: TextAlign.left,
+              ),
+              SizedBox(height: 20),
+              // Left-Aligned Selected Members
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Selected Members:',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: primaryTwo,
+                  ),
+                ),
+              ),
+              SizedBox(height: 8),
+              ListView.builder(
+                shrinkWrap: true,
+                physics: NeverScrollableScrollPhysics(),
                 itemCount: widget.selectedContacts.length,
                 itemBuilder: (context, index) {
                   final contact = widget.selectedContacts[index];
                   return ListTile(
+                    contentPadding: EdgeInsets.zero,
                     leading: CircleAvatar(
                       backgroundImage: contact['profilePic'] != null &&
                               contact['profilePic']!.isNotEmpty
@@ -176,12 +220,15 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                           ? Icon(Icons.person, color: white)
                           : null,
                     ),
-                    title: Text(contact['name'] ?? 'Unknown'),
+                    title: Text(
+                      contact['name'] ?? 'Unknown',
+                      textAlign: TextAlign.left,
+                    ),
                   );
                 },
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

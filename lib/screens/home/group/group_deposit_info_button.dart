@@ -1,10 +1,18 @@
 // File 2: deposit_button.dart
 import 'package:flutter/material.dart';
 import 'package:cyanase/theme/theme.dart';
-import 'test.dart'; // Replace with actual page
+import 'group_deposit.dart'; // Replace with actual page
 
 class DepositButton extends StatelessWidget {
-  const DepositButton({Key? key}) : super(key: key);
+  final String groupName;
+  final String profilePic;
+  final int groupId;
+  const DepositButton(
+      {Key? key,
+      required this.groupName,
+      required this.profilePic,
+      required this.groupId})
+      : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -13,7 +21,11 @@ class DepositButton extends StatelessWidget {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => Testa(), // Replace with actual page
+            builder: (context) => DepositScreen(
+              groupName: groupName,
+              profilePic: profilePic,
+              groupId: groupId,
+            ), // Replace with actual page
           ),
         );
         // Add Deposit functionality here

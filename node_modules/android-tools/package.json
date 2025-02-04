@@ -1,0 +1,19 @@
+{
+  "name": "android-tools",
+  "version": "1.0.0",
+  "description": "android tools",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RubyDongyu/android-tools.git"
+  },
+  "author": "ruby.dongyu",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/RubyDongyu/android-tools/issues"
+  },
+  "homepage": "https://github.com/RubyDongyu/android-tools#readme"
+}

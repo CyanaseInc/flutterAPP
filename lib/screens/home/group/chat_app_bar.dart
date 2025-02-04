@@ -10,10 +10,11 @@ class MessageAppBar extends StatelessWidget implements PreferredSizeWidget {
   final List<String> memberNames; // List of group member names
   final VoidCallback onDepositPressed; // Callback for deposit button
   final VoidCallback onBackPressed; // Callback for back button
-
+  final int? groupId;
   const MessageAppBar({
     Key? key,
     required this.name,
+    required this.groupId,
     required this.profilePic,
     required this.memberNames,
     required this.onDepositPressed,
@@ -24,7 +25,7 @@ class MessageAppBar extends StatelessWidget implements PreferredSizeWidget {
   Size get preferredSize => Size.fromHeight(kToolbarHeight);
 
   // Helper function to truncate long text to a maximum length
-  String _truncateText(String text, {int maxLength = 15}) {
+  String _truncateText(String text, {int maxLength = 10}) {
     if (text.length <= maxLength) {
       return text;
     }
@@ -59,6 +60,8 @@ class MessageAppBar extends StatelessWidget implements PreferredSizeWidget {
     return formattedNames;
   }
 
+  // Helper function to format member names (separate from group name)
+
   @override
   Widget build(BuildContext context) {
     return AppBar(
@@ -76,6 +79,7 @@ class MessageAppBar extends StatelessWidget implements PreferredSizeWidget {
               builder: (context) => GroupInfoPage(
                 groupName: name,
                 profilePic: profilePic,
+                groupId: groupId ?? 0,
               ),
             ),
           );
@@ -154,6 +158,7 @@ class MessageAppBar extends StatelessWidget implements PreferredSizeWidget {
                     builder: (context) => GroupInfoPage(
                       groupName: name,
                       profilePic: profilePic,
+                      groupId: groupId ?? 0,
                     ),
                   ),
                 );

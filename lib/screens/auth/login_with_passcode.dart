@@ -5,7 +5,7 @@ import 'signup.dart';
 import '../home/home.dart';
 import 'package:cyanase/helpers/database_helper.dart'; // Import the DatabaseHelper
 // For contacts permission
-import 'package:cyanase/screens/home/group/hash_numbers.dart'; // Import the file containing fetchAndHashContacts and getRegisteredContacts
+import 'package:cyanase/helpers/hash_numbers.dart'; // Import the file containing fetchAndHashContacts and getRegisteredContacts
 import 'package:cyanase/helpers/loader.dart';
 
 class NumericLoginScreen extends StatefulWidget {
@@ -84,8 +84,7 @@ class _NumericLoginScreenState extends State<NumericLoginScreen> {
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('Error'),
-          content: Text('Failed to authenticate or fetch contacts: $e'),
+          content: Text('Check your internet connection and try again'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),

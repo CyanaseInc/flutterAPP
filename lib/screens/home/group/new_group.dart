@@ -1,8 +1,9 @@
+import 'package:cyanase/helpers/loader.dart';
 import 'package:flutter/material.dart';
 import 'package:cyanase/helpers/database_helper.dart'; // Import the DatabaseHelper
 import 'package:cyanase/theme/theme.dart'; // Import your theme file
 import 'create_new_group_details.dart'; // Import the GroupDetailsScreen
-import 'hash_numbers.dart'; // Import the getRegisteredContacts function
+import '../../../helpers/hash_numbers.dart'; // Import the getRegisteredContacts function
 
 class NewGroupScreen extends StatefulWidget {
   @override
@@ -96,7 +97,7 @@ class _NewGroupScreenState extends State<NewGroupScreen> {
         ],
       ),
       body: isLoading
-          ? Center(child: CircularProgressIndicator())
+          ? Center(child: Loader())
           : Column(
               children: [
                 // Display selected contacts at the top

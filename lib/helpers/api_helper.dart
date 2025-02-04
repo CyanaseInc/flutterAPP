@@ -55,10 +55,11 @@ class ApiService {
       final response = await post(ApiEndpoints.login, credentials);
       // return response;
       return {
+        'id': '1200',
         'name': 'wasswa viannie',
         'email': 'wasswaviannie@gmail.com',
         'phone_number': '1234567890',
-        'is_verified': true, // Manually set this to false for testing
+        'is_verified': false, // Manually set this to false for testing
       };
     } catch (e) {
       throw Exception('Login failed: $e');

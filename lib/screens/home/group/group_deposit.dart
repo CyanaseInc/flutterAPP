@@ -1,10 +1,17 @@
 import 'package:cyanase/theme/theme.dart';
 import 'package:flutter/material.dart';
+import 'dart:io'; // Make sure you import this for File usage
 
 class DepositScreen extends StatefulWidget {
   final String groupName;
+  final String profilePic;
+  final int groupId;
 
-  DepositScreen({required this.groupName}); // Add this constructor
+  DepositScreen({
+    required this.groupName,
+    required this.profilePic,
+    required this.groupId,
+  });
 
   @override
   _DepositScreenState createState() => _DepositScreenState();
@@ -46,14 +53,36 @@ class _DepositScreenState extends State<DepositScreen> {
       appBar: AppBar(
         title: Text(widget.groupName),
       ),
-      body: PageView(
-        controller: _pageController,
-        physics: NeverScrollableScrollPhysics(),
-        children: [
-          _buildChooseDepositMethod(),
-          _buildEnterAmount(),
-          _buildSuccessScreen(),
-        ],
+      body: SingleChildScrollView(
+        child: Column(
+          children: [
+            // Centered Profile Picture visible on all steps
+            Padding(
+              padding: const EdgeInsets.only(top: 40),
+              child: CircleAvatar(
+                backgroundImage: widget.profilePic.isNotEmpty
+                    ? FileImage(File(widget.profilePic))
+                    : AssetImage('assets/avat.png') as ImageProvider,
+                radius: 60,
+              ),
+            ),
+
+            // PageView for different steps
+            SizedBox(
+              height: MediaQuery.of(context).size.height -
+                  200, // Adjust height as needed
+              child: PageView(
+                controller: _pageController,
+                physics: NeverScrollableScrollPhysics(),
+                children: [
+                  _buildChooseDepositMethod(),
+                  _buildEnterAmount(),
+                  _buildSuccessScreen(),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -14,7 +14,6 @@ dependencies:
   sim_card_info: ^0.0.1
   fl_chart: ^0.70.0
   flutter_svg: ^2.0.0
-  flutter_lints: ^2.0.0
   web_socket_channel: ^2.4.0 # For WebSocket communication
   encrypt: ^5.0.0 # For encryption/decryption
   provider: ^6.0.5
@@ -43,6 +42,7 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  flutter_lints: ^2.0.0
 
 flutter:
   uses-material-design: true
@@ -50,6 +50,7 @@ flutter:
   # Include assets like images and icons
   assets:
     - assets/images/logo.png
+    - assets/images/deposit.png
     - assets/images/avatar.png
     - assets/images/vian.jpg
     - assets/icons/person.svg
