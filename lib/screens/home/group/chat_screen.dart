@@ -47,6 +47,7 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
   Duration _recordingDuration = Duration.zero;
   final DatabaseHelper _dbHelper = DatabaseHelper();
   List<String> _memberNames = [];
+
   List<Map<String, dynamic>> _messages = []; // Store all messages
   Map<String, bool> _isPlayingMap = {};
   Map<String, Duration> _audioDurationMap = {};
@@ -95,17 +96,16 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
   Future<void> _loadGroupMembers() async {
     if (widget.isGroup && widget.groupId != null) {
       try {
-        final memberNames =
-            await _dbHelper.getGroupMemberNames(widget.groupId!);
+        final members = await _dbHelper.getGroupMemberNames(widget.groupId!);
         setState(() {
-          _memberNames = memberNames;
+          _memberNames = members.map((e) => e["name"] ?? "").toList();
         });
       } catch (e) {
         print("Error loading group members: $e");
       }
-    } else if (!widget.isGroup) {
+    } else {
       setState(() {
-        _memberNames = [widget.name]; // Show the other user's name
+        _memberNames = [widget.name];
       });
     }
   }

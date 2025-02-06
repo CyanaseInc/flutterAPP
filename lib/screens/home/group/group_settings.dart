@@ -149,11 +149,6 @@ class _GroupSettingsState extends State<GroupSettings> {
             ),
             TextButton(
               onPressed: () {
-                // Save the settings here
-                print(
-                    'Only members with savings: $_onlyMembersWithSavingsCanRequest');
-                print('Max loan multiplier: $_maxLoanMultiplier');
-                print('Loan periods: $loanPeriods');
                 Navigator.pop(context);
               },
               child: const Text('Save'),
@@ -335,8 +330,8 @@ class _GroupSettingsState extends State<GroupSettings> {
         ),
         children: [
           _buildSettingItem(
-            'Edit Group Info',
-            'Change group name, profile picture, and description',
+            'Edit group roles',
+            'change group roles and permissions',
             Icons.edit,
             null,
           ),

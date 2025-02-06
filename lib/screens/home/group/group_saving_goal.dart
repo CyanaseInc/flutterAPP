@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cyanase/theme/theme.dart';
-import 'test.dart';
+import 'add_group_goal.dart';
+import 'package:awesome_notifications/awesome_notifications.dart';
+import 'package:vibration/vibration.dart';
 
 class GroupSavingGoal {
   final String goalName;
@@ -23,16 +25,45 @@ class GroupSavingGoal {
   }
 }
 
-class GroupSavingGoalsSection extends StatelessWidget {
+class GroupSavingGoalsSection extends StatefulWidget {
   final List<GroupSavingGoal> groupGoals;
 
   const GroupSavingGoalsSection({Key? key, required this.groupGoals})
       : super(key: key);
 
   @override
+  _GroupSavingGoalsSectionState createState() =>
+      _GroupSavingGoalsSectionState();
+}
+
+class _GroupSavingGoalsSectionState extends State<GroupSavingGoalsSection> {
+  @override
+  void initState() {
+    super.initState();
+    _initializeNotifications();
+  }
+
+  Future<void> _initializeNotifications() async {
+    await AwesomeNotifications().initialize(
+      null,
+      [
+        NotificationChannel(
+          channelKey: 'scheduled_notifications',
+          channelName: 'Scheduled Notifications',
+          channelDescription: 'Notifications for group saving goal reminders',
+          defaultColor: primaryTwo,
+          ledColor: Colors.white,
+          importance: NotificationImportance.High,
+        ),
+      ],
+    );
+    await AwesomeNotifications().requestPermissionToSendNotifications();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Container(
-      color: white, // White background for the section
+      color: white,
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -53,8 +84,7 @@ class GroupSavingGoalsSection extends StatelessWidget {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => Testa(), // Replace with actual page
-                    ),
+                        builder: (context) => AddGroupGoalScreen()),
                   );
                 },
                 child: Text('Add Goal'),
@@ -68,8 +98,8 @@ class GroupSavingGoalsSection extends StatelessWidget {
             ],
           ),
           SizedBox(height: 16),
-          ...groupGoals
-              .map((groupGoal) => GroupSavingGoalsCard(groupGoal: groupGoal))
+          ...widget.groupGoals
+              .map((goal) => GroupSavingGoalsCard(groupGoal: goal))
               .toList(),
         ],
       ),
@@ -82,6 +112,51 @@ class GroupSavingGoalsCard extends StatelessWidget {
 
   const GroupSavingGoalsCard({Key? key, required this.groupGoal})
       : super(key: key);
+
+  int _getUniqueID() {
+    return DateTime.now().microsecondsSinceEpoch.remainder(100000);
+  }
+
+  Future<void> _scheduleNotification(
+      String title, String body, DateTime scheduledTime) async {
+    await AwesomeNotifications().createNotification(
+      content: NotificationContent(
+        id: _getUniqueID(),
+        channelKey: 'scheduled_notifications',
+        title: title,
+        body: body,
+      ),
+      schedule: NotificationCalendar.fromDate(date: scheduledTime),
+    );
+  }
+
+  Future<void> _setReminder(BuildContext context) async {
+    TimeOfDay? pickedTime = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.now(),
+    );
+
+    if (pickedTime != null) {
+      final now = DateTime.now();
+      var pickedDateTime = DateTime(
+          now.year, now.month, now.day, pickedTime.hour, pickedTime.minute);
+      if (pickedDateTime.isBefore(now)) {
+        pickedDateTime = pickedDateTime.add(Duration(days: 1));
+      }
+
+      await _scheduleNotification('Reminder: ${groupGoal.goalName}',
+          'Time to save for your goal "${groupGoal.goalName}"', pickedDateTime);
+
+      if (await Vibration.hasVibrator() ?? false) {
+        Vibration.vibrate(duration: 500);
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text('Reminder set for ${pickedTime.format(context)}')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -101,162 +176,57 @@ class GroupSavingGoalsCard extends StatelessWidget {
                   child: Text(
                     groupGoal.goalName,
                     style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black87,
-                    ),
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                CircleAvatar(
-                  backgroundColor: primaryTwo.withOpacity(0.1),
-                  radius: 18,
-                  child: Icon(Icons.savings, color: primaryTwo, size: 18),
+                IconButton(
+                  onPressed: () async {
+                    await _setReminder(context);
+                  },
+                  icon: Icon(Icons.notifications, color: primaryTwo),
                 ),
               ],
-            ),
-
-            Divider(color: Colors.grey.shade300, thickness: 1),
-            SizedBox(height: 6),
-            Row(
-              children: [
-                Text(
-                  "Saved:",
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.black54,
-                  ),
-                ),
-                SizedBox(width: 4),
-                Text(
-                  "UGX ${groupGoal.currentAmount.toStringAsFixed(0)}",
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.black87,
-                  ),
-                ),
-                Spacer(),
-                Text(
-                  "Goal:",
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.black54,
-                  ),
-                ),
-                SizedBox(width: 4),
-                Text(
-                  "UGX ${groupGoal.goalAmount.toStringAsFixed(0)}",
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.black87,
-                  ),
-                ),
-              ],
-            ),
-            SizedBox(height: 16),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: LinearProgressIndicator(
-                value: groupGoal.progressPercentage / 100,
-                backgroundColor: Colors.grey[200],
-                color: primaryTwo,
-                minHeight: 8,
-              ),
-            ),
-            SizedBox(height: 4),
-            Align(
-              alignment: Alignment.centerRight,
-              child: Text(
-                "${groupGoal.progressPercentage.toStringAsFixed(1)}% Complete",
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  color: primaryTwo,
-                ),
-              ),
             ),
             SizedBox(height: 8),
-            // Deposit Button
+            LinearProgressIndicator(
+              value: groupGoal.progressPercentage / 100,
+              backgroundColor: Colors.grey[200],
+              color: primaryTwo,
+              minHeight: 8,
+            ),
+            SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  "${groupGoal.progressPercentage.toStringAsFixed(1)}%",
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: primaryTwo,
+                  ),
+                ),
+                Text(
+                  "UGX ${groupGoal.currentAmount.toStringAsFixed(0)} / UGX ${groupGoal.goalAmount.toStringAsFixed(0)}",
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.black87,
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 8),
             ElevatedButton(
-              onPressed: () {
-                // Handle deposit logic here
-                showDialog(
-                  context: context,
-                  builder: (context) {
-                    final TextEditingController _controller =
-                        TextEditingController();
-
-                    return AlertDialog(
-                      backgroundColor: white, // White background for the modal
-                      title: Text(
-                        'Enter Amount',
-                        style: TextStyle(
-                          color: Colors.black87,
-                          fontSize: 18,
-                        ), // Customize title text color
-                      ),
-                      content: TextField(
-                        controller: _controller,
-                        keyboardType: TextInputType.number,
-                        decoration: InputDecoration(
-                          labelText: 'Amount',
-                          labelStyle: TextStyle(
-                              color: Colors.black54), // Label text color
-                          enabledBorder: OutlineInputBorder(
-                            borderSide: BorderSide(
-                                color: Colors.black54), // Border color
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderSide: BorderSide(
-                                color: primaryTwo), // Focused border color
-                          ),
-                        ),
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () =>
-                              Navigator.pop(context), // Cancel action
-                          child: Text(
-                            'Cancel',
-                            style: TextStyle(
-                                color: primaryTwo), // Button text color
-                          ),
-                        ),
-                        ElevatedButton(
-                          onPressed: () {
-                            // Handle the submit action
-                            double depositAmount =
-                                double.tryParse(_controller.text) ?? 0;
-                            if (depositAmount > 0) {
-                              groupGoal.addContribution(depositAmount);
-                            }
-                            Navigator.pop(
-                                context); // Close the dialog after submission
-                          },
-                          child: Text('Submit'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor:
-                                primaryTwo, // Customize the button color
-                            // Text color
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                );
-              },
+              onPressed: () {},
               child: Text('Deposit'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: primaryTwo, // Customize the button color
-                // Text color
+                backgroundColor: primaryTwo,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
+                    borderRadius: BorderRadius.circular(8)),
               ),
             ),
           ],

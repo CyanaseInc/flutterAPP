@@ -20,6 +20,7 @@ class _SignupScreenState extends State<SignupScreen> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
   bool _isLoading = false; // Track loading state
+  Map<String, String> _errorMessages = {}; // Store specific validation errors
 
   // Form fields
   final TextEditingController _firstNameController = TextEditingController();
@@ -120,6 +121,11 @@ class _SignupScreenState extends State<SignupScreen> {
   }
 
   void _submitForm() async {
+    // Clear previous errors
+    setState(() {
+      _errorMessages.clear();
+    });
+
     if (!_validateInputs()) return; // Validate inputs before proceeding.
 
     setState(() {
@@ -130,12 +136,11 @@ class _SignupScreenState extends State<SignupScreen> {
         '${_yearController.text}-${_monthController.text.padLeft(2, '0')}-${_dayController.text.padLeft(2, '0')}';
 
     final Map<String, dynamic> userData = {
-      'firstName': _firstNameController.text.trim(),
-      'lastName': _lastNameController.text.trim(),
+      'first_Name': _firstNameController.text.trim(),
+      'last_Name': _lastNameController.text.trim(),
       'email': _emailController.text.trim(),
       'password': _passwordController.text,
-      'phoneNumber':
-          '$_selectedCountryCode${_phoneNumberController.text.trim()}',
+      'phone_no': '$_selectedCountryCode${_phoneNumberController.text.trim()}',
       'country': _countryController.text.trim(),
       'birthDate': birthDate,
       'gender': _selectedGender,
@@ -151,10 +156,11 @@ class _SignupScreenState extends State<SignupScreen> {
           MaterialPageRoute(builder: (context) => VerificationScreen()),
         );
       } else {
-        _showErrorPopup(response['message'] ?? 'Registration failed');
+        // Handle API validation errors specifically
+        _handleApiErrors(response['errors']);
       }
     } catch (e) {
-      _showErrorPopup('Signup failed: $e');
+      _showErrorPopup('Signup failed: ${e.toString()}');
     } finally {
       setState(() {
         _isLoading = false; // Hide loader and enable button
@@ -162,16 +168,88 @@ class _SignupScreenState extends State<SignupScreen> {
     }
   }
 
+  /// **Enhanced Input Validation**
   bool _validateInputs() {
-    if (_firstNameController.text.isEmpty ||
-        _lastNameController.text.isEmpty ||
-        !_emailController.text.contains('@') ||
-        _passwordController.text.length < 6 ||
-        _phoneNumberController.text.isEmpty) {
-      _showErrorPopup('Please fill all fields correctly.');
+    bool isValid = true;
+
+    if (_firstNameController.text.trim().isEmpty) {
+      _setError('firstName', 'First name is required.');
+      isValid = false;
+    }
+
+    if (_lastNameController.text.trim().isEmpty) {
+      _setError('lastName', 'Last name is required.');
+      isValid = false;
+    }
+
+    if (!_isValidEmail(_emailController.text.trim())) {
+      _setError('email', 'Enter a valid email address.');
+      isValid = false;
+    }
+
+    if (_passwordController.text.length < 6) {
+      _setError('password', 'Password must be at least 6 characters.');
+      isValid = false;
+    }
+
+    if (_phoneNumberController.text.trim().length < 9) {
+      _setError('phone', 'Enter a valid phone number.');
+      isValid = false;
+    }
+
+    if (_countryController.text.trim().isEmpty) {
+      _setError('country', 'Country is required.');
+      isValid = false;
+    }
+
+    if (!_isValidDate(
+        _yearController.text, _monthController.text, _dayController.text)) {
+      _setError('birthDate', 'Enter a valid birthdate.');
+      isValid = false;
+    }
+
+    if (_selectedGender == null) {
+      _setError('gender', 'Select a gender.');
+      isValid = false;
+    }
+
+    setState(() {}); // Update UI with errors
+    return isValid;
+  }
+
+  /// **Helper Methods**
+  void _setError(String field, String message) {
+    _errorMessages[field] = message;
+  }
+
+  bool _isValidEmail(String email) {
+    final emailRegex =
+        RegExp(r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$');
+    return emailRegex.hasMatch(email);
+  }
+
+  bool _isValidDate(String year, String month, String day) {
+    try {
+      final parsedDate =
+          DateTime(int.parse(year), int.parse(month), int.parse(day));
+      return parsedDate.isBefore(DateTime.now());
+    } catch (e) {
       return false;
     }
-    return true;
+  }
+
+  /// **Handle API Errors Specifically**
+  void _handleApiErrors(Map<String, dynamic>? errors) {
+    if (errors == null) {
+      _showErrorPopup('Registration failed. Please check your details.');
+      return;
+    }
+
+    errors.forEach((field, message) {
+      _setError(field, message);
+    });
+
+    setState(() {}); // Refresh UI with error messages
   }
 
   Future<void> _saveUserToDatabase(Map<String, dynamic> response) async {

@@ -342,21 +342,55 @@ class DatabaseHelper {
   }
 
   // Retrieve group member names
-  Future<List<String>> getGroupMemberNames(int groupId) async {
+  Future<List<Map<String, String>>> getGroupMemberNames(int groupId) async {
     final db = await database;
     final result = await db.rawQuery('''
-      SELECT contacts.name 
-      FROM participants
-      INNER JOIN contacts ON participants.user_id = contacts.user_id
-      WHERE participants.group_id = ?
-    ''', [groupId]);
-    return result.map((row) => row['name'] as String).toList();
+    SELECT contacts.name, participants.role , contacts.phone_number
+    FROM participants
+    INNER JOIN contacts ON participants.user_id = contacts.user_id
+    WHERE participants.group_id = ?
+  ''', [groupId]);
+
+    return result
+        .map((row) => {
+              'name': row['name'] as String,
+              'role': row['role'] as String? ?? 'Member',
+              'phone_number': row['phone_number'] as String? ??
+                  'Member' // Default role if null
+            })
+        .toList();
   }
 
-  // Delete a user
+// add member role
+  Future<void> updateMemberRole(
+      int groupId, String userId, String newRole) async {
+    final db = await database;
+
+    // Create a map for the updated role
+    Map<String, dynamic> updateValues = {
+      'role': newRole,
+    };
+
+    // Perform the update query for the specific group and user
+    await db.update(
+      'participants', // Table name
+      updateValues, // Values to update (only 'role' in this case)
+      where: 'group_id = ? AND user_id = ?', // Where condition
+      whereArgs: [groupId, userId], // Arguments for the where clause
+    );
+  }
+
+  //Remove  member from group
   Future<int> deleteUser(String userId) async {
     final db = await database;
     return await db.delete('profile', where: 'id = ?', whereArgs: [userId]);
+  }
+
+  // Delete a user
+  Future<int> removeMember(int userId) async {
+    final db = await database;
+    return await db
+        .delete('participants', where: 'id = ?', whereArgs: [userId]);
   }
 
   // Delete a group

@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'group_header.dart';
 import 'group_settings.dart';
 import 'group_members.dart';
-import 'group_media.dart';
 import 'danger_zone.dart';
 import 'group_stat.dart';
+import 'invite.dart';
 import 'group_saving_goal.dart'; // Import the file
 import 'package:cyanase/theme/theme.dart';
 
@@ -42,6 +42,33 @@ class GroupInfoPage extends StatelessWidget {
             margin: const EdgeInsets.only(top: 8.0),
             child: ListTile(
               title: const Text(
+                'Invite to group',
+                style: TextStyle(
+                  color: Colors.black87,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => InviteScreen(
+                      groupName: groupName,
+                      profilePic: profilePic,
+                      groupId: groupId.toString(),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          Container(
+            color: white,
+            margin: const EdgeInsets.only(top: 8.0),
+            child: ListTile(
+              title: const Text(
                 'Group finance info',
                 style: TextStyle(
                   color: Colors.black87,
@@ -62,9 +89,8 @@ class GroupInfoPage extends StatelessWidget {
           ),
           SizedBox(height: 10),
           GroupSavingGoalsSection(groupGoals: groupGoals),
-          const GroupMedia(),
           const GroupSettings(),
-          const GroupMembers(),
+          GroupMembers(groupId: groupId, isGroup: true, name: groupName),
           const DangerZone(),
         ],
       ),
