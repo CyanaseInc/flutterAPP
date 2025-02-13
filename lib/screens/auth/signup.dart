@@ -1,7 +1,6 @@
 import 'package:cyanase/screens/auth/verification.dart';
 import 'package:flutter/material.dart';
 import 'package:country_picker/country_picker.dart';
-import 'package:sim_card_info/sim_card_info.dart';
 import '../../theme/theme.dart';
 import 'first_name_slide.dart';
 import 'phone_country_slide.dart';
@@ -10,6 +9,7 @@ import 'password_slide.dart';
 import 'package:cyanase/helpers/api_helper.dart';
 import 'package:cyanase/helpers/database_helper.dart';
 import 'package:cyanase/helpers/loader.dart'; // Import the Loader
+import 'dart:convert'; // Add this import
 
 class SignupScreen extends StatefulWidget {
   @override
@@ -19,6 +19,7 @@ class SignupScreen extends StatefulWidget {
 class _SignupScreenState extends State<SignupScreen> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
+  bool _isCheckingUser = false;
   bool _isLoading = false; // Track loading state
   Map<String, String> _errorMessages = {}; // Store specific validation errors
 
@@ -93,7 +94,10 @@ class _SignupScreenState extends State<SignupScreen> {
 
   void _nextPage() {
     if (_isCurrentSlideValid()) {
-      if (_currentPage < 3) {
+      if (_currentPage == 1) {
+        // This is the phone country slide
+        _checkUserExistence();
+      } else if (_currentPage < 3) {
         _pageController.nextPage(
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeInOut,
@@ -136,18 +140,31 @@ class _SignupScreenState extends State<SignupScreen> {
         '${_yearController.text}-${_monthController.text.padLeft(2, '0')}-${_dayController.text.padLeft(2, '0')}';
 
     final Map<String, dynamic> userData = {
-      'first_Name': _firstNameController.text.trim(),
-      'last_Name': _lastNameController.text.trim(),
+      'username': _emailController.text.trim(), // Add username if needed
       'email': _emailController.text.trim(),
+      'first_name': _firstNameController.text.trim(),
+      'last_name': _lastNameController.text.trim(),
       'password': _passwordController.text,
-      'phone_no': '$_selectedCountryCode${_phoneNumberController.text.trim()}',
-      'country': _countryController.text.trim(),
-      'birthDate': birthDate,
-      'gender': _selectedGender,
+      'confirmpassword': _confirmPasswordController
+          .text, // Assuming you have a confirm password field
+      'pkg_id': 1, // Assuming this is a static value; update if necessary
+      'profile': {
+        'created': DateTime.now()
+            .toIso8601String(), // Assuming this is when the user is created
+        'is_verified': false, // You can modify this based on your actual value
+        'gender': _selectedGender,
+        'birth_date':
+            birthDate, // Assuming birthDate is a variable with the user's birth date
+        'country': _countryController.text.trim(),
+        'phone_no':
+            '$_selectedCountryCode${_phoneNumberController.text.trim()}', // Combining country code and phone number
+      }
     };
 
     try {
       final response = await ApiService.signup(userData);
+      // Log the response
+      print('Response Message: ${response['message']}');
 
       if (response['success'] == true) {
         await _saveUserToDatabase(response);
@@ -161,6 +178,7 @@ class _SignupScreenState extends State<SignupScreen> {
       }
     } catch (e) {
       _showErrorPopup('Signup failed: ${e.toString()}');
+      print('Signup failed: ${e.toString()}');
     } finally {
       setState(() {
         _isLoading = false; // Hide loader and enable button
@@ -168,52 +186,60 @@ class _SignupScreenState extends State<SignupScreen> {
     }
   }
 
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+
   /// **Enhanced Input Validation**
   bool _validateInputs() {
     bool isValid = true;
 
     if (_firstNameController.text.trim().isEmpty) {
-      _setError('firstName', 'First name is required.');
+      _showSnackBar('First name is required.');
       isValid = false;
     }
 
     if (_lastNameController.text.trim().isEmpty) {
-      _setError('lastName', 'Last name is required.');
+      _showSnackBar('Last name is required.');
       isValid = false;
     }
 
     if (!_isValidEmail(_emailController.text.trim())) {
-      _setError('email', 'Enter a valid email address.');
+      _showSnackBar('Enter a valid email address.');
       isValid = false;
     }
 
     if (_passwordController.text.length < 6) {
-      _setError('password', 'Password must be at least 6 characters.');
+      _showSnackBar('Password must be at least 6 characters.');
       isValid = false;
     }
 
     if (_phoneNumberController.text.trim().length < 9) {
-      _setError('phone', 'Enter a valid phone number.');
+      _showSnackBar('Enter a valid phone number.');
       isValid = false;
     }
 
     if (_countryController.text.trim().isEmpty) {
-      _setError('country', 'Country is required.');
+      _showSnackBar('Country is required.');
       isValid = false;
     }
 
     if (!_isValidDate(
         _yearController.text, _monthController.text, _dayController.text)) {
-      _setError('birthDate', 'Enter a valid birthdate.');
+      _showSnackBar('Enter a valid birthdate.');
       isValid = false;
     }
 
     if (_selectedGender == null) {
-      _setError('gender', 'Select a gender.');
+      _showSnackBar('Select a gender.');
       isValid = false;
     }
 
-    setState(() {}); // Update UI with errors
     return isValid;
   }
 
@@ -241,7 +267,7 @@ class _SignupScreenState extends State<SignupScreen> {
   /// **Handle API Errors Specifically**
   void _handleApiErrors(Map<String, dynamic>? errors) {
     if (errors == null) {
-      _showErrorPopup('Registration failed. Please check your details.');
+      _showErrorPopup('Phone number or email already exists.');
       return;
     }
 
@@ -265,6 +291,53 @@ class _SignupScreenState extends State<SignupScreen> {
     await dbHelper.insertUser(profileData);
   }
 
+  void _checkUserExistence() async {
+    setState(() {
+      _isCheckingUser = true;
+    });
+    String phoneno =
+        '${_selectedCountryCode}${_phoneNumberController.text.trim()}';
+    print(phoneno);
+    try {
+      final response = await ApiService.checkup({
+        'email': _emailController.text.trim(),
+        'phone': phoneno,
+      });
+
+      if (response['email_exists'] == false &&
+          response['phone_exists'] == false) {
+        _pageController.nextPage(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+        );
+      } else {
+        String message = response['message'];
+        if (message.isEmpty) {
+          message = response['email_exists'] == true
+              ? 'Email already exists.'
+              : 'Phone number already exists.';
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error checking user: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      setState(() {
+        _isCheckingUser = false;
+      });
+    }
+  }
+
   void _showErrorPopup(String message) {
     showDialog(
       context: context,
@@ -284,6 +357,7 @@ class _SignupScreenState extends State<SignupScreen> {
   }
 
   @override
+  @override
   Widget build(BuildContext context) {
     const Color yourPrimaryColor = primaryTwo;
     return Scaffold(
@@ -292,6 +366,7 @@ class _SignupScreenState extends State<SignupScreen> {
       ),
       body: Stack(
         children: [
+          // Main content
           Column(
             children: [
               Expanded(
@@ -335,11 +410,13 @@ class _SignupScreenState extends State<SignupScreen> {
               _buildNavigationButtons(yourPrimaryColor),
             ],
           ),
-          if (_isLoading) // Show transparent overlay and loader
+
+          // Full-screen overlay with loader
+          if (_isLoading)
             Container(
-              color: Colors.black.withOpacity(0.5), // Transparent overlay
+              color: Colors.black.withOpacity(0.5), // Semi-transparent overlay
               child: const Center(
-                child: Loader(), // Use the Loader widget
+                child: Loader(),
               ),
             ),
         ],

@@ -41,10 +41,51 @@ class ApiService {
   static Future<Map<String, dynamic>> signup(
       Map<String, dynamic> userData) async {
     try {
-      final response = await post(ApiEndpoints.signup, userData);
-      return response;
+      final response = await http.post(
+        Uri.parse(ApiEndpoints.signup), // Use the correct signup endpoint
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(userData),
+      );
+
+      if (response.statusCode == 200) {
+        // If the server responds with a success code, decode and return the response body
+        return jsonDecode(response.body);
+      } else {
+        // Print the error message if the response status is not 200
+        print('Error: ${response.statusCode}');
+        print('Error Body: ${response.body}');
+        throw Exception('Failed to load data');
+      }
     } catch (e) {
-      throw Exception('Signup failed: $e');
+      // Catch any errors and log them for debugging
+      print('Error during sign up: $e');
+      throw Exception('Error during sign up: $e');
+    }
+  }
+
+  static Future<Map<String, dynamic>> checkup(
+      Map<String, dynamic> userData) async {
+    final url = Uri.parse(
+        ApiEndpoints.checkuser); // Ensure this path matches your Django URL
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: jsonEncode(userData), // userData should be directly encodable
+      );
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        throw Exception(
+            'Failed to check user: ${response.statusCode} - ${response.body}');
+      }
+    } catch (e) {
+      throw Exception('Error during user check: $e');
     }
   }
 
