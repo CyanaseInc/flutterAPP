@@ -157,20 +157,20 @@ class _SignupScreenState extends State<SignupScreen> {
             birthDate, // Assuming birthDate is a variable with the user's birth date
         'country': _countryController.text.trim(),
         'phone_no':
-            '$_selectedCountryCode${_phoneNumberController.text.trim()}', // Combining country code and phone number
+            '$_selectedCountryCode', // Combining country code and phone number
       }
     };
 
     try {
       final response = await ApiService.signup(userData);
       // Log the response
-      print('Response Message: ${response['message']}');
 
       if (response['success'] == true) {
-        await _saveUserToDatabase(response);
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => VerificationScreen()),
+          MaterialPageRoute(
+              builder: (context) =>
+                  VerificationScreen(email: _emailController.text.trim())),
         );
       } else {
         // Handle API validation errors specifically
@@ -295,8 +295,7 @@ class _SignupScreenState extends State<SignupScreen> {
     setState(() {
       _isCheckingUser = true;
     });
-    String phoneno =
-        '${_selectedCountryCode}${_phoneNumberController.text.trim()}';
+    String phoneno = '${_selectedCountryCode}';
     print(phoneno);
     try {
       final response = await ApiService.checkup({
@@ -327,7 +326,7 @@ class _SignupScreenState extends State<SignupScreen> {
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error checking user: $e'),
+          content: Text('Check your internet connection'),
           backgroundColor: Colors.red,
         ),
       );

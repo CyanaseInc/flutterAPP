@@ -12,7 +12,8 @@ class ApiEndpoints {
   static const String updateProfile = "$server/api/v1/en/register/user/";
   static const String fetchMessages = "$server/api/v1/en/register/user/";
 
-  static const String verifyOtp = "$server/api/v1/en/register/user/";
+  static const String verifyOtp = "$server/api/v1/en/verifyemail/user/";
+  static const String passcode = "$server/api/v1/en/passcode/user/";
   static const String fetchUserDetails = "$server/api/v1/en/register/user/";
   static const String apiUrlGetInvestmentClasses =
       "$server/api/v1/en/auth/get/investment/classes/";
@@ -74,9 +75,9 @@ class ApiEndpoints {
       "$server/api/v1/en/auth/user/riskprofile/";
   static const String apiUrlGetRiskProfile =
       "$server/api/v1/en/auth/get/riskprofile/";
-  static const String apiUrlUserUpdatePassword =
+  static const String checkPasswordEmail = "$server/api/v1/en/password/reset/";
+  static const String apiUrlPasswordReset =
       "$server/api/v1/en/auth/user/update/password/";
-  static const String apiUrlPasswordReset = "$server/api/v1/en/password/reset/";
   static const String apiUrlGetUserVerification =
       "$server/api/v1/en/get/verification/";
   static const String apiUrlGetRiskAnalysisPercentages =

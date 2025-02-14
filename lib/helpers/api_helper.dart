@@ -54,8 +54,7 @@ class ApiService {
         return jsonDecode(response.body);
       } else {
         // Print the error message if the response status is not 200
-        print('Error: ${response.statusCode}');
-        print('Error Body: ${response.body}');
+
         throw Exception('Failed to load data');
       }
     } catch (e) {
@@ -89,19 +88,110 @@ class ApiService {
     }
   }
 
-  // Login request
+  ////Send verification email
+
+  static Future<Map<String, dynamic>> VerificationEmail(
+      Map<String, dynamic> userData) async {
+    final url = Uri.parse(
+        ApiEndpoints.verifyOtp); // Ensure this path matches your Django URL
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: jsonEncode(userData), // userData should be directly encodable
+      );
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        throw Exception(
+            'Failed to check user: ${response.statusCode} - ${response.body}');
+      }
+    } catch (e) {
+      throw Exception('Error during user check: $e');
+    }
+  } // Login request
+
+  ////set the passcode
+  static Future<Map<String, dynamic>> Setpasscode(
+      Map<String, dynamic> userData) async {
+    final url = Uri.parse(
+        ApiEndpoints.passcode); // Ensure this path matches your Django URL
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: jsonEncode(userData), // userData should be directly encodable
+      );
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        throw Exception(
+            'Failed to check user: ${response.statusCode} - ${response.body}');
+      }
+    } catch (e) {
+      throw Exception('Error during user check: $e');
+    }
+  }
+
+  static Future<Map<String, dynamic>> CheckResetPassword(
+      Map<String, dynamic> userData) async {
+    final url = Uri.parse(ApiEndpoints
+        .checkPasswordEmail); // Ensure this path matches your Django URL
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: jsonEncode(userData), // userData should be directly encodable
+      );
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        throw Exception(
+            'Failed to check user: ${response.statusCode} - ${response.body}');
+      }
+    } catch (e) {
+      throw Exception('Error during user check: $e');
+    }
+  }
+
+  static Future<Map<String, dynamic>> ResetPassword(
+      Map<String, dynamic> userData) async {
+    final url = Uri.parse(ApiEndpoints
+        .apiUrlPasswordReset); // Ensure this path matches your Django URL
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: jsonEncode(userData), // userData should be directly encodable
+      );
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        throw Exception(
+            'Failed to check user: ${response.statusCode} - ${response.body}');
+      }
+    } catch (e) {
+      throw Exception('Error during user check: $e');
+    }
+  }
+
   static Future<Map<String, dynamic>> login(
       Map<String, dynamic> credentials) async {
     try {
       final response = await post(ApiEndpoints.login, credentials);
-      // return response;
-      return {
-        'id': '1200',
-        'name': 'wasswa viannie',
-        'email': 'wasswaviannie@gmail.com',
-        'phone_number': '1234567890',
-        'is_verified': true, // Manually set this to false for testing
-      };
+      return response;
     } catch (e) {
       throw Exception('Login failed: $e');
     }

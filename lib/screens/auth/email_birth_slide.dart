@@ -17,6 +17,53 @@ class EmailBirthSlide extends StatelessWidget {
     required this.onGenderSelected,
   }) : super(key: key);
 
+  // Validate the date of birth
+  String? _validateDateOfBirth() {
+    final year = int.tryParse(yearController.text);
+    final month = int.tryParse(monthController.text);
+    final day = int.tryParse(dayController.text);
+
+    // Check if all fields are filled
+    if (year == null || month == null || day == null) {
+      return "Please enter a valid date of birth.";
+    }
+
+    // Validate year
+    final currentYear = DateTime.now().year;
+    if (year < 1900 || year > currentYear) {
+      return "Year must be between 1900 and $currentYear.";
+    }
+
+    // Validate month
+    if (month < 1 || month > 12) {
+      return "Month must be between 1 and 12.";
+    }
+
+    // Validate day
+    final maxDay = _getMaxDayForMonth(year, month);
+    if (day < 1 || day > maxDay) {
+      return "Day must be between 1 and $maxDay for the selected month and year.";
+    }
+
+    return null; // No error
+  }
+
+  // Get the maximum number of days for a given month and year
+  int _getMaxDayForMonth(int year, int month) {
+    if (month == 2) {
+      // Check for leap year
+      if ((year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)) {
+        return 29; // Leap year
+      } else {
+        return 28; // Non-leap year
+      }
+    } else if ([4, 6, 9, 11].contains(month)) {
+      return 30; // Months with 30 days
+    } else {
+      return 31; // Months with 31 days
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -36,15 +83,19 @@ class EmailBirthSlide extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 16),
-              const Text(
-                'One more step to go!',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: primaryTwo,
+              Center(
+                child: Text(
+                  'One more step to go!',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: primaryTwo,
+                  ),
+                  textAlign:
+                      TextAlign.center, // Ensures the text itself is centered
                 ),
-                textAlign: TextAlign.center,
               ),
+
               const SizedBox(height: 16),
               const Text(
                 "Enter your date of birth and select your gender.",
@@ -87,7 +138,7 @@ class EmailBirthSlide extends StatelessWidget {
                   // Year field
                   SizedBox(
                     width: 80,
-                    child: TextField(
+                    child: TextFormField(
                       controller: yearController,
                       keyboardType: TextInputType.number,
                       maxLength: 4,
@@ -100,6 +151,7 @@ class EmailBirthSlide extends StatelessWidget {
                         focusedBorder: UnderlineInputBorder(
                           borderSide: BorderSide(color: primaryTwo),
                         ),
+                        errorText: _validateDateOfBirth(),
                       ),
                       onChanged: (value) {
                         if (value.length == 4) {
@@ -112,7 +164,7 @@ class EmailBirthSlide extends StatelessWidget {
                   // Month field
                   SizedBox(
                     width: 60,
-                    child: TextField(
+                    child: TextFormField(
                       controller: monthController,
                       keyboardType: TextInputType.number,
                       maxLength: 2,
@@ -125,6 +177,7 @@ class EmailBirthSlide extends StatelessWidget {
                         focusedBorder: UnderlineInputBorder(
                           borderSide: BorderSide(color: primaryTwo),
                         ),
+                        errorText: _validateDateOfBirth(),
                       ),
                       onChanged: (value) {
                         if (value.length == 2) {
@@ -137,7 +190,7 @@ class EmailBirthSlide extends StatelessWidget {
                   // Day field
                   SizedBox(
                     width: 60,
-                    child: TextField(
+                    child: TextFormField(
                       controller: dayController,
                       keyboardType: TextInputType.number,
                       maxLength: 2,
@@ -150,6 +203,7 @@ class EmailBirthSlide extends StatelessWidget {
                         focusedBorder: UnderlineInputBorder(
                           borderSide: BorderSide(color: primaryTwo),
                         ),
+                        errorText: _validateDateOfBirth(),
                       ),
                     ),
                   ),

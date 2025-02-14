@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../theme/theme.dart';
 
-class PasswordSlide extends StatelessWidget {
+class PasswordSlide extends StatefulWidget {
   final TextEditingController passwordController;
   final TextEditingController confirmPasswordController;
 
@@ -12,16 +12,34 @@ class PasswordSlide extends StatelessWidget {
   }) : super(key: key);
 
   @override
+  _PasswordSlideState createState() => _PasswordSlideState();
+}
+
+class _PasswordSlideState extends State<PasswordSlide> {
+  bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
+  String? _errorText;
+
+  void _validatePasswords() {
+    setState(() {
+      if (widget.passwordController.text !=
+          widget.confirmPasswordController.text) {
+        _errorText = "Passwords do not match";
+      } else {
+        _errorText = null;
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: SingleChildScrollView(
-        // Make the content scrollable
         child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment:
-                CrossAxisAlignment.center, // Center all children horizontally
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Center(
                 child: Image.asset(
@@ -38,23 +56,34 @@ class PasswordSlide extends StatelessWidget {
                   fontWeight: FontWeight.bold,
                   color: primaryTwo,
                 ),
-                textAlign: TextAlign.center, // Center the text
+                textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
               const Text(
                 "Add your password to continue.",
-                textAlign: TextAlign.center, // Center the text
+                textAlign: TextAlign.center,
               ),
               const SizedBox(height: 50),
-              // Password field with bottom border only
+
+              // Password field
               SizedBox(
                 width: MediaQuery.of(context).size.width * 0.8,
                 child: TextField(
-                  controller: passwordController,
-                  obscureText: true,
+                  controller: widget.passwordController,
+                  obscureText: _obscurePassword,
                   decoration: InputDecoration(
                     labelText: 'Password',
                     labelStyle: TextStyle(color: primaryTwo),
+                    suffixIcon: IconButton(
+                      icon: Icon(_obscurePassword
+                          ? Icons.visibility_off
+                          : Icons.visibility),
+                      onPressed: () {
+                        setState(() {
+                          _obscurePassword = !_obscurePassword;
+                        });
+                      },
+                    ),
                     enabledBorder: UnderlineInputBorder(
                       borderSide: BorderSide(color: primaryTwo),
                     ),
@@ -64,22 +93,36 @@ class PasswordSlide extends StatelessWidget {
                   ),
                 ),
               ),
+
               const SizedBox(height: 16),
-              // Confirm password field with bottom border only
+
+              // Confirm password field
               SizedBox(
                 width: MediaQuery.of(context).size.width * 0.8,
                 child: TextField(
-                  controller: confirmPasswordController,
-                  obscureText: true,
+                  controller: widget.confirmPasswordController,
+                  obscureText: _obscureConfirmPassword,
+                  onChanged: (_) => _validatePasswords(),
                   decoration: InputDecoration(
                     labelText: 'Confirm Password',
                     labelStyle: TextStyle(color: primaryTwo),
+                    suffixIcon: IconButton(
+                      icon: Icon(_obscureConfirmPassword
+                          ? Icons.visibility_off
+                          : Icons.visibility),
+                      onPressed: () {
+                        setState(() {
+                          _obscureConfirmPassword = !_obscureConfirmPassword;
+                        });
+                      },
+                    ),
                     enabledBorder: UnderlineInputBorder(
                       borderSide: BorderSide(color: primaryTwo),
                     ),
                     focusedBorder: UnderlineInputBorder(
                       borderSide: BorderSide(color: primaryTwo),
                     ),
+                    errorText: _errorText,
                   ),
                 ),
               ),

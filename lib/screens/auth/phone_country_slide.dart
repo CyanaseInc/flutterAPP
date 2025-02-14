@@ -1,9 +1,7 @@
-import 'package:cyanase/helpers/loader.dart';
 import 'package:flutter/material.dart';
 import 'package:intl_phone_field/intl_phone_field.dart';
 import 'package:intl_phone_field/countries.dart';
 import 'package:sim_card_info/sim_card_info.dart';
-import '../../helpers/api_helper.dart';
 import '../../theme/theme.dart';
 
 class PhoneCountrySlide extends StatefulWidget {
@@ -44,7 +42,6 @@ class _PhoneCountrySlideState extends State<PhoneCountrySlide> {
       if (simCardInfo != null && simCardInfo.isNotEmpty) {
         final sim = simCardInfo.first;
         final countryIso = sim.countryIso?.toUpperCase() ?? 'UG';
-
         _updateCountryByISO(countryIso);
       }
     } catch (e) {
@@ -54,7 +51,7 @@ class _PhoneCountrySlideState extends State<PhoneCountrySlide> {
   }
 
   void _setDefaultCountry() {
-    _updateCountryByISO('UG'); // Default to Uganda
+    _updateCountryByISO('UG');
   }
 
   void _updateCountryByISO(String countryIso) {
@@ -71,13 +68,9 @@ class _PhoneCountrySlideState extends State<PhoneCountrySlide> {
     });
   }
 
-  void _updateCountryByPhoneCode(String dialCode) {
-    final country = countries.firstWhere(
-      (c) => c.dialCode == dialCode,
-      orElse: () => countries.firstWhere((c) => c.dialCode == '+256'),
-    );
-
+  void _onCountryChanged(Country country) {
     setState(() {
+      _selectedCountryCode = country.dialCode ?? '+256';
       _selectedCountryISO = country.code ?? 'UG';
       widget.countryController.text = country.name ?? 'Uganda';
     });
@@ -125,12 +118,11 @@ class _PhoneCountrySlideState extends State<PhoneCountrySlide> {
                   keyboardType: TextInputType.emailAddress,
                   decoration: InputDecoration(
                     labelText: 'Email',
-                    labelStyle: TextStyle(color: primaryTwo),
                     enabledBorder: UnderlineInputBorder(
-                      borderSide: BorderSide(color: primaryTwo),
+                      borderSide: BorderSide(),
                     ),
                     focusedBorder: UnderlineInputBorder(
-                      borderSide: BorderSide(color: primaryTwo),
+                      borderSide: BorderSide(),
                     ),
                   ),
                 ),
@@ -141,7 +133,7 @@ class _PhoneCountrySlideState extends State<PhoneCountrySlide> {
               SizedBox(
                 width: MediaQuery.of(context).size.width * 0.8,
                 child: _isLoading
-                    ? const Loader()
+                    ? const Center(child: CircularProgressIndicator())
                     : IntlPhoneField(
                         controller: widget.phoneNumberController,
                         initialCountryCode: _selectedCountryISO, // Set ISO code
@@ -149,23 +141,21 @@ class _PhoneCountrySlideState extends State<PhoneCountrySlide> {
                         dropdownTextStyle: TextStyle(fontSize: _inputFontSize),
                         decoration: InputDecoration(
                           labelText: 'Phone Number',
-                          labelStyle: TextStyle(
-                            color: primaryTwo,
-                            fontSize: _inputFontSize,
-                          ),
                           enabledBorder: UnderlineInputBorder(
-                            borderSide: BorderSide(color: primaryTwo),
+                            borderSide: BorderSide(),
                           ),
                           focusedBorder: UnderlineInputBorder(
-                            borderSide: BorderSide(color: primaryTwo),
+                            borderSide: BorderSide(),
                           ),
                         ),
                         onChanged: (phone) {
                           setState(() {
                             _selectedCountryCode = phone.countryCode;
                           });
-                          _updateCountryByPhoneCode(phone.countryCode);
                           widget.onPhoneChanged(phone.completeNumber);
+                        },
+                        onCountryChanged: (country) {
+                          _onCountryChanged(country);
                         },
                       ),
               ),
@@ -177,23 +167,15 @@ class _PhoneCountrySlideState extends State<PhoneCountrySlide> {
                 child: TextField(
                   controller: widget.countryController,
                   readOnly: true,
-                  onTap: () async {
-                    widget.selectCountry();
-                    await Future.delayed(const Duration(milliseconds: 500));
-                    _updateCountryByISO(widget.countryController.text);
-                  },
+                  onTap: () => widget.selectCountry(),
                   style: TextStyle(fontSize: _inputFontSize),
                   decoration: InputDecoration(
                     labelText: 'Country',
-                    labelStyle: TextStyle(
-                      color: primaryTwo,
-                      fontSize: _inputFontSize,
-                    ),
                     enabledBorder: UnderlineInputBorder(
-                      borderSide: BorderSide(color: primaryTwo),
+                      borderSide: BorderSide(),
                     ),
                     focusedBorder: UnderlineInputBorder(
-                      borderSide: BorderSide(color: primaryTwo),
+                      borderSide: BorderSide(),
                     ),
                   ),
                 ),
