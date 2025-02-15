@@ -33,8 +33,7 @@ class _FundManagerSliderState extends State<FundManagerSlider> {
   @override
   void initState() {
     super.initState();
-    _pageController = PageController(
-        viewportFraction: 0.4); // Reduce space by decreasing this value
+    _pageController = PageController(viewportFraction: 0.4);
     _autoSlide();
   }
 
@@ -63,15 +62,14 @@ class _FundManagerSliderState extends State<FundManagerSlider> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 100,
+      height: 120, // Increased height for the rectangular card
       child: PageView.builder(
         controller: _pageController,
         itemCount: fundManagers.length,
         itemBuilder: (context, index) {
           final fundManager = fundManagers[index];
           return Padding(
-            padding: const EdgeInsets.symmetric(
-                horizontal: 4.0), // Reduce horizontal padding
+            padding: const EdgeInsets.symmetric(horizontal: 4.0),
             child: GestureDetector(
               onTap: () {
                 showModalBottomSheet(
@@ -81,42 +79,77 @@ class _FundManagerSliderState extends State<FundManagerSlider> {
                   },
                 );
               },
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 60,
-                    height: 60,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: Theme.of(context).primaryColor,
-                        width: 3,
+              child: Card(
+                elevation: 5,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Container(
+                  width: 100,
+                  padding: EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.grey.withOpacity(0.3),
+                        spreadRadius: 2,
+                        blurRadius: 5,
+                        offset: Offset(0, 3),
                       ),
-                      image: DecorationImage(
-                        image: AssetImage(fundManager.imagePath),
-                        fit: BoxFit.cover,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: white,
-                          spreadRadius: 2,
-                          blurRadius: 5,
-                          offset: Offset(0, 3),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Small image in the top-left corner
+                      Container(
+                        width: 20,
+                        height: 20,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(8),
+                          image: DecorationImage(
+                            image: AssetImage(fundManager.imagePath),
+                            fit: BoxFit.cover,
+                          ),
+                          border: Border.all(
+                            color: Theme.of(context).primaryColor,
+                            width: 1,
+                          ),
                         ),
-                      ],
-                    ),
+                      ),
+                      SizedBox(height: 8),
+                      // Manager name
+                      Text(
+                        fundManager.name,
+                        style: TextStyle(
+                          color: primaryTwo,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      // Additional creative design (e.g., a tag or badge)
+                      Container(
+                        padding:
+                            EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color:
+                              Theme.of(context).primaryColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          'Top Performer',
+                          style: TextStyle(
+                            color: Theme.of(context).primaryColor,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                  SizedBox(height: 8),
-                  Text(
-                    fundManager.name,
-                    style: TextStyle(
-                      color: primaryTwo,
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           );

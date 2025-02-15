@@ -63,6 +63,7 @@ class ApiEndpoints {
   static const String apiUrlUserNetWorth =
       "$server/api/v1/en/auth/user/networth/";
   static const String login = "$server/api/v1/en/auth/user/login/";
+  static const String passcodeLogin = "$server/api/v1/en/auth/user/passcode/";
   static const String apiUrlUserNextOfKin = "$server/api/v1/en/user/nextOfKin/";
   static const String apiUrlGetNextOfKin = "$server/api/v1/en/get/nextOfKin/";
   static const String apiUrlGetToken = "$server/api/v1/en/auth/token/";

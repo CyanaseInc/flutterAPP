@@ -170,7 +170,7 @@ class _VerificationScreenState extends State<VerificationScreen> {
     try {
       // Prepare the data to send to the API
       Map<String, dynamic> userData = {
-        'email': widget.email, // Pass the email
+        'username': widget.email, // Pass the email
         'code': emailCode, // Pass the verification code
       };
 

@@ -197,6 +197,16 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, dynamic>> passcodeLogin(
+      Map<String, dynamic> credentials) async {
+    try {
+      final response = await post(ApiEndpoints.passcodeLogin, credentials);
+      return response;
+    } catch (e) {
+      throw Exception('Login failed: $e');
+    }
+  }
+
   // Verify OTP request
   static Future<Map<String, dynamic>> verifyOtp(
       Map<String, dynamic> otpData) async {

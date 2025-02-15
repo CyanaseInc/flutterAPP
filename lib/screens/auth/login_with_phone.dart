@@ -5,8 +5,7 @@ import 'login_with_passcode.dart'; // Import the NumericLoginScreen
 import 'signup.dart'; // Import the SignupScreen
 import 'forgot.dart';
 import '../home/home.dart';
-import 'package:cyanase/helpers/hash_numbers.dart';
-import 'package:cyanase/theme/theme.dart';
+
 import 'package:cyanase/helpers/database_helper.dart'; // Import the file containing fetchAndHashContacts and getRegisteredContacts
 import 'package:cyanase/helpers/loader.dart';
 import 'package:cyanase/helpers/api_helper.dart'; // Import the reusable function
@@ -48,13 +47,12 @@ class _LoginScreenState extends State<LoginScreen> {
         'username': username,
         'password': password,
       });
-      print('my username is $username and my password is $password');
+
       // Check if the response indicates failure
       if (loginResponse.containsKey('success') && !loginResponse['success']) {
         // Handle invalid credentials or other errors
         throw Exception(loginResponse['message'] ?? 'Login failed');
       }
-
       // Check if the response contains the expected fields for a successful login
       if (loginResponse.containsKey('token') &&
           loginResponse.containsKey('user_id') &&
@@ -76,27 +74,45 @@ class _LoginScreenState extends State<LoginScreen> {
           // Store only the required profile details in the database
           final dbHelper = DatabaseHelper();
           final db = await dbHelper.database;
-          await db.insert(
+
+          // Check if the profile already exists
+          final existingProfile = await db.query(
             'profile',
-            {
-              'id': userId,
-              'email': email,
-              'phone_number': phoneNumber,
-              'name': userName,
-              'created_at': DateTime.now().toIso8601String(),
-            },
+            where: 'id = ?',
+            whereArgs: [userId],
           );
 
-          // Initialize the database
-          await dbHelper.database;
-
-          // Fetch and hash contacts (if needed)
-          List<Map<String, String>> contacts = await fetchAndHashContacts();
-          List<Map<String, dynamic>> registeredContacts =
-              await getRegisteredContacts(contacts);
+          if (existingProfile.isNotEmpty) {
+            // Update the existing profile
+            await db.update(
+              'profile',
+              {
+                'email': email,
+                'phone_number': phoneNumber,
+                'token': token,
+                'name': userName,
+                'created_at': DateTime.now().toIso8601String(),
+              },
+              where: 'id = ?',
+              whereArgs: [userId],
+            );
+          } else {
+            // Insert a new profile
+            await db.insert(
+              'profile',
+              {
+                'id': userId,
+                'email': email,
+                'token': token,
+                'phone_number': phoneNumber,
+                'name': userName,
+                'created_at': DateTime.now().toIso8601String(),
+              },
+            );
+          }
 
           // Navigate to HomeScreen after successful login
-          Navigator.pushReplacement(
+          Navigator.push(
             context,
             MaterialPageRoute(
               builder: (context) => HomeScreen(),
@@ -112,18 +128,8 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       print('Error: $e');
       // Show error dialog
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Error'),
-          content: const Text('Invalid Login credentials. Please try again.'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('OK'),
-            ),
-          ],
-        ),
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
       );
     } finally {
       setState(() {
@@ -245,6 +251,8 @@ class _LoginScreenState extends State<LoginScreen> {
   List<TextEditingController> _controllers =
       List.generate(6, (_) => TextEditingController());
 
+  ///Handle verification
+
   // Method to handle OTP submission
   Future<void> _submitOTP(String phoneNumber) async {
     setState(() {
@@ -255,13 +263,14 @@ class _LoginScreenState extends State<LoginScreen> {
       // Join all OTP digits to form the complete OTP
       String otp = _controllers.map((controller) => controller.text).join('');
 
+      Map<String, dynamic> userData = {
+        'username': phoneNumber, // Pass the email
+        'code': otp, // Pass the verification code
+      };
+      final response = await ApiService.VerificationEmail(userData);
       // Call API to validate OTP
-      final response = await ApiService.post('validate_otp', {
-        'phone_number': phoneNumber,
-        'otp': otp,
-      });
 
-      if (response['status'] == 'success') {
+      if (response['success'] == true) {
         // Close bottom sheet if successful
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(

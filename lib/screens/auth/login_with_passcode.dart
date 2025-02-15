@@ -7,6 +7,7 @@ import 'package:cyanase/helpers/database_helper.dart'; // Import the DatabaseHel
 // For contacts permission
 import 'package:cyanase/helpers/hash_numbers.dart'; // Import the file containing fetchAndHashContacts and getRegisteredContacts
 import 'package:cyanase/helpers/loader.dart';
+import 'package:cyanase/helpers/api_helper.dart';
 
 class NumericLoginScreen extends StatefulWidget {
   const NumericLoginScreen({Key? key}) : super(key: key);
@@ -59,38 +60,120 @@ class _NumericLoginScreenState extends State<NumericLoginScreen> {
 
     try {
       // Initialize the database
-      await dbHelper.database;
+      final db = await dbHelper.database;
 
-      // Fetch and process contacts using the existing function
-      List<Map<String, String>> contacts = await fetchAndHashContacts();
-      List<Map<String, dynamic>> registeredContacts =
-          await getRegisteredContacts(contacts);
+      // Retrieve the user's email from the profile table
+      final userProfile = await db.query('profile', limit: 1);
+      final email = userProfile.first['email'] as String;
+
+      // Perform login API request using the retrieved email and passcode
+      final loginResponse = await ApiService.passcodeLogin({
+        'username': email,
+        'password': passcode,
+      });
+
       // Dismiss the loading indicator
-      Navigator.pop(context);
 
-      // Navigate to HomeScreen with registered contacts
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => HomeScreen(),
-        ),
-      );
-    } catch (e) {
-      print('Error: $e');
-      // Dismiss the loading indicator
-      Navigator.pop(context);
+      // Check if the response indicates failure
+      if (loginResponse.containsKey('success') && !loginResponse['success']) {
+        // Show a red SnackBar for errorsNavigato
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(loginResponse['message'] ?? 'Login failed'),
+            backgroundColor: Colors.red, // Red SnackBar for errors
+          ),
+        );
+        return;
+      }
 
-      // Show an error dialog
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          content: Text('Check your internet connection and try again'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('OK'),
+      // Check if the response contains the expected fields for a successful login
+      if (loginResponse.containsKey('token') &&
+          loginResponse.containsKey('user_id') &&
+          loginResponse.containsKey('user')) {
+        final token = loginResponse['token'];
+        final userId = loginResponse['user_id'];
+        final user = loginResponse['user'];
+
+        // Extract user details
+        final email = user['email'];
+        final userName = user['username'];
+
+        // Extract profile details
+        final profile = user['profile'];
+        final phoneNumber = profile['phoneno'];
+        final isVerified = profile['is_verified'] ?? false;
+
+        if (isVerified) {
+          // Store only the required profile details in the database
+          final dbHelper = DatabaseHelper();
+          final db = await dbHelper.database;
+
+          // Check if the profile already exists
+          final existingProfile = await db.query(
+            'profile',
+            where: 'id = ?',
+            whereArgs: [userId],
+          );
+
+          if (existingProfile.isNotEmpty) {
+            // Update the existing profile
+            await db.update(
+              'profile',
+              {
+                'email': email,
+                'phone_number': phoneNumber,
+                'token': token,
+                'name': userName,
+                'created_at': DateTime.now().toIso8601String(),
+              },
+              where: 'id = ?',
+              whereArgs: [userId],
+            );
+          } else {
+            // Insert a new profile
+            await db.insert(
+              'profile',
+              {
+                'id': userId,
+                'email': email,
+                'token': token,
+                'phone_number': phoneNumber,
+                'name': userName,
+                'created_at': DateTime.now().toIso8601String(),
+              },
+            );
+          }
+          Navigator.pop(context);
+          // Navigate to HomeScreen after successful login
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => HomeScreen(),
             ),
-          ],
+          );
+        } else {
+          // Show bottom sheet to verify account
+          // You can add your logic here for unverified accounts
+        }
+      } else {
+        Navigator.pop(context); // Show a red SnackBar for invalid response
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Invalid login response: Missing required fields'),
+            backgroundColor: Colors.red, // Red SnackBar for errors
+          ),
+        );
+      }
+    } catch (e) {
+      // Dismiss the loading indicator
+      Navigator.pop(context);
+
+      // Show a red SnackBar for errors
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.red, // Red SnackBar for errors
         ),
       );
     }

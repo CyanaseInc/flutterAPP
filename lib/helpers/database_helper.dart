@@ -73,6 +73,7 @@ class DatabaseHelper {
     await db.execute('''
       CREATE TABLE profile (
         id TEXT PRIMARY KEY,
+        token TEXT NOT NULL,
         name TEXT NOT NULL,
         profile_pic TEXT,
         phone_number TEXT,

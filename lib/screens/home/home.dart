@@ -7,6 +7,7 @@ import './goal/goal.dart';
 import './group/new_group.dart';
 import '../settings/settings.dart';
 import '../auth/login_with_passcode.dart';
+import 'package:cyanase/helpers/hash_numbers.dart';
 
 class HomeScreen extends StatefulWidget {
   @override
@@ -25,10 +26,16 @@ class _HomeScreenState extends State<HomeScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
-    _tabController.addListener(_updateTabTitle); // Listen to tab changes
+    _tabController.addListener(_updateTabTitle);
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _showSubscriptionReminder();
+      _fetchAndHashContacts(); // Call the async function here
     });
+  }
+
+  void _fetchAndHashContacts() async {
+    await fetchAndHashContacts();
   }
 
   void _updateTabTitle() {
