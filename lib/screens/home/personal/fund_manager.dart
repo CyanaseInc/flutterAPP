@@ -19,15 +19,15 @@ class _FundManagerSliderState extends State<FundManagerSlider> {
 
   final List<FundManager> fundManagers = [
     FundManager(name: 'Manager 1', imagePath: 'assets/images/logo.png'),
-    FundManager(name: 'Manager 2', imagePath: 'assets/manager_2.jpg'),
-    FundManager(name: 'Manager 3', imagePath: 'assets/manager_3.png'),
-    FundManager(name: 'Manager 4', imagePath: 'assets/manager_4.jpg'),
-    FundManager(name: 'Manager 5', imagePath: 'assets/manager_5.jpg'),
-    FundManager(name: 'Manager 6', imagePath: 'assets/manager_6.jpg'),
-    FundManager(name: 'Manager 7', imagePath: 'assets/manager_7.jpg'),
-    FundManager(name: 'Manager 8', imagePath: 'assets/manager_8.jpg'),
-    FundManager(name: 'Manager 9', imagePath: 'assets/manager_9.jpg'),
-    FundManager(name: 'Manager 10', imagePath: 'assets/manager_10.jpg'),
+    FundManager(name: 'Manager 2', imagePath: 'assets/images/logo.png'),
+    FundManager(name: 'Manager 3', imagePath: 'assets/images/logo.png'),
+    FundManager(name: 'Manager 4', imagePath: 'assets/images/logo.png'),
+    FundManager(name: 'Manager 5', imagePath: 'assets/images/logo.png'),
+    FundManager(name: 'Manager 6', imagePath: 'assets/images/logo.png'),
+    FundManager(name: 'Manager 7', imagePath: 'assets/images/logo.png'),
+    FundManager(name: 'Manager 8', imagePath: 'assets/images/logo.png'),
+    FundManager(name: 'Manager 9', imagePath: 'assets/images/logo.png'),
+    FundManager(name: 'Manager 10', imagePath: 'assets/images/logo.png'),
   ];
 
   @override

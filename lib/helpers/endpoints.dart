@@ -37,7 +37,7 @@ class ApiEndpoints {
   static const String apiUrlGetDeposit = "$server/api/v1/en/get/deposit/";
   static const String apiUrlGetSubStatus =
       "$server/api/v1/en/get/subscription/status/";
-  static const String apiUrlSubscribe = "$server/api/v1/en/make/subscription/";
+  static const String paySubscription = "$server/api/v1/en/make/subscription/";
   static const String apiUrlGetWithdraw = "$server/api/v1/en/get/withdraw/";
   static const String apiUrlGetWithdrawFee =
       "$server/api/v1/en/get/withdraw/fee/";

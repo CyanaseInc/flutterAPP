@@ -3,9 +3,7 @@ import '../../theme/theme.dart'; // Import your theme file
 import 'login_with_phone.dart';
 import 'signup.dart';
 import '../home/home.dart';
-import 'package:cyanase/helpers/database_helper.dart'; // Import the DatabaseHelper
-// For contacts permission
-import 'package:cyanase/helpers/hash_numbers.dart'; // Import the file containing fetchAndHashContacts and getRegisteredContacts
+import 'package:cyanase/helpers/database_helper.dart';
 import 'package:cyanase/helpers/loader.dart';
 import 'package:cyanase/helpers/api_helper.dart';
 
@@ -101,6 +99,7 @@ class _NumericLoginScreenState extends State<NumericLoginScreen> {
 
         // Extract profile details
         final profile = user['profile'];
+        final userCountry = profile['country'];
         final phoneNumber = profile['phoneno'];
         final isVerified = profile['is_verified'] ?? false;
 
@@ -110,11 +109,7 @@ class _NumericLoginScreenState extends State<NumericLoginScreen> {
           final db = await dbHelper.database;
 
           // Check if the profile already exists
-          final existingProfile = await db.query(
-            'profile',
-            where: 'id = ?',
-            whereArgs: [userId],
-          );
+          final existingProfile = await db.query('profile');
 
           if (existingProfile.isNotEmpty) {
             // Update the existing profile
@@ -122,13 +117,12 @@ class _NumericLoginScreenState extends State<NumericLoginScreen> {
               'profile',
               {
                 'email': email,
+                'country': userCountry,
                 'phone_number': phoneNumber,
                 'token': token,
                 'name': userName,
                 'created_at': DateTime.now().toIso8601String(),
               },
-              where: 'id = ?',
-              whereArgs: [userId],
             );
           } else {
             // Insert a new profile
@@ -137,6 +131,7 @@ class _NumericLoginScreenState extends State<NumericLoginScreen> {
               {
                 'id': userId,
                 'email': email,
+                'country': userCountry,
                 'token': token,
                 'phone_number': phoneNumber,
                 'name': userName,
@@ -172,7 +167,7 @@ class _NumericLoginScreenState extends State<NumericLoginScreen> {
       // Show a red SnackBar for errors
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error: $e'),
+          content: Text('Error: Check internet connection and try again'),
           backgroundColor: Colors.red, // Red SnackBar for errors
         ),
       );

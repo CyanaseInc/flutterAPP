@@ -67,6 +67,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
         // Extract profile details
         final profile = user['profile'];
+        final userCountry = profile['country'];
         final phoneNumber = profile['phoneno'];
         final isVerified = profile['is_verified'] ?? false;
 
@@ -76,11 +77,7 @@ class _LoginScreenState extends State<LoginScreen> {
           final db = await dbHelper.database;
 
           // Check if the profile already exists
-          final existingProfile = await db.query(
-            'profile',
-            where: 'id = ?',
-            whereArgs: [userId],
-          );
+          final existingProfile = await db.query('profile');
 
           if (existingProfile.isNotEmpty) {
             // Update the existing profile
@@ -88,13 +85,12 @@ class _LoginScreenState extends State<LoginScreen> {
               'profile',
               {
                 'email': email,
+                'country': userCountry,
                 'phone_number': phoneNumber,
                 'token': token,
                 'name': userName,
                 'created_at': DateTime.now().toIso8601String(),
               },
-              where: 'id = ?',
-              whereArgs: [userId],
             );
           } else {
             // Insert a new profile
@@ -103,6 +99,7 @@ class _LoginScreenState extends State<LoginScreen> {
               {
                 'id': userId,
                 'email': email,
+                'country': userCountry,
                 'token': token,
                 'phone_number': phoneNumber,
                 'name': userName,
@@ -126,7 +123,6 @@ class _LoginScreenState extends State<LoginScreen> {
         throw Exception('Invalid login response: Missing required fields');
       }
     } catch (e) {
-      print('Error: $e');
       // Show error dialog
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: $e')),

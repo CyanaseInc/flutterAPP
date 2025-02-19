@@ -1,8 +1,23 @@
-// File: cards.dart
 import 'package:flutter/material.dart';
-import '../../../theme/theme.dart';
+import '../../../theme/theme.dart'; // Your custom theme file
 
-class TotalDepositsCard extends StatelessWidget {
+class TotalDepositsCard extends StatefulWidget {
+  final String depositLocal;
+  final String depositForeign;
+  final String currency;
+
+  const TotalDepositsCard({
+    Key? key,
+    required this.depositLocal,
+    required this.depositForeign,
+    required this.currency,
+  }) : super(key: key);
+
+  @override
+  _TotalDepositsCardState createState() => _TotalDepositsCardState();
+}
+
+class _TotalDepositsCardState extends State<TotalDepositsCard> {
   @override
   Widget build(BuildContext context) {
     return Card(
@@ -25,15 +40,15 @@ class TotalDepositsCard extends StatelessWidget {
                     color: white,
                   ),
                 ),
-                SizedBox(height: 10),
+                const SizedBox(height: 10),
                 Text.rich(
                   TextSpan(
                     children: [
                       WidgetSpan(
                         child: Transform.translate(
-                          offset: Offset(0, -6),
+                          offset: const Offset(0, -6),
                           child: Text(
-                            'UGX',
+                            widget.currency,
                             style: TextStyle(
                               fontSize: 16,
                               color: white,
@@ -42,7 +57,7 @@ class TotalDepositsCard extends StatelessWidget {
                         ),
                       ),
                       TextSpan(
-                        text: ' 5,000',
+                        text: widget.depositLocal,
                         style: TextStyle(
                           fontSize: 32,
                           color: white,
@@ -51,7 +66,7 @@ class TotalDepositsCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                SizedBox(height: 20),
+                const SizedBox(height: 20),
               ],
             ),
           ),
@@ -59,7 +74,7 @@ class TotalDepositsCard extends StatelessWidget {
             bottom: 8,
             right: 16,
             child: Text(
-              '\$13.50',
+              '\$${widget.depositForeign}',
               style: TextStyle(
                 fontSize: 12,
                 color: white,
@@ -72,7 +87,23 @@ class TotalDepositsCard extends StatelessWidget {
   }
 }
 
-class NetworthCard extends StatelessWidget {
+class NetworthCard extends StatefulWidget {
+  final String NetworthLocal;
+  final String NetworthForeign;
+  final String currency;
+
+  const NetworthCard({
+    Key? key,
+    required this.NetworthLocal,
+    required this.NetworthForeign,
+    required this.currency,
+  }) : super(key: key);
+
+  @override
+  _NetworthCardState createState() => _NetworthCardState();
+}
+
+class _NetworthCardState extends State<NetworthCard> {
   @override
   Widget build(BuildContext context) {
     return Card(
@@ -95,21 +126,24 @@ class NetworthCard extends StatelessWidget {
                     color: primaryTwo,
                   ),
                 ),
-                SizedBox(height: 10),
+                const SizedBox(height: 10),
                 Text.rich(
                   TextSpan(
                     children: [
                       WidgetSpan(
                         child: Transform.translate(
-                          offset: Offset(0, -6),
+                          offset: const Offset(0, -6),
                           child: Text(
-                            'UGX',
-                            style: TextStyle(fontSize: 16, color: primaryTwo),
+                            widget.currency,
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: primaryTwo,
+                            ),
                           ),
                         ),
                       ),
                       TextSpan(
-                        text: ' 5,000',
+                        text: widget.NetworthLocal,
                         style: TextStyle(
                           fontSize: 32,
                           color: primaryTwo,
@@ -118,7 +152,7 @@ class NetworthCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                SizedBox(height: 20),
+                const SizedBox(height: 20),
               ],
             ),
           ),
@@ -126,7 +160,7 @@ class NetworthCard extends StatelessWidget {
             bottom: 8,
             right: 16,
             child: Text(
-              '\$13.50',
+              '\$${widget.NetworthForeign}',
               style: TextStyle(
                 fontSize: 12,
               ),

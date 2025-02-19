@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cyanase/theme/theme.dart';
 import 'goal_header.dart'; // Ensure this file is available
-import 'package:cyanase/screens/home/deposit.dart';
+import 'package:cyanase/helpers/deposit.dart';
 import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:vibration/vibration.dart';
 
@@ -210,7 +210,9 @@ class GoalCard extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => DepositScreen(),
+                        builder: (context) => DepositScreen(
+                          depositCategory: "goals",
+                        ),
                       ),
                     );
                   },

@@ -60,7 +60,7 @@ flutter:
     - assets/images/back.svg
     - assets/images/white.png
     - assets/images/new_user.svg
-
+    - assets/images/done.png
   # Include custom fonts like Montserrat
   fonts:
     - family: Montserrat

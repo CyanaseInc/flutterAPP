@@ -207,6 +207,155 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, dynamic>> subscriptionStatus(String token) async {
+    try {
+      // Define the URL
+      final Uri url = Uri.parse(ApiEndpoints.apiUrlGetSubStatus);
+
+      // Set the headers correctly
+      final Map<String, String> headers = {
+        'Authorization': 'Token $token',
+        'Content-Type': 'application/json',
+      };
+
+      // Make a GET request (same as the working version)
+      final http.Request request = http.Request('GET', url);
+      request.headers.addAll(headers);
+
+      // Send the request and get the response
+      final http.StreamedResponse streamedResponse = await request.send();
+      final http.Response response =
+          await http.Response.fromStream(streamedResponse);
+
+      // Check the response status
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body); // Convert response to Map
+      } else {
+        throw Exception(
+            'Failed to fetch subscription status: ${response.reasonPhrase}');
+      }
+    } catch (e) {
+      throw Exception('Error fetching subscription status: $e');
+    }
+  }
+
+  static Future<Map<String, dynamic>> depositNetworth(String token) async {
+    try {
+      // Define the URL
+      final Uri url = Uri.parse(ApiEndpoints.apiUrlGetDeposit);
+
+      // Set the headers correctly
+      final Map<String, String> headers = {
+        'Authorization': 'Token $token',
+        'Content-Type': 'application/json',
+      };
+
+      // Make a GET request (same as the working version)
+      final http.Request request = http.Request('GET', url);
+      request.headers.addAll(headers);
+
+      // Send the request and get the response
+      final http.StreamedResponse streamedResponse = await request.send();
+      final http.Response response =
+          await http.Response.fromStream(streamedResponse);
+
+      // Check the response status
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body); // Convert response to Map
+      } else {
+        throw Exception(
+            'Failed to fetch subscription status: ${response.reasonPhrase}');
+      }
+    } catch (e) {
+      throw Exception('Error fetching subscription status: $e');
+    }
+  }
+
+  static Future<Map<String, dynamic>> subscriptionPay(
+      String token, String phone, String Currency) async {
+    try {
+      // Define the URL
+      final Uri url = Uri.parse(ApiEndpoints.paySubscription);
+
+      // Set the headers correctly
+      final Map<String, String> headers = {
+        'Authorization': 'Token $token',
+        'Content-Type': 'application/json',
+      };
+
+      // Define the request body
+      final Map<String, String> body = {'phone': phone, 'currency': Currency};
+
+      // Make a POST request
+      final http.Response response = await http.post(
+        url,
+        headers: headers,
+        body: jsonEncode(body), // Convert body to JSON format
+      );
+
+      // Check the response status
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body); // Convert response to Map
+      } else {
+        throw Exception('Failed to process payment: ${response.reasonPhrase}');
+      }
+    } catch (e) {
+      throw Exception('Error processing payment: $e');
+    }
+  }
+
+  static Future<Map<String, dynamic>> submitRiskProfile(
+      String token, Map<String, dynamic> data) async {
+    final response = await http.post(
+      Uri.parse(ApiEndpoints.apiUrlAddAuthUserRiskProfile),
+      headers: {
+        'Authorization': 'Token $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode(data),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to submit risk profile: ${response.statusCode}');
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> getClasses(String token) async {
+    final response = await http.get(
+      Uri.parse(ApiEndpoints.apiUrlGetInvestmentClasses),
+      headers: {
+        'Authorization': 'Token $token',
+        'Content-Type': 'application/json',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      // Decode the JSON response into a List<Map<String, dynamic>>
+      return List<Map<String, dynamic>>.from(jsonDecode(response.body));
+    } else {
+      throw Exception(
+          'Failed to fetch investment classes: ${response.statusCode}');
+    }
+  }
+
+  static Future<void> investDeposit(
+      String token, Map<String, dynamic> requestData) async {
+    final response = await http.post(
+      Uri.parse(ApiEndpoints.apiUrlDeposit), // Replace with your API endpoint
+      headers: {
+        'Authorization': 'Token $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode(requestData), // Convert requestData to JSON
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to submit deposit: ${response.statusCode}');
+    }
+  }
+
   // Verify OTP request
   static Future<Map<String, dynamic>> verifyOtp(
       Map<String, dynamic> otpData) async {

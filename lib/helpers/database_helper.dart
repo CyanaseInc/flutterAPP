@@ -77,6 +77,7 @@ class DatabaseHelper {
         name TEXT NOT NULL,
         profile_pic TEXT,
         phone_number TEXT,
+        country TEXT,
         email TEXT,
         last_seen TEXT,
         status TEXT,

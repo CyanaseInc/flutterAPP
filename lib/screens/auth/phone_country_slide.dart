@@ -63,7 +63,7 @@ class _PhoneCountrySlideState extends State<PhoneCountrySlide> {
     setState(() {
       _selectedCountryCode = country.dialCode ?? '+256';
       _selectedCountryISO = country.code ?? 'UG';
-      widget.countryController.text = country.name ?? 'Uganda';
+      widget.countryController.text = country.code ?? 'Uganda';
       _isLoading = false;
     });
   }

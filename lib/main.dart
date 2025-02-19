@@ -85,7 +85,6 @@ class _SplashScreenWrapperState extends State<SplashScreenWrapper> {
         'profile', // Assuming 'profile' is your table name
         where: 'email IS NOT NULL AND phone_number IS NOT NULL',
       );
-      print('result: $result');
 
       // Navigate based on the result of the profile check
       if (result.isNotEmpty) {
