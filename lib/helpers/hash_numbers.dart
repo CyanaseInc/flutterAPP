@@ -2,7 +2,6 @@ import 'package:contacts_service/contacts_service.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:crypto/crypto.dart';
 import 'package:libphonenumber/libphonenumber.dart';
 import 'package:cyanase/helpers/database_helper.dart';
 

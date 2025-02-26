@@ -1,11 +1,13 @@
 import 'package:cyanase/helpers/loader.dart';
 import 'package:flutter/material.dart';
-import 'package:cyanase/helpers/database_helper.dart'; // Import the DatabaseHelper
-import 'package:cyanase/theme/theme.dart'; // Import your theme file
-import 'create_new_group_details.dart'; // Import the GroupDetailsScreen
-import '../../../helpers/hash_numbers.dart'; // Import the getRegisteredContacts function
+import 'package:cyanase/helpers/database_helper.dart';
+import 'package:cyanase/theme/theme.dart';
+import 'create_new_group_details.dart'; // Import GroupDetailsScreen
+import '../../../helpers/hash_numbers.dart'; // Import fetchAndHashContacts and getRegisteredContacts
 
 class NewGroupScreen extends StatefulWidget {
+  const NewGroupScreen({super.key});
+
   @override
   _NewGroupScreenState createState() => _NewGroupScreenState();
 }
@@ -14,48 +16,114 @@ class _NewGroupScreenState extends State<NewGroupScreen> {
   List<Map<String, dynamic>> contacts = [];
   List<Map<String, dynamic>> selectedContacts = [];
   bool isLoading = true;
+  bool isRefreshing = false; // Track refresh state separately
 
   @override
   void initState() {
     super.initState();
-    _refreshContacts(); // Refresh contacts when the screen is opened
+    _loadContacts(); // Load contacts initially
   }
 
-  Future<void> _refreshContacts() async {
+  Future<void> _loadContacts() async {
     setState(() {
-      isLoading = true; // Show loading indicator
+      isLoading = true; // Show loader
     });
 
-    try {
-      // Fetch the latest contacts from the database
-      final dbHelper = DatabaseHelper();
-      final fetchedContacts = await dbHelper.getContacts();
+    final dbHelper = DatabaseHelper();
+    final existingContacts = await dbHelper.getContacts();
 
-      // Format the contacts
-      final formattedContacts = fetchedContacts.map((contact) {
-        return {
-          'id': contact['id'],
-          'name': contact['name'],
-          'phone': contact['phone_number'],
-          'profilePic': '', // Add profile picture logic if available
-        };
-      }).toList();
-
-      // Fetch registered contacts from the server
-      final registeredContacts = await getRegisteredContacts(formattedContacts);
-
-      // Update the state with the registered contacts
+    if (existingContacts.isEmpty) {
+      await _fetchAndSyncContacts();
+    } else {
       setState(() {
-        contacts = registeredContacts;
+        contacts = existingContacts
+            .map((contact) => {
+                  'id': contact['id'],
+                  'user_id': contact['user_id'],
+                  'name': contact['name'],
+                  'phone': contact['phone_number'],
+                  'profilePic': contact['profilePic'] ?? '',
+                  'is_registered': contact['is_registered'] == 1,
+                })
+            .toList();
         isLoading = false;
       });
+    }
+  }
+
+  Future<void> _fetchAndSyncContacts({bool isManualRefresh = false}) async {
+    if (isManualRefresh) {
+      setState(() {
+        isRefreshing = true; // Indicate refreshing is in progress
+      });
+      // Show a loading dialog for manual refresh
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          content: Row(
+            children: [
+              Loader(),
+              const SizedBox(width: 16),
+              Text(
+                'Refreshing contacts...',
+                style: TextStyle(color: primaryTwo),
+              ),
+            ],
+          ),
+        ),
+      );
+    } else {
+      setState(() {
+        isLoading = true; // Show main loader for initial fetch
+      });
+    }
+
+    try {
+      final fetchedContacts = await fetchAndHashContacts();
+
+      final registeredContacts = await getRegisteredContacts(fetchedContacts);
+
+      // Deduplicate contacts based on phone number
+      final uniqueContacts = <String, Map<String, dynamic>>{};
+      for (var contact in registeredContacts) {
+        final phone = contact['phone'] as String? ?? '';
+        if (phone.isNotEmpty && !uniqueContacts.containsKey(phone)) {
+          uniqueContacts[phone] = contact;
+        }
+      }
+
+      setState(() {
+        contacts = uniqueContacts.values.toList();
+        isLoading = false;
+        if (isManualRefresh) isRefreshing = false;
+      });
+
+      if (isManualRefresh) {
+        Navigator.pop(context); // Close the dialog
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Contacts refreshed successfully!'),
+            backgroundColor: primaryTwo,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
     } catch (e) {
       setState(() {
         isLoading = false;
+        if (isManualRefresh) isRefreshing = false;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to refresh contacts: $e')),
-      );
+      if (isManualRefresh) {
+        Navigator.pop(context); // Close the dialog
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to refresh contacts: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
     }
   }
 
@@ -68,10 +136,10 @@ class _NewGroupScreenState extends State<NewGroupScreen> {
           style: TextStyle(color: white, fontSize: 20),
         ),
         backgroundColor: primaryTwo,
-        iconTheme: IconThemeData(color: white),
+        iconTheme: const IconThemeData(color: white),
         actions: [
           IconButton(
-            icon: Icon(Icons.search),
+            icon: const Icon(Icons.search),
             onPressed: () {
               showSearch(
                 context: context,
@@ -87,22 +155,44 @@ class _NewGroupScreenState extends State<NewGroupScreen> {
               );
             },
           ),
-          // Add a refresh button
           IconButton(
-            icon: Icon(Icons.refresh),
-            onPressed: () async {
-              await _refreshContacts();
-            },
+            icon: isRefreshing
+                ? SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      color: white,
+                      strokeWidth: 2,
+                    ),
+                  )
+                : const Icon(Icons.refresh),
+            onPressed: isRefreshing
+                ? null
+                : () async {
+                    await _fetchAndSyncContacts(isManualRefresh: true);
+                  },
           ),
         ],
       ),
       body: isLoading
-          ? Center(child: Loader())
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Loader(),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Loading contacts...',
+                    style: TextStyle(color: primaryTwo, fontSize: 16),
+                  ),
+                ],
+              ),
+            )
           : Column(
               children: [
                 // Display selected contacts at the top
                 if (selectedContacts.isNotEmpty)
-                  Container(
+                  SizedBox(
                     height: 120,
                     child: ListView.builder(
                       scrollDirection: Axis.horizontal,
@@ -115,7 +205,7 @@ class _NewGroupScreenState extends State<NewGroupScreen> {
                         return Stack(
                           children: [
                             Padding(
-                              padding: EdgeInsets.all(8.0),
+                              padding: const EdgeInsets.all(8.0),
                               child: Column(
                                 children: [
                                   CircleAvatar(
@@ -124,17 +214,17 @@ class _NewGroupScreenState extends State<NewGroupScreen> {
                                                 null &&
                                             contact['profilePic']!.isNotEmpty
                                         ? NetworkImage(contact['profilePic']!)
-                                        : AssetImage(
+                                        : const AssetImage(
                                             'assets/images/avatar.png'),
                                     child: contact['profilePic'] == null ||
                                             contact['profilePic']!.isEmpty
                                         ? Icon(Icons.person, color: white)
                                         : null,
                                   ),
-                                  SizedBox(height: 4),
+                                  const SizedBox(height: 4),
                                   Text(
                                     firstName,
-                                    style: TextStyle(
+                                    style: const TextStyle(
                                       fontSize: 12,
                                       color: Colors.black,
                                     ),
@@ -177,7 +267,7 @@ class _NewGroupScreenState extends State<NewGroupScreen> {
                           backgroundImage: contact['profilePic'] != null &&
                                   contact['profilePic']!.isNotEmpty
                               ? NetworkImage(contact['profilePic']!)
-                              : AssetImage('assets/images/avatar.png'),
+                              : const AssetImage('assets/images/avatar.png'),
                           child: contact['profilePic'] == null ||
                                   contact['profilePic']!.isEmpty
                               ? Icon(Icons.person, color: white)
@@ -187,7 +277,7 @@ class _NewGroupScreenState extends State<NewGroupScreen> {
                         subtitle: Text(contact['phone'] ?? 'No phone number'),
                         trailing: isSelected
                             ? Icon(Icons.check_circle, color: primaryColor)
-                            : Icon(Icons.radio_button_unchecked),
+                            : const Icon(Icons.radio_button_unchecked),
                         onTap: () {
                           setState(() {
                             if (isSelected) {
@@ -234,7 +324,7 @@ class ContactSearchDelegate extends SearchDelegate {
   List<Widget>? buildActions(BuildContext context) {
     return [
       IconButton(
-        icon: Icon(Icons.clear),
+        icon: const Icon(Icons.clear),
         onPressed: () {
           query = '';
         },
@@ -245,7 +335,7 @@ class ContactSearchDelegate extends SearchDelegate {
   @override
   Widget? buildLeading(BuildContext context) {
     return IconButton(
-      icon: Icon(Icons.arrow_back),
+      icon: const Icon(Icons.arrow_back),
       onPressed: () {
         close(context, null);
       },
@@ -271,7 +361,7 @@ class ContactSearchDelegate extends SearchDelegate {
             backgroundImage: contact['profilePic'] != null &&
                     contact['profilePic']!.isNotEmpty
                 ? NetworkImage(contact['profilePic']!)
-                : AssetImage('assets/images/avatar.png'),
+                : const AssetImage('assets/images/avatar.png'),
             child:
                 contact['profilePic'] == null || contact['profilePic']!.isEmpty
                     ? Icon(Icons.person, color: white)
@@ -281,7 +371,7 @@ class ContactSearchDelegate extends SearchDelegate {
           subtitle: Text(contact['phone'] ?? 'No phone number'),
           trailing: isSelected
               ? Icon(Icons.check_circle, color: primaryColor)
-              : Icon(Icons.radio_button_unchecked),
+              : const Icon(Icons.radio_button_unchecked),
           onTap: () {
             if (isSelected) {
               selectedContacts.remove(contact);
@@ -289,7 +379,7 @@ class ContactSearchDelegate extends SearchDelegate {
               selectedContacts.add(contact);
             }
             onSelection(List.from(selectedContacts));
-            close(context, null); // Close the search after selection
+            close(context, null); // Close search after selection
           },
         );
       },

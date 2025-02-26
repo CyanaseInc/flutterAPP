@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart'; // For number formatting
 import '../../../theme/theme.dart';
 
 class ActivitySummaryCard extends StatelessWidget {
@@ -9,14 +10,21 @@ class ActivitySummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final totalDeposits = portfolios.fold<int>(
-        0, (sum, portfolio) => sum + (portfolio['deposits'] as int? ?? 0));
-    final totalWithdrawals = portfolios.fold<int>(
-        0, (sum, portfolio) => sum + (portfolio['withdrawals'] as int? ?? 0));
-    final totalGoals = portfolios.fold<int>(
-        0, (sum, portfolio) => sum + (portfolio['goals'] as int? ?? 0));
-    final totalInvestments = portfolios.fold<int>(
-        0, (sum, portfolio) => sum + (portfolio['investments'] as int? ?? 0));
+    // Calculate totals from portfolios
+    final totalDeposits = portfolios.fold<double>(0.0,
+        (sum, portfolio) => sum + (portfolio['deposit'] as double? ?? 0.0));
+    final totalNetWorth = portfolios.fold<double>(0.0,
+        (sum, portfolio) => sum + (portfolio['netWorth'] as double? ?? 0.0));
+
+    // Infer withdrawals (assumption: if netWorth < deposits, difference could be withdrawals)
+    final totalWithdrawals = portfolios.fold<double>(0.0, (sum, portfolio) {
+      final deposit = portfolio['deposit'] as double? ?? 0.0;
+      final netWorth = portfolio['netWorth'] as double? ?? 0.0;
+      return sum + (deposit > netWorth ? deposit - netWorth : 0.0);
+    });
+
+    // Number formatter for clean display
+    final numberFormat = NumberFormat('#,###', 'en_US');
 
     return Padding(
       padding: const EdgeInsets.all(16.0),
@@ -25,14 +33,13 @@ class ActivitySummaryCard extends StatelessWidget {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
         ),
-        color: primaryTwo, // Light background color
-        shadowColor: primaryTwo, // Shadow color
+        color: primaryTwo,
+        shadowColor: primaryTwo,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 24.0, horizontal: 16.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Activity heading
               Text(
                 'Activity',
                 textAlign: TextAlign.center,
@@ -44,15 +51,13 @@ class ActivitySummaryCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 16),
-
-              // Activity stats grid
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _buildActivityStat('Deposit', totalDeposits),
-                  _buildActivityStat('Withdraw', totalWithdrawals),
-                  _buildActivityStat('Goals', totalGoals),
-                  _buildActivityStat('Investments', totalInvestments),
+                  _buildActivityStat('Deposits', totalDeposits, numberFormat),
+                  _buildActivityStat(
+                      'Withdrawals', totalWithdrawals, numberFormat),
+                  _buildActivityStat('Net Worth', totalNetWorth, numberFormat),
                 ],
               ),
             ],
@@ -62,15 +67,26 @@ class ActivitySummaryCard extends StatelessWidget {
     );
   }
 
-  Widget _buildActivityStat(String label, int count) {
+  Widget _buildActivityStat(
+      String label, double value, NumberFormat numberFormat) {
+    // Format value based on magnitude
+    String displayValue;
+    if (value.abs() >= 1000000) {
+      displayValue = '${(value / 1000000).toStringAsFixed(1)}M';
+    } else if (value.abs() >= 1000) {
+      displayValue = '${(value / 1000).toStringAsFixed(1)}k';
+    } else {
+      displayValue = numberFormat.format(value);
+    }
+
     return Column(
       children: [
         Text(
-          count.toString(),
+          displayValue,
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,
-            color: white, // Updated text color to white
+            color: white,
           ),
         ),
         const SizedBox(height: 4),
@@ -79,7 +95,7 @@ class ActivitySummaryCard extends StatelessWidget {
           style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w500,
-            color: white, // Updated text color to white
+            color: white,
           ),
         ),
       ],

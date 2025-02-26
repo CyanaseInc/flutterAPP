@@ -340,6 +340,25 @@ class ApiService {
     }
   }
 
+  static Future<List<Map<String, dynamic>>> getAllUserGoals(
+      String token) async {
+    final response = await http.get(
+      Uri.parse(ApiEndpoints.apiUrlGetGoal),
+      headers: {
+        'Authorization': 'Token $token',
+        'Content-Type': 'application/json',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      // Decode the JSON response into a List<Map<String, dynamic>>
+      return List<Map<String, dynamic>>.from(jsonDecode(response.body));
+    } else {
+      throw Exception(
+          'Failed to fetch investment classes: ${response.statusCode}');
+    }
+  }
+
   static Future<void> investDeposit(
       String token, Map<String, dynamic> requestData) async {
     final response = await http.post(

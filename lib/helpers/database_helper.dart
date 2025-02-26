@@ -55,7 +55,7 @@ class DatabaseHelper {
     // Open the database
     return await openDatabase(
       dbPath,
-      version: 3,
+      version: 4, // Updated to version 4 for reply_to_message
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -109,7 +109,6 @@ class DatabaseHelper {
         joined_at TEXT NOT NULL,
         muted BOOLEAN NOT NULL DEFAULT FALSE,
         FOREIGN KEY (group_id) REFERENCES groups (id) ON DELETE CASCADE
-        
       )
     ''');
 
@@ -133,12 +132,13 @@ class DatabaseHelper {
         group_id INTEGER NOT NULL,
         sender_id TEXT NOT NULL,
         message TEXT,
-        isMe INTEGER NOT NULL DEFAULT 0, 
+        isMe INTEGER NOT NULL DEFAULT 0,
         media_id INTEGER,
         type TEXT NOT NULL,
         status TEXT NOT NULL,
         timestamp TEXT NOT NULL,
         reply_to_id INTEGER,
+        reply_to_message TEXT,  -- Added for reply feature
         forwarded BOOLEAN NOT NULL DEFAULT FALSE,
         edited BOOLEAN NOT NULL DEFAULT FALSE,
         deleted BOOLEAN NOT NULL DEFAULT FALSE,
@@ -158,21 +158,27 @@ class DatabaseHelper {
         last_synced TEXT
       )
     ''');
+
+    // Add indexes for performance
+    await db
+        .execute('CREATE INDEX idx_messages_group_id ON messages(group_id)');
+    await db
+        .execute('CREATE INDEX idx_messages_timestamp ON messages(timestamp)');
   }
 
   // Handle schema upgrades
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
-      // Upgrade from version 1 to 2
       await db.execute(
           'ALTER TABLE messages ADD COLUMN isMe INTEGER NOT NULL DEFAULT 0');
     }
 
     if (oldVersion < 3) {
-      // Upgrade from version 2 to 3
-      await db.execute(
-          'ALTER TABLE messages ADD COLUMN isMe INTEGER NOT NULL DEFAULT 0');
       await db.execute('ALTER TABLE media ADD COLUMN thumbnail_path TEXT');
+    }
+
+    if (oldVersion < 4) {
+      await db.execute('ALTER TABLE messages ADD COLUMN reply_to_message TEXT');
     }
   }
 
@@ -181,63 +187,56 @@ class DatabaseHelper {
     return await db.insert('profile', user);
   }
 
-  // Insert a group
   Future<int> insertGroup(Map<String, dynamic> group) async {
     final db = await database;
     return await db.insert('groups', group);
   }
 
-  // Insert a participant
   Future<int> insertParticipant(Map<String, dynamic> participant) async {
     final db = await database;
     return await db.insert('participants', participant);
   }
 
-  // Insert a message
   Future<int> insertMessage(Map<String, dynamic> message) async {
     final db = await database;
 
-    // Ensure the timestamp is always set
-    final Map<String, dynamic> messageWithTimestamp = {
+    // Ensure the timestamp and reply fields are set
+    final Map<String, dynamic> messageWithDefaults = {
       ...message,
       'timestamp': message['timestamp'] ?? DateTime.now().toIso8601String(),
+      'reply_to_id': message['reply_to_id'],
+      'reply_to_message': message['reply_to_message'],
     };
 
-    // Insert the message into the database
     return await db.insert(
       'messages',
-      messageWithTimestamp,
+      messageWithDefaults,
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }
 
-  // Insert a contact
   Future<int> insertContact(Map<String, dynamic> contact) async {
     final db = await database;
     return await db.insert('contacts', contact);
   }
 
-  // Insert multiple contacts
   Future<void> insertContacts(List<Map<String, dynamic>> contacts) async {
     final db = await database;
     for (var contact in contacts) {
       await db.insert(
         'contacts',
         {
-          'id': contact['id'], // Ensure the ID is an int
-          'user_id':
-              contact['id'] ?? 'unknown', // Provide a default value for user_id
+          'id': contact['id'],
+          'user_id': contact['id'] ?? 'unknown',
           'name': contact['name'],
           'phone_number': contact['phone'],
-          'is_registered':
-              contact['is_registered'] == true ? 1 : 0, // Convert bool to int
+          'is_registered': contact['is_registered'] == true ? 1 : 0,
         },
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
     }
   }
 
-  // Insert an audio file
   Future<int> insertAudioFile(String filePath) async {
     final db = await database;
     return await db.insert(
@@ -255,7 +254,6 @@ class DatabaseHelper {
     );
   }
 
-  // Insert an image file
   Future<int> insertImageFile(String filePath) async {
     final db = await database;
     return await db.insert(
@@ -273,7 +271,6 @@ class DatabaseHelper {
     );
   }
 
-  // Insert an image message
   Future<int> insertImageMessage(Map<String, dynamic> message) async {
     final db = await database;
     return await db.insert(
@@ -283,38 +280,37 @@ class DatabaseHelper {
         'sender_id': message['sender_id'],
         'message': message['message'],
         'type': 'image',
-        'timestamp': message['timestamp'],
+        'timestamp': message['timestamp'] ?? DateTime.now().toIso8601String(),
         'media_id': message['media_id'],
+        'status': message['status'] ?? 'sent',
+        'isMe': message['isMe'] ?? 0,
+        'reply_to_id': message['reply_to_id'],
+        'reply_to_message': message['reply_to_message'],
       },
     );
   }
 
-  // Retrieve all contacts
   Future<List<Map<String, dynamic>>> getContacts() async {
     final db = await database;
     return await db.query('contacts');
   }
 
-  // Retrieve all users
   Future<List<Map<String, dynamic>>> getUsers() async {
     final db = await database;
     return await db.query('profile');
   }
 
-  // Retrieve all groups
   Future<List<Map<String, dynamic>>> getGroups() async {
     final db = await database;
     return await db.query('groups');
   }
 
-  // Retrieve all participants in a group
   Future<List<Map<String, dynamic>>> getParticipants(int groupId) async {
     final db = await database;
     return await db
         .query('participants', where: 'group_id = ?', whereArgs: [groupId]);
   }
 
-  // Retrieve all messages in a group
   Future<List<Map<String, dynamic>>> getMessages({
     int? groupId,
     int limit = 20,
@@ -323,31 +319,29 @@ class DatabaseHelper {
     final db = await database;
     final result = await db.query(
       'messages',
-      where: groupId != null ? 'group_id = ?' : null,
+      where: groupId != null ? 'group_id = ? AND deleted = 0' : 'deleted = 0',
       whereArgs: groupId != null ? [groupId] : null,
       limit: limit,
       offset: offset,
-      orderBy: 'timestamp ASC', // Fetch the most recent messages first
+      orderBy: 'timestamp DESC', // Changed to DESC for newest first
     );
     return result;
   }
 
-  // Retrieve a single media file by ID
   Future<Map<String, dynamic>?> getMedia(int mediaId) async {
     final db = await database;
     final media = await db.query(
       'media',
-      where: 'id = ?',
+      where: 'id = ? AND deleted = 0',
       whereArgs: [mediaId],
     );
     return media.isNotEmpty ? media.first : null;
   }
 
-  // Retrieve group member names
   Future<List<Map<String, String>>> getGroupMemberNames(int groupId) async {
     final db = await database;
     final result = await db.rawQuery('''
-    SELECT contacts.name, participants.role , contacts.phone_number
+    SELECT contacts.name, participants.role, contacts.phone_number
     FROM participants
     INNER JOIN contacts ON participants.user_id = contacts.user_id
     WHERE participants.group_id = ?
@@ -357,81 +351,98 @@ class DatabaseHelper {
         .map((row) => {
               'name': row['name'] as String,
               'role': row['role'] as String? ?? 'Member',
-              'phone_number': row['phone_number'] as String? ??
-                  'Member' // Default role if null
+              'phone_number': row['phone_number'] as String? ?? 'Unknown',
             })
         .toList();
   }
 
-// add member role
   Future<void> updateMemberRole(
       int groupId, String userId, String newRole) async {
     final db = await database;
-
-    // Create a map for the updated role
-    Map<String, dynamic> updateValues = {
-      'role': newRole,
-    };
-
-    // Perform the update query for the specific group and user
     await db.update(
-      'participants', // Table name
-      updateValues, // Values to update (only 'role' in this case)
-      where: 'group_id = ? AND user_id = ?', // Where condition
-      whereArgs: [groupId, userId], // Arguments for the where clause
+      'participants',
+      {'role': newRole},
+      where: 'group_id = ? AND user_id = ?',
+      whereArgs: [groupId, userId],
     );
   }
 
-  //Remove  member from group
+  Future<int> insertNotification({
+    required int groupId,
+    required String message,
+    String? senderId, // Optional, for cases like "Admin added X"
+  }) async {
+    final db = await database;
+    final notification = {
+      'group_id': groupId,
+      'sender_id':
+          senderId ?? 'system', // Use 'system' for automated notifications
+      'message': message,
+      'type': 'notification',
+      'status': 'delivered',
+      'timestamp': DateTime.now().toIso8601String(),
+      'isMe': 0, // Notifications aren't "sent" by the user
+      'reply_to_id': null,
+      'reply_to_message': null,
+    };
+    return await db.insert(
+      'messages',
+      notification,
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
   Future<int> deleteUser(String userId) async {
     final db = await database;
     return await db.delete('profile', where: 'id = ?', whereArgs: [userId]);
   }
 
-  // Delete a user
   Future<int> removeMember(int userId) async {
     final db = await database;
     return await db
         .delete('participants', where: 'id = ?', whereArgs: [userId]);
   }
 
-  // Delete a group
   Future<int> deleteGroup(int groupId) async {
     final db = await database;
     return await db.delete('groups', where: 'id = ?', whereArgs: [groupId]);
   }
 
-  // Delete a participant
   Future<int> deleteParticipant(int participantId) async {
     final db = await database;
     return await db
         .delete('participants', where: 'id = ?', whereArgs: [participantId]);
   }
 
-  // Delete a message
   Future<int> deleteMessage(int messageId) async {
     final db = await database;
-    return await db.delete('messages', where: 'id = ?', whereArgs: [messageId]);
+    return await db.update(
+      'messages',
+      {'deleted': true},
+      where: 'id = ?',
+      whereArgs: [messageId],
+    );
   }
 
-  // Clear all messages in a group
   Future<int> clearMessages(int groupId) async {
     final db = await database;
-    return await db
-        .delete('messages', where: 'group_id = ?', whereArgs: [groupId]);
+    return await db.update(
+      'messages',
+      {'deleted': true},
+      where: 'group_id = ?',
+      whereArgs: [groupId],
+    );
   }
 
-  // Retrieve all media for a group
   Future<List<Map<String, dynamic>>> getMediaForGroup(int groupId) async {
     final db = await database;
     return await db.rawQuery('''
       SELECT media.* FROM media
       INNER JOIN messages ON media.id = messages.media_id
-      WHERE messages.group_id = ?
+      WHERE messages.group_id = ? AND messages.deleted = 0 AND media.deleted = 0
     ''', [groupId]);
   }
 
-  // Delete media (soft delete)
   Future<int> deleteMedia(int mediaId) async {
     final db = await database;
     return await db.update(

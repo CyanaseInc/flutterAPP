@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart'; // Import the intl package
 import '../../../theme/theme.dart'; // Your custom theme file
 import './sample_goals.dart'; // Importing the SampleGoals widget
 import './portifolio.dart'; // Portfolio screen or logic
@@ -19,10 +20,8 @@ class PersonalTab extends StatefulWidget {
 }
 
 class _PersonalTabState extends State<PersonalTab> {
-  double _totalDepositUGX = 333330.0;
+  double _totalDepositUGX = 0.0;
   double _totalDepositUSD = 0.0;
-  double _totalUGX = 0.0;
-  double _totalUSD = 0.0;
   double _totalNetworthy = 0.0;
   String currency = ''; // Default currency
 
@@ -30,6 +29,12 @@ class _PersonalTabState extends State<PersonalTab> {
   void initState() {
     super.initState();
     _getDepositNetworth(); // Fetch data when the widget is initialized
+  }
+
+  // Helper function to format numbers with commas
+  String formatNumberWithCommas(double number) {
+    final formatter = NumberFormat('#,###');
+    return formatter.format(number);
   }
 
   Future<void> _getDepositNetworth() async {
@@ -43,28 +48,18 @@ class _PersonalTabState extends State<PersonalTab> {
         final userCountry = userProfile.first['country'] as String;
         final currencyCode = CurrencyHelper.getCurrencyCode(userCountry);
         final response = await ApiService.depositNetworth(token);
-
-        // Debug: Print the API response
+        final data = response['data'] ?? {};
 
         // Safely extract the required fields with null checks
-        final totalDepositUGX =
-            (response['totalDepositUGX'] as num?)?.toDouble() ?? 0.0;
-        final totalDepositUSD =
-            (response['totalDepositUSD'] as num?)?.toDouble() ?? 0.0;
-        final totalUGX = (response['totalUGX'] as num?)?.toDouble() ?? 0.0;
-        final totalUSD = (response['totalUSD'] as num?)?.toDouble() ?? 0.0;
-        final totalNetworthy =
-            (response['totalNetworthy'] as num?)?.toDouble() ?? 0.0;
-
-        // Debug: Print updated state
+        final totalDeposit =
+            (data['total_deposits'] as num?)?.toDouble() ?? 0.0;
+        final totalNetWorthy = (data['net_worth'] as num?)?.toDouble() ?? 0.0;
 
         // Update the state
         setState(() {
-          _totalDepositUGX = totalDepositUGX;
-          _totalDepositUSD = totalDepositUSD;
-          _totalUGX = totalUGX;
-          _totalUSD = totalUSD;
-          _totalNetworthy = totalNetworthy;
+          _totalDepositUGX = totalDeposit;
+          _totalDepositUSD = totalDeposit;
+          _totalNetworthy = totalNetWorthy;
           currency = currencyCode;
         });
       }
@@ -89,7 +84,7 @@ class _PersonalTabState extends State<PersonalTab> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => Portfolio(),
+                      builder: (context) => Portfolio(currency: currency),
                     ),
                   );
                 },
@@ -110,8 +105,8 @@ class _PersonalTabState extends State<PersonalTab> {
             const SizedBox(height: 20),
             // Total Deposits Card
             TotalDepositsCard(
-              depositLocal: _totalDepositUGX.toString(),
-              depositForeign: _totalDepositUSD.toString(),
+              depositLocal: formatNumberWithCommas(_totalDepositUGX),
+              depositForeign: formatNumberWithCommas(_totalDepositUSD),
               currency: currency,
             ),
             const SizedBox(height: 10),
@@ -120,12 +115,18 @@ class _PersonalTabState extends State<PersonalTab> {
             const SizedBox(height: 10),
             // Net Worth Card
             NetworthCard(
-              NetworthLocal: _totalNetworthy.toString(),
+              NetworthLocal: formatNumberWithCommas(_totalNetworthy),
               currency: currency,
-              NetworthForeign: _totalUSD.toString(),
+              NetworthForeign: formatNumberWithCommas(_totalDepositUSD),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 20),
             // Fund Manager Slider
+            Text('Investment options',
+                style: TextStyle(
+                  color: primaryTwo,
+                  fontSize: 20,
+                )),
+            const SizedBox(height: 12),
             FundManagerSlider(),
             const SizedBox(height: 10),
             // Goals Section

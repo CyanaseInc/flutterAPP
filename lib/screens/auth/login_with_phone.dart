@@ -5,13 +5,44 @@ import 'login_with_passcode.dart'; // Import the NumericLoginScreen
 import 'signup.dart'; // Import the SignupScreen
 import 'forgot.dart';
 import '../home/home.dart';
-
-import 'package:cyanase/helpers/database_helper.dart'; // Import the file containing fetchAndHashContacts and getRegisteredContacts
+import 'package:cyanase/helpers/database_helper.dart';
 import 'package:cyanase/helpers/loader.dart';
-import 'package:cyanase/helpers/api_helper.dart'; // Import the reusable function
+import 'package:cyanase/helpers/api_helper.dart';
+
+// Custom formatter to enforce '+' at the beginning
+class PhoneNumberFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+      TextEditingValue oldValue, TextEditingValue newValue) {
+    String text = newValue.text;
+
+    // Ensure '+' is always at the beginning
+    if (!text.startsWith('+')) {
+      text = '+$text';
+    }
+
+    // Remove any extra '+' signs after the first one
+    text = '+' + text.replaceAll('+', '');
+
+    if (text.length > 13) {
+      // Limit to +256XXXXXXXXXX (13 characters)
+      return oldValue;
+    }
+
+    return TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+  }
+}
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+  final bool? isEmailStored;
+
+  const LoginScreen({
+    super.key,
+    this.isEmailStored,
+  });
 
   @override
   _LoginScreenState createState() => _LoginScreenState();
@@ -21,39 +52,67 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
   String username = '';
   String password = '';
-  String countryCode = '256'; // Default country code
-  String phoneNumber = ''; // Store phone number separately
+  String countryCode = '+256'; // Default country code
+  String phoneNumber = '';
+  bool _passcode = false;
+  String _email = '';
+  bool _showPasscodeOption = false;
+  final TextEditingController _phoneController =
+      TextEditingController(text: '+256');
 
-  // State to track if login is in progress
+  @override
+  void initState() {
+    super.initState();
+    _checkEmailInDatabase();
+  }
+
+  Future<void> _checkEmailInDatabase() async {
+    try {
+      final dbHelper = DatabaseHelper();
+      final db = await dbHelper.database;
+      final profiles = await db.query('profile');
+
+      setState(() {
+        _showPasscodeOption = profiles.isNotEmpty;
+      });
+    } catch (e) {
+      print('Error checking database: $e');
+      setState(() {
+        _showPasscodeOption = false;
+      });
+    }
+  }
+
   Future<void> _handleLogin(String username, String password) async {
     setState(() {
-      _isLoading = true; // Show loader
+      _isLoading = true;
     });
 
-    // Validate that the username and password are not empty
+    // Ensure username starts with '+'
+    if (!username.startsWith('+')) {
+      username = '+$username';
+    }
+
     if (username.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('All fields are required')),
       );
       setState(() {
-        _isLoading = false; // Hide loader
+        _isLoading = false;
       });
-      return; // Exit early if validation fails
+      return;
     }
-
+    print('username $username password: $password');
     try {
-      // Perform login API request
       final loginResponse = await ApiService.login({
         'username': username,
         'password': password,
       });
 
-      // Check if the response indicates failure
       if (loginResponse.containsKey('success') && !loginResponse['success']) {
-        // Handle invalid credentials or other errors
         throw Exception(loginResponse['message'] ?? 'Login failed');
       }
-      // Check if the response contains the expected fields for a successful login
+
       if (loginResponse.containsKey('token') &&
           loginResponse.containsKey('user_id') &&
           loginResponse.containsKey('user')) {
@@ -61,26 +120,25 @@ class _LoginScreenState extends State<LoginScreen> {
         final userId = loginResponse['user_id'];
         final user = loginResponse['user'];
 
-        // Extract user details
         final email = user['email'];
         final userName = user['username'];
-
-        // Extract profile details
         final profile = user['profile'];
         final userCountry = profile['country'];
         final phoneNumber = profile['phoneno'];
         final isVerified = profile['is_verified'] ?? false;
+        final mypasscode = profile['passcode'] as String?;
+
+        setState(() {
+          _email = email;
+          _passcode = (mypasscode != null && mypasscode.isNotEmpty);
+        });
 
         if (isVerified) {
-          // Store only the required profile details in the database
           final dbHelper = DatabaseHelper();
           final db = await dbHelper.database;
-
-          // Check if the profile already exists
           final existingProfile = await db.query('profile');
 
           if (existingProfile.isNotEmpty) {
-            // Update the existing profile
             await db.update(
               'profile',
               {
@@ -93,7 +151,6 @@ class _LoginScreenState extends State<LoginScreen> {
               },
             );
           } else {
-            // Insert a new profile
             await db.insert(
               'profile',
               {
@@ -108,28 +165,28 @@ class _LoginScreenState extends State<LoginScreen> {
             );
           }
 
-          // Navigate to HomeScreen after successful login
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => HomeScreen(),
+              builder: (context) => HomeScreen(
+                passcode: _passcode,
+                email: _email,
+              ),
             ),
           );
         } else {
-          // Show bottom sheet to verify account
           _showVerificationBottomSheet(phoneNumber);
         }
       } else {
         throw Exception('Invalid login response: Missing required fields');
       }
     } catch (e) {
-      // Show error dialog
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: $e')),
       );
     } finally {
       setState(() {
-        _isLoading = false; // Hide loader
+        _isLoading = false;
       });
     }
   }
@@ -175,20 +232,15 @@ class _LoginScreenState extends State<LoginScreen> {
                         border: OutlineInputBorder(),
                       ),
                       onChanged: (value) {
-                        // Move to next field when a digit is entered
                         if (value.isNotEmpty && index < 5) {
                           FocusScope.of(context).nextFocus();
                         }
-
-                        // Check if all fields are filled, and auto-submit OTP
                         if (_controllers.every(
                             (controller) => controller.text.isNotEmpty)) {
-                          _submitOTP(
-                              phoneNumber); // Trigger OTP submission when all fields are filled
+                          _submitOTP(phoneNumber);
                         }
                       },
-                      controller:
-                          _controllers[index], // Add controllers for each field
+                      controller: _controllers[index],
                     ),
                   );
                 }),
@@ -197,7 +249,6 @@ class _LoginScreenState extends State<LoginScreen> {
               TextButton(
                 onPressed: () async {
                   try {
-                    // Call the API to resend verification code
                     await ApiService.post('resend_verification_code', {
                       'phone_number': phoneNumber,
                     });
@@ -222,17 +273,15 @@ class _LoginScreenState extends State<LoginScreen> {
               ElevatedButton(
                 onPressed: _isLoading ? null : () => _submitOTP(phoneNumber),
                 child: _isLoading
-                    ? Loader() // Show loading spinner instead of "Verify" text
+                    ? Loader()
                     : const Text('Verify',
                         style: TextStyle(color: primaryColor)),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: primaryTwo, // Set button background color
+                  backgroundColor: primaryTwo,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(15),
                   ),
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 15,
-                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 15),
                   minimumSize: const Size(double.infinity, 60),
                 ),
               ),
@@ -243,55 +292,40 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // Assuming these controllers and isLoading variable are declared globally
   List<TextEditingController> _controllers =
       List.generate(6, (_) => TextEditingController());
 
-  ///Handle verification
-
-  // Method to handle OTP submission
   Future<void> _submitOTP(String phoneNumber) async {
     setState(() {
-      _isLoading = true; // Show loader
+      _isLoading = true;
     });
 
     try {
-      // Join all OTP digits to form the complete OTP
       String otp = _controllers.map((controller) => controller.text).join('');
-
       Map<String, dynamic> userData = {
-        'username': phoneNumber, // Pass the email
-        'code': otp, // Pass the verification code
+        'username': phoneNumber,
+        'code': otp,
       };
       final response = await ApiService.VerificationEmail(userData);
-      // Call API to validate OTP
 
       if (response['success'] == true) {
-        // Close bottom sheet if successful
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Verification successful!'),
-          ),
+          const SnackBar(content: Text('Verification successful!')),
         );
       } else {
-        // Show error if verification failed
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Invalid code. Please try again.'),
-          ),
+          const SnackBar(content: Text('Invalid code. Please try again.')),
         );
       }
     } catch (e) {
-      print('Error verifying OTP: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Failed to verify OTP. Please try again.'),
-        ),
+            content: Text('Failed to verify OTP. Please try again.')),
       );
     } finally {
       setState(() {
-        _isLoading = false; // Hide loader after the request
+        _isLoading = false;
       });
     }
   }
@@ -307,83 +341,53 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // App Logo
                 Image.asset(
-                  'assets/images/logo.png', // Your logo image here
+                  'assets/images/logo.png',
                   height: 100,
                   width: 70,
                 ),
                 const SizedBox(height: 20),
-
-                // Welcome Note
                 const Text(
                   'Welcome to Cyanase!',
                   style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
-                    color: primaryTwo, // Use primaryColor color from theme
+                    color: primaryTwo,
                   ),
                 ),
                 const SizedBox(height: 40),
-
-                // Phone Number Field with Editable Country Code
-                Row(
-                  children: [
-                    // Country Code Field
-                    SizedBox(
-                      width: 80, // Fixed width for the country code field
-                      child: TextFormField(
-                        keyboardType: TextInputType.phone,
-                        inputFormatters: [
-                          FilteringTextInputFormatter
-                              .digitsOnly, // Only numbers
-                          LengthLimitingTextInputFormatter(
-                              3), // Max 3 digits for country code
-                        ],
-                        decoration: const InputDecoration(
-                          prefixText: '+', // Add '+' prefix
-                          prefixStyle: TextStyle(color: Colors.black),
-                          labelText: 'Code',
-                          border: UnderlineInputBorder(),
-                        ),
-                        onChanged: (value) {
-                          setState(() {
-                            countryCode = value; // Update country code
-                          });
-                        },
-                        initialValue: '256', // Default country code
-                      ),
-                    ),
-                    const SizedBox(width: 10), // Spacing between fields
-                    // Phone Number Field
-                    Expanded(
-                      child: TextFormField(
-                        keyboardType: TextInputType.phone,
-                        inputFormatters: [
-                          FilteringTextInputFormatter
-                              .digitsOnly, // Only numbers
-                          LengthLimitingTextInputFormatter(10), // Max 10 digits
-                        ],
-                        onChanged: (value) {
-                          setState(() {
-                            phoneNumber = value; // Update phone number
-                          });
-                        },
-                        decoration: const InputDecoration(
-                          labelText: 'Phone Number',
-                          border: UnderlineInputBorder(),
-                        ),
-                      ),
-                    ),
+                TextFormField(
+                  controller: _phoneController,
+                  keyboardType: TextInputType.phone,
+                  inputFormatters: [
+                    PhoneNumberFormatter(),
+                    LengthLimitingTextInputFormatter(13), // +256XXXXXXXXXX
                   ],
+                  decoration: const InputDecoration(
+                    labelText: 'Phone Number',
+                    prefixIcon: Icon(Icons.phone, color: primaryColor),
+                    border: UnderlineInputBorder(),
+                  ),
+                  onChanged: (value) {
+                    setState(() {
+                      if (value.startsWith('+')) {
+                        String stripped = value.substring(1);
+                        if (stripped.length >= 3) {
+                          countryCode = '+' + stripped.substring(0, 3);
+                          phoneNumber = stripped.substring(3);
+                        } else {
+                          countryCode = value;
+                          phoneNumber = '';
+                        }
+                      }
+                    });
+                  },
                 ),
                 const SizedBox(height: 20),
-
-                // Password Field
                 TextFormField(
                   obscureText: true,
                   onChanged: (value) {
-                    password = value; // Update password
+                    password = value;
                   },
                   decoration: const InputDecoration(
                     labelText: 'Password',
@@ -392,37 +396,34 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
                 const SizedBox(height: 40),
-
-                // Login Button
                 ElevatedButton(
                   onPressed: _isLoading
                       ? null
                       : () {
-                          // Combine country code and phone number to form the username
-                          if (countryCode.isEmpty || phoneNumber.isEmpty) {
+                          if (_phoneController.text.length < 4) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
-                                  content: Text('Please fill in all fields')),
+                                  content: Text(
+                                      'Please enter a valid phone number')),
                             );
                             return;
                           }
-                          username =
-                              '+$countryCode$phoneNumber'; // Combine into one value
-                          _handleLogin(
-                              username, password); // Call login function
+                          username = _phoneController.text;
+                          if (!username.startsWith('+')) {
+                            username = '+$username';
+                          }
+                          _handleLogin(username, password);
                         },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: primaryTwo, // Use primaryColor from theme
+                    backgroundColor: primaryTwo,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(15),
                     ),
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 15, // Same vertical padding as the input fields
-                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 15),
                     minimumSize: const Size(double.infinity, 60),
                   ),
                   child: _isLoading
-                      ? Loader() // Show loader when loading
+                      ? Loader()
                       : const Text(
                           'Login',
                           style: TextStyle(
@@ -433,50 +434,41 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                 ),
                 const SizedBox(height: 20),
-
-                // Forgot Password Text
                 GestureDetector(
                   onTap: () {
-                    // Navigate to Forgot Password screen
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => ForgotPasswordScreen(),
-                      ),
+                          builder: (context) => ForgotPasswordScreen()),
                     );
                   },
                   child: const Text(
                     'Forgot Password?',
                     style: TextStyle(
-                      color: primaryColor, // Use primaryColor from theme
+                      color: primaryColor,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                 ),
                 const SizedBox(height: 20),
-
-                // Passcode Login Text
-                GestureDetector(
-                  onTap: () {
-                    // Navigate to the Passcode Login screen
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const NumericLoginScreen(),
+                if (_showPasscodeOption)
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => const NumericLoginScreen()),
+                      );
+                    },
+                    child: const Text(
+                      'Login using Passcode?',
+                      style: TextStyle(
+                        color: primaryColor,
+                        fontWeight: FontWeight.bold,
                       ),
-                    );
-                  },
-                  child: const Text(
-                    'Login using Passcode?',
-                    style: TextStyle(
-                      color: primaryColor, // Use primaryColor from theme
-                      fontWeight: FontWeight.bold,
                     ),
                   ),
-                ),
                 const SizedBox(height: 20),
-
-                // Don't have an account? Register text
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -486,14 +478,13 @@ class _LoginScreenState extends State<LoginScreen> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => SignupScreen(),
-                          ),
+                              builder: (context) => SignupScreen()),
                         );
                       },
                       child: const Text(
                         'Sign Up',
                         style: TextStyle(
-                          color: primaryColor, // Use primaryColor from theme
+                          color: primaryColor,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -506,5 +497,14 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _phoneController.dispose();
+    for (var controller in _controllers) {
+      controller.dispose();
+    }
+    super.dispose();
   }
 }

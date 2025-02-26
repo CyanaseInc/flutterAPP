@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:awesome_notifications/awesome_notifications.dart'; // Add this import
+import 'package:awesome_notifications/awesome_notifications.dart';
 import '/screens/splash.dart'; // Splash screen widget
 import 'screens/auth/login_with_passcode.dart'; // Login screen
 import 'screens/auth/login_with_phone.dart'; // Your phone login screen (if needed)
@@ -8,7 +8,6 @@ import 'package:cyanase/helpers/database_helper.dart'; // Database helper
 
 // Class to handle background notification actions
 class NotificationHandler {
-  // Static method to handle background actions
   @pragma('vm:entry-point')
   static Future<void> onActionReceivedMethod(
       ReceivedAction receivedAction) async {
@@ -18,26 +17,23 @@ class NotificationHandler {
 }
 
 void main() async {
-  WidgetsFlutterBinding
-      .ensureInitialized(); // Ensure Flutter binding is initialized
+  WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize AwesomeNotifications
   await AwesomeNotifications().initialize(
-    null, // Use null for default app icon
+    null,
     [
       NotificationChannel(
         channelKey: 'scheduled_notifications',
         channelName: 'Scheduled Notifications',
         channelDescription: 'Notifications for saving goal reminders',
-        defaultColor: Color(0xFF9D50DD),
+        defaultColor: const Color(0xFF9D50DD),
         ledColor: Colors.white,
         importance: NotificationImportance.High,
       ),
     ],
-    debug: true, // Enable debug logs
+    debug: true,
   );
 
-  // Set the static method for background actions
   AwesomeNotifications().setListeners(
     onActionReceivedMethod: NotificationHandler.onActionReceivedMethod,
   );
@@ -52,8 +48,8 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Cyanase',
-      theme: appTheme, // Use the light theme from theme.dart
-      home: const SplashScreenWrapper(), // Start with the Splash Screen Wrapper
+      theme: appTheme,
+      home: const SplashScreenWrapper(),
     );
   }
 }
@@ -66,60 +62,60 @@ class SplashScreenWrapper extends StatefulWidget {
 }
 
 class _SplashScreenWrapperState extends State<SplashScreenWrapper> {
+  // Changed to nullable bool to match LoginScreen
+
   @override
   void initState() {
     super.initState();
-    _checkUserProfile(); // Initiating user profile check
+    _checkUserProfile();
   }
 
   Future<void> _checkUserProfile() async {
-    await Future.delayed(
-        const Duration(seconds: 3)); // Simulate splash screen duration
+    await Future.delayed(const Duration(seconds: 3));
 
     try {
       final dbHelper = DatabaseHelper();
       final db = await dbHelper.database;
 
-      // Query to check if the user profile exists
       List<Map> result = await db.query(
-        'profile', // Assuming 'profile' is your table name
+        'profile',
         where: 'email IS NOT NULL AND phone_number IS NOT NULL',
       );
 
-      // Navigate based on the result of the profile check
-      if (result.isNotEmpty) {
+      if (mounted) {
+        // Check if widget is still mounted
+        if (result.isNotEmpty) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const NumericLoginScreen(),
+            ),
+          );
+        } else {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const LoginScreen(),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('Error checking user profile: $e');
+      if (mounted) {
+        // Check if widget is still mounted
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (context) =>
-                const NumericLoginScreen(), // Navigate to NumericLoginScreen
-          ),
-        );
-      } else {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) =>
-                const LoginScreen(), // Navigate to LoginScreen
+            builder: (context) => const LoginScreen(),
           ),
         );
       }
-    } catch (e) {
-      // Handle errors (e.g., database not initialized, missing table, etc.)
-      print('Error checking user profile: $e');
-
-      // Fallback: Navigate to LoginScreen
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => const LoginScreen(),
-        ),
-      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return const SplashScreen(); // The splash screen widget
+    return const SplashScreen();
   }
 }

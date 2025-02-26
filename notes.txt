@@ -1,0 +1,4 @@
+Road Map
+-- Add hashing of contacts
+-- Add hashing based on country
+--- Fix withwdarw in the activity- portifolio

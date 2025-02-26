@@ -1,354 +1,464 @@
 import 'package:flutter/material.dart';
-import 'package:fl_chart/fl_chart.dart'; // For graph implementation
+import 'package:fl_chart/fl_chart.dart';
 import '../../../theme/theme.dart';
 import 'summary.dart';
 import 'investment_distribution.dart';
+import 'package:cyanase/helpers/database_helper.dart';
+import 'package:cyanase/helpers/api_helper.dart';
+import 'package:intl/intl.dart';
 
-class Portfolio extends StatelessWidget {
-  final List<Map<String, dynamic>> portfolios = [
-    {
-      'name': 'Bombo Land',
-      'deposit': 4000,
-      'netWorth': 4500,
-      'performance': [
-        FlSpot(0, 4000),
-        FlSpot(1, 4200),
-        FlSpot(2, 4300),
-        FlSpot(3, 4500)
-      ],
-    },
-    {
-      'name': 'Kampala Estate',
-      'deposit': 7000,
-      'netWorth': 8000,
-      'performance': [
-        FlSpot(0, 7000),
-        FlSpot(1, 7200),
-        FlSpot(2, 7500),
-        FlSpot(3, 8000)
-      ],
-    },
-    {
-      'name': 'Lake View Apartments',
-      'deposit': 5000,
-      'netWorth': 5200,
-      'performance': [
-        FlSpot(0, 5000),
-        FlSpot(1, 5100),
-        FlSpot(2, 5150),
-        FlSpot(3, 5200)
-      ],
-    },
-  ];
+class Portfolio extends StatefulWidget {
+  final String? currency;
+  const Portfolio({
+    super.key,
+    this.currency,
+  });
 
-  final List<Color> lineColors = [
+  @override
+  _PortfolioState createState() => _PortfolioState();
+}
+
+class _PortfolioState extends State<Portfolio> {
+  List<Map<String, dynamic>> portfolios = [];
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchPortfolioData();
+  }
+
+  Future<void> _fetchPortfolioData() async {
+    try {
+      final dbHelper = DatabaseHelper();
+      final db = await dbHelper.database;
+      final userProfile = await db.query('profile', limit: 1);
+
+      if (userProfile.isNotEmpty) {
+        final token = userProfile.first['token'] as String;
+        final response = await ApiService.depositNetworth(token);
+        final data = response['data'] ?? {};
+
+        final investmentPerformance =
+            data['investment_performance'] as List? ?? [];
+        final historyData = data['history'] as List? ?? [];
+
+        final referenceDate = DateTime(2000, 1, 1);
+
+        setState(() {
+          portfolios = investmentPerformance.map((item) {
+            final investmentId = item['investment_option_id'] as int?;
+            final history = historyData.firstWhere(
+              (historyItem) =>
+                  historyItem['investment_option_id'] == investmentId,
+              orElse: () => {'history': []},
+            )['history'] as List;
+
+            final performance = history.map((historyEntry) {
+              final date = DateTime.parse(historyEntry['date']);
+              final closingBalance = historyEntry['closing_balance'] as double;
+
+              final xValue = ((date.year - referenceDate.year) * 12) +
+                  (date.month - referenceDate.month);
+              // Use raw closing balance instead of scaling
+              final yValue = closingBalance;
+
+              return FlSpot(xValue.toDouble(), yValue);
+            }).toList();
+
+            print('Portfolio ${item['name']}: performance $performance');
+
+            return {
+              'name': item['name'] ?? 'Unknown',
+              'deposit': (item['deposits'] as num?)?.toDouble() ?? 0.0,
+              'netWorth': (item['networth'] as num?)?.toDouble() ?? 0.0,
+              'performance': performance,
+            };
+          }).toList();
+          isLoading = false;
+        });
+      }
+    } catch (e) {
+      print('Error fetching portfolio data: $e');
+      setState(() {
+        isLoading = false;
+      });
+    }
+  }
+
+  final List<Color> gradientColors = [
     primaryColor,
     primaryTwo,
     primaryDark,
     primaryTwoLight
   ];
 
+  final NumberFormat numberFormat = NumberFormat('#,###', 'en_US');
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: white,
-      appBar: AppBar(
-        title: const Text(
-          'Portfolio',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: primaryTwo,
-            fontSize: 25,
-          ),
-        ),
-        backgroundColor: white,
+      backgroundColor: Colors.grey[100],
+      body: CustomScrollView(
+        slivers: [
+          _buildSliverAppBar(),
+          SliverToBoxAdapter(child: SizedBox(height: 20)),
+          isLoading
+              ? SliverToBoxAdapter(
+                  child: Center(
+                      child: CircularProgressIndicator(color: primaryColor)),
+                )
+              : SliverToBoxAdapter(child: _buildPortfolioCarousel(context)),
+          SliverToBoxAdapter(child: SizedBox(height: 30)),
+          isLoading
+              ? SliverToBoxAdapter(child: SizedBox.shrink())
+              : SliverToBoxAdapter(child: _buildPerformanceSection()),
+          SliverToBoxAdapter(child: SizedBox(height: 30)),
+          isLoading
+              ? SliverToBoxAdapter(child: SizedBox.shrink())
+              : SliverToBoxAdapter(
+                  child: ActivitySummaryCard(portfolios: portfolios)),
+          SliverToBoxAdapter(child: SizedBox(height: 30)),
+          isLoading
+              ? SliverToBoxAdapter(child: SizedBox.shrink())
+              : SliverToBoxAdapter(
+                  child: InvestmentDistribution(portfolios: portfolios)),
+          SliverToBoxAdapter(child: SizedBox(height: 20)),
+        ],
       ),
-      body: SingleChildScrollView(
-        // Wrap the Column with SingleChildScrollView
+    );
+  }
+
+  Widget _buildSliverAppBar() {
+    return SliverAppBar(
+      expandedHeight: 60,
+      floating: false,
+      pinned: true,
+      backgroundColor: white,
+      elevation: 0,
+      title: Text(
+        'My Portfolio',
+        style: TextStyle(
+            fontWeight: FontWeight.bold, color: primaryTwo, fontSize: 18),
+      ),
+      bottom: PreferredSize(
+        preferredSize: Size.fromHeight(1),
+        child: Container(color: Colors.grey[300], height: 1),
+      ),
+    );
+  }
+
+  Widget _buildPortfolioCarousel(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxWidth = constraints.maxWidth * 0.9;
+        return Container(
+          height: 150,
+          child: PageView.builder(
+            controller: PageController(viewportFraction: 0.9),
+            itemCount: portfolios.length,
+            itemBuilder: (context, index) {
+              final portfolio = portfolios[index];
+              return Padding(
+                padding: EdgeInsets.symmetric(horizontal: 8),
+                child: _buildPortfolioCard(portfolio, index, maxWidth),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildPortfolioCard(
+      Map<String, dynamic> portfolio, int index, double maxWidth) {
+    return Card(
+      elevation: 8,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Container(
+        width: maxWidth,
+        decoration: BoxDecoration(
+          color: gradientColors[index % gradientColors.length],
+          borderRadius: BorderRadius.circular(20),
+        ),
+        padding: EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            const SizedBox(height: 40),
-            const Padding(
-              padding: EdgeInsets.all(16.0),
-              child: Text(
-                'Portfolio Breakdown',
-                style: TextStyle(
-                  fontSize: 18,
-                  color: primaryTwo,
-                ),
-              ),
-            ),
-            _buildScrollCards(),
-            const SizedBox(height: 20),
-            const Padding(
-              padding: EdgeInsets.all(16.0),
-              child: Text(
-                'Performance Overview',
-                style: TextStyle(
-                  fontSize: 18,
-                  color: primaryTwoLight,
-                ),
-              ),
-            ),
-
-            _buildPerformanceGraph(),
-            _buildLegend(),
-            ActivitySummaryCard(
-                portfolios: portfolios), // Use the new widget here
-            const Padding(
-              padding: EdgeInsets.all(16.0),
-              child: Text(
-                'Investment Distribution',
-                style: TextStyle(
-                  fontSize: 18,
-                  color: primaryTwoLight,
-                ),
-              ),
-            ),
-            InvestmentDistribution(portfolios: portfolios)
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPerformanceGraph() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-      child: SizedBox(
-        height: 250,
-        child: LineChart(
-          LineChartData(
-            gridData: FlGridData(show: false),
-            borderData: FlBorderData(
-              show: true,
-              border: const Border(
-                bottom: BorderSide(color: Colors.grey, width: 1),
-                left: BorderSide(color: Colors.grey, width: 1),
-              ),
-            ),
-            titlesData: FlTitlesData(
-              bottomTitles: AxisTitles(
-                sideTitles: SideTitles(
-                  showTitles: true,
-                  reservedSize: 22,
-                  getTitlesWidget: (value, meta) {
-                    return Padding(
-                      padding: const EdgeInsets.only(top: 4.0),
-                      child: Text(
-                        '${value.toInt()}',
-                        style:
-                            const TextStyle(fontSize: 12, color: Colors.grey),
-                      ),
-                    );
-                  },
-                ),
-              ),
-              leftTitles: AxisTitles(
-                sideTitles: SideTitles(
-                  showTitles: true,
-                  reservedSize: 36,
-                  getTitlesWidget: (value, meta) {
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 4.0),
-                      child: Text(
-                        '\$${value.toInt()}',
-                        style:
-                            const TextStyle(fontSize: 12, color: Colors.grey),
-                      ),
-                    );
-                  },
-                ),
-              ),
-              topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-              rightTitles:
-                  AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            ),
-            lineBarsData: portfolios.asMap().entries.map((entry) {
-              final index = entry.key;
-              final portfolio = entry.value;
-              return LineChartBarData(
-                spots: portfolio['performance'],
-                isCurved: true,
-                barWidth: 3,
-                color: lineColors[index % lineColors.length],
-                dotData: FlDotData(
-                  show: true,
-                  getDotPainter: (spot, percent, barData, index) =>
-                      FlDotCirclePainter(
-                    radius: 3,
-                    color: lineColors[index % lineColors.length],
-                    strokeWidth: 1.5,
-                    strokeColor: white,
-                  ),
-                ),
-                belowBarData: BarAreaData(
-                  show: true,
-                  color: lineColors[index % lineColors.length].withOpacity(0.2),
-                ),
-              );
-            }).toList(),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLegend() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-      child: Wrap(
-        spacing: 16.0,
-        runSpacing: 8.0,
-        children: portfolios.asMap().entries.map((entry) {
-          final index = entry.key;
-          final portfolio = entry.value;
-          return Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 12,
-                height: 12,
-                decoration: BoxDecoration(
-                  color: lineColors[index % lineColors.length],
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                portfolio['name'],
-                style: const TextStyle(fontSize: 12, color: Colors.grey),
-              ),
-            ],
-          );
-        }).toList(),
-      ),
-    );
-  }
-
-  Widget _buildScrollCards() {
-    return SizedBox(
-      height: 180,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16.0),
-        itemCount: portfolios.length,
-        itemBuilder: (context, index) {
-          final portfolio = portfolios[index];
-          return _buildCard(
-            portfolio['name'],
-            '${portfolio['deposit']}',
-            '${portfolio['netWorth']}',
-            primaryTwo,
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildCard(
-      String title, String deposit, String netWorth, Color color) {
-    return Container(
-      margin: const EdgeInsets.only(right: 16.0),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.end, // Right-align all content
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            // Title of the portfolio
             Text(
-              title,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: white,
-              ),
-              textAlign: TextAlign.right,
+              portfolio['name'],
+              style: TextStyle(
+                  fontSize: 20, fontWeight: FontWeight.bold, color: white),
             ),
-            const SizedBox(height: 16),
-            // Portfolio details (Deposit and Net Worth)
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end, // Right-align text
+            SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  'Deposit:',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: white,
-                  ),
-                  textAlign: TextAlign.right,
-                ),
-                Text.rich(
-                  TextSpan(
-                    children: [
-                      WidgetSpan(
-                        child: Transform.translate(
-                          offset: const Offset(0, -6),
-                          child: Text(
-                            'UGX',
-                            style: const TextStyle(
-                              fontSize: 8,
-                              color: white,
-                            ),
-                          ),
-                        ),
-                      ),
-                      TextSpan(
-                        text: deposit,
-                        style: const TextStyle(
-                          fontSize: 20,
-                          color: white,
-                        ),
-                      ),
-                    ],
-                  ),
-                  textAlign: TextAlign.right,
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  'Net Worth:',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: white,
-                  ),
-                  textAlign: TextAlign.right,
-                ),
-                Text.rich(
-                  TextSpan(
-                    children: [
-                      WidgetSpan(
-                        child: Transform.translate(
-                          offset: const Offset(0, -6),
-                          child: Text(
-                            'UGX',
-                            style: const TextStyle(
-                              fontSize: 10,
-                              color: white,
-                            ),
-                          ),
-                        ),
-                      ),
-                      TextSpan(
-                        text: netWorth,
-                        style: const TextStyle(
-                          fontSize: 22,
-                          color: white,
-                        ),
-                      ),
-                    ],
-                  ),
-                  textAlign: TextAlign.right,
-                ),
+                Flexible(
+                    child: _buildValueWidget('Deposit', portfolio['deposit'])),
+                SizedBox(width: 16),
+                Flexible(
+                    child:
+                        _buildValueWidget('Net Worth', portfolio['netWorth'])),
               ],
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildValueWidget(String label, double value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(color: white.withOpacity(0.8), fontSize: 12),
+        ),
+        SizedBox(height: 4),
+        Text.rich(
+          TextSpan(
+            children: [
+              TextSpan(
+                  text: '${widget.currency ?? "UGX"} ',
+                  style: TextStyle(color: white, fontSize: 12)),
+              TextSpan(
+                text: numberFormat.format(value),
+                style: TextStyle(
+                    color: white, fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPerformanceSection() {
+    double minX = double.infinity;
+    double maxX = double.negativeInfinity;
+    double minY = double.infinity;
+    double maxY = double.negativeInfinity;
+
+    for (final portfolio in portfolios) {
+      final List<FlSpot> performance = portfolio['performance'];
+      if (performance.isEmpty) continue;
+      for (final spot in performance) {
+        if (spot.x < minX) minX = spot.x;
+        if (spot.x > maxX) maxX = spot.x;
+        if (spot.y < minY) minY = spot.y;
+        if (spot.y > maxY) maxY = spot.y;
+      }
+    }
+
+    final hasData = minX != double.infinity &&
+        maxX != double.negativeInfinity &&
+        minY != double.infinity &&
+        maxY != double.negativeInfinity;
+
+    if (!hasData) {
+      return Center(
+        child: Text(
+          'No performance data available',
+          style: TextStyle(fontSize: 16, color: Colors.grey),
+        ),
+      );
+    }
+
+    final xRange = maxX - minX;
+    final yRange = maxY - minY;
+
+    if (xRange == 0) {
+      minX -= 1;
+      maxX += 1;
+    }
+    if (yRange == 0) {
+      final yBuffer = (maxY.abs() * 0.1)
+          .clamp(1000.0, double.infinity); // Larger buffer for investments
+      minY -= yBuffer;
+      maxY += yBuffer;
+    }
+
+    final xPadding = xRange * 0.1;
+    final yPadding = yRange * 0.2;
+    minX -= xPadding;
+    maxX += xPadding;
+    minY -= yPadding;
+    maxY += yPadding;
+
+    // Ensure minY is non-negative for investment data
+    if (minY < 0) minY = 0;
+
+    // Dynamic intervals with finer granularity for small changes
+    final xInterval = (maxX - minX) / 5;
+    final yInterval = yRange > 100000
+        ? yRange / 5
+        : yRange / 10; // More steps for smaller ranges
+
+    print('Chart ranges: minX=$minX, maxX=$maxX, minY=$minY, maxY=$maxY');
+    print('Intervals: xInterval=$xInterval, yInterval=$yInterval');
+
+    return Container(
+      margin: EdgeInsets.symmetric(horizontal: 16),
+      padding: EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.grey.withOpacity(0.2),
+              spreadRadius: 2,
+              blurRadius: 8),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Performance Overview',
+            style: TextStyle(
+                fontSize: 20, fontWeight: FontWeight.bold, color: primaryTwo),
+          ),
+          SizedBox(height: 16),
+          SizedBox(
+            height: 200,
+            child: LineChart(
+              LineChartData(
+                gridData: FlGridData(
+                  show: true,
+                  drawVerticalLine: true,
+                  getDrawingHorizontalLine: (value) => FlLine(
+                    color: Colors.grey.withOpacity(0.1),
+                    strokeWidth: 1,
+                  ),
+                  getDrawingVerticalLine: (value) => FlLine(
+                    color: Colors.grey.withOpacity(0.1),
+                    strokeWidth: 1,
+                  ),
+                ),
+                borderData: FlBorderData(
+                    show: true, border: Border.all(color: Colors.grey)),
+                titlesData: FlTitlesData(
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 20,
+                      interval: xInterval,
+                      getTitlesWidget: (value, meta) {
+                        if (value < minX || value > maxX)
+                          return SizedBox.shrink();
+                        final referenceDate = DateTime(2000, 1, 1);
+                        final date = DateTime(
+                          referenceDate.year + (value ~/ 12),
+                          referenceDate.month + (value % 12).toInt(),
+                        );
+                        return Text(
+                          DateFormat('MMMyy').format(date),
+                          style: TextStyle(fontSize: 10, color: Colors.grey),
+                        );
+                      },
+                    ),
+                  ),
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 40,
+                      interval: yInterval,
+                      getTitlesWidget: (value, meta) {
+                        if (value < minY || value > maxY)
+                          return SizedBox.shrink();
+                        if (value.abs() >= 1000000) {
+                          return Text(
+                            '${(value / 1000000).toStringAsFixed(1)}M',
+                            style: TextStyle(fontSize: 10, color: Colors.grey),
+                          );
+                        } else if (value.abs() >= 1000) {
+                          return Text(
+                            '${(value / 1000).toStringAsFixed(1)}k',
+                            style: TextStyle(fontSize: 10, color: Colors.grey),
+                          );
+                        }
+                        return Text(
+                          value.toStringAsFixed(0),
+                          style: TextStyle(fontSize: 10, color: Colors.grey),
+                        );
+                      },
+                    ),
+                  ),
+                  topTitles:
+                      AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  rightTitles:
+                      AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                ),
+                lineBarsData: portfolios.asMap().entries.map((entry) {
+                  final index = entry.key;
+                  final spots = entry.value['performance'] as List<FlSpot>;
+                  if (spots.length < 2) {
+                    return LineChartBarData(
+                      spots: spots,
+                      isCurved: false,
+                      barWidth: 3,
+                      color: gradientColors[index % gradientColors.length],
+                      dotData: FlDotData(show: true),
+                      belowBarData: BarAreaData(show: false),
+                    );
+                  }
+                  return LineChartBarData(
+                    spots: spots,
+                    isCurved: true,
+                    barWidth: 3,
+                    color: gradientColors[index % gradientColors.length],
+                    dotData: FlDotData(show: false),
+                    belowBarData: BarAreaData(
+                      show: true,
+                      gradient: LinearGradient(
+                        colors: [
+                          gradientColors[index % gradientColors.length]
+                              .withOpacity(0.3),
+                          gradientColors[index % gradientColors.length]
+                              .withOpacity(0),
+                        ],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                      ),
+                    ),
+                  );
+                }).toList(),
+                minX: minX,
+                maxX: maxX,
+                minY: minY,
+                maxY: maxY,
+              ),
+            ),
+          ),
+          SizedBox(height: 16),
+          Wrap(
+            spacing: 16,
+            children: portfolios.asMap().entries.map((entry) {
+              final index = entry.key;
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: gradientColors[index % gradientColors.length],
+                    ),
+                  ),
+                  SizedBox(width: 8),
+                  Text(
+                    entry.value['name'],
+                    style: TextStyle(color: Colors.grey[700], fontSize: 12),
+                  ),
+                ],
+              );
+            }).toList(),
+          ),
+        ],
       ),
     );
   }

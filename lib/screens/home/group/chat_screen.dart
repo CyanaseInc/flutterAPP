@@ -1,18 +1,17 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:cyanase/helpers/loader.dart';
+import 'package:cyanase/screens/home/group/functions/sort_message_ui_function.dart';
 import 'package:flutter/material.dart';
 import 'package:cyanase/theme/theme.dart';
 import 'package:cyanase/helpers/database_helper.dart';
-import 'package:cyanase/helpers/date_helper.dart'; // Import the date formatter
 import './functions/audio_function.dart';
 import './functions/message_function.dart';
 import 'package:cyanase/screens/home/group/group_deposit.dart';
-import 'chat_app_bar.dart'; // Import the AppBar
-import 'message_chat.dart'; // Import the MessageChat widget
-import 'chat_input.dart'; // Import the InputArea
-import 'full_screen_image_viewer.dart'; // Import the FullScreenImage widget
-import './functions/sort_message_ui_function.dart'; // Import MessageUtils
+import 'chat_app_bar.dart';
+import 'message_chat.dart';
+import 'chat_input.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 class MessageChatScreen extends StatefulWidget {
@@ -23,13 +22,13 @@ class MessageChatScreen extends StatefulWidget {
   final VoidCallback? onMessageSent;
 
   const MessageChatScreen({
-    Key? key,
+    super.key,
     required this.name,
     required this.profilePic,
     this.isGroup = true,
     this.groupId,
     this.onMessageSent,
-  }) : super(key: key);
+  });
 
   @override
   _MessageChatScreenState createState() => _MessageChatScreenState();
@@ -40,56 +39,69 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
   final AudioFunctions _audioFunctions = AudioFunctions();
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  String? _replyingToMessage;
-  final List<Map<String, dynamic>> messages = [];
+  Map<String, dynamic>? _replyingToMessage;
   final String currentUserId = "current_user_id";
   bool _isRecording = false;
   Duration _recordingDuration = Duration.zero;
   final DatabaseHelper _dbHelper = DatabaseHelper();
   List<String> _memberNames = [];
 
-  List<Map<String, dynamic>> _messages = []; // Store all messages
+  List<Map<String, dynamic>> _messages = [];
   Map<String, bool> _isPlayingMap = {};
   Map<String, Duration> _audioDurationMap = {};
   Map<String, Duration> _audioPositionMap = {};
 
   Timer? _recordingTimer;
-  String? _lastMessageId;
   bool _showScrollToBottomButton = false;
   String? _currentDateHeader;
 
-  bool _isLoading = false;
+  bool _isLoading = true;
   bool _hasMoreMessages = true;
   int _currentPage = 0;
   final int _messagesPerPage = 20;
 
-  Map<String, List<Map<String, dynamic>>> _groupedMessages =
-      {}; // Grouped messages by date
+  Map<String, List<Map<String, dynamic>>> _groupedMessages = {};
 
   @override
   void initState() {
     super.initState();
     _loadGroupMembers();
+    _loadMessages();
     _scrollController.addListener(_onScroll);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scrollToLastMessage();
-    });
-    _loadMessages(); // Load initial messages
   }
 
   @override
   void dispose() {
-    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    _controller.dispose();
+    _recordingTimer?.cancel();
+    _audioFunctions.dispose();
     super.dispose();
   }
 
-  void _scrollToLastMessage() {
+  void _scrollToBottom() {
     if (_scrollController.hasClients) {
       _scrollController.animateTo(
         _scrollController.position.maxScrollExtent,
-        duration: Duration(milliseconds: 300),
+        duration: const Duration(milliseconds: 300),
         curve: Curves.easeOut,
       );
+      // Immediately hide the button after scrolling to bottom
+      setState(() => _showScrollToBottomButton = false);
+    }
+  }
+
+  void _scrollToBottomIfAtBottom() {
+    if (_scrollController.hasClients) {
+      final bool isAtBottom = _scrollController.position.pixels >=
+          _scrollController.position.maxScrollExtent - 50; // 50px tolerance
+      if (isAtBottom) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
     }
   }
 
@@ -111,14 +123,10 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
   }
 
   Future<void> _loadMessages() async {
-    if (_isLoading || !_hasMoreMessages) return;
-
-    setState(() {
-      _isLoading = true;
-    });
+    print('Loading messages for group: ${widget.groupId}');
+    setState(() => _isLoading = true);
 
     try {
-      // Fetch the next page of messages
       final newMessages = await _messageFunctions.getMessages(
         widget.groupId,
         limit: _messagesPerPage,
@@ -126,163 +134,172 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
       );
 
       if (newMessages.isEmpty) {
-        setState(() {
-          _hasMoreMessages = false;
-        });
+        setState(() => _hasMoreMessages = false);
       } else {
         setState(() {
-          _messages.addAll(newMessages); // Append new messages to the end
-          _groupedMessages = MessageUtils.groupMessagesByDate(_messages);
+          _messages.addAll(newMessages);
+          _messages = MessageSort.sortMessagesByDate(
+              _messages); // Updated to use MessageSort
+          _groupedMessages = MessageSort.groupMessagesByDate(
+              _messages); // Updated to use MessageSort
           _currentPage++;
+          print('Grouped messages: ${_groupedMessages.keys}');
         });
       }
     } catch (e) {
       print("Error loading messages: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error loading messages: $e")),
+      );
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
-    }
-  }
-
-  Future<Duration> getAudioDuration(String path) async {
-    final audioPlayer = AudioPlayer();
-    try {
-      await audioPlayer.setSource(DeviceFileSource(path));
-      final duration = await audioPlayer.getDuration();
-      return duration ?? Duration.zero;
-    } catch (e) {
-      return Duration.zero;
+      setState(() => _isLoading = false);
+      if (_currentPage == 1) _scrollToBottom();
     }
   }
 
   void _onScroll() {
-    if (_scrollController.position.pixels ==
-            _scrollController.position.minScrollExtent &&
-        !_isLoading &&
-        _hasMoreMessages) {
-      // User has scrolled to the top, load older messages
-      _loadMessages();
+    if (_scrollController.hasClients) {
+      final double currentPosition = _scrollController.position.pixels;
+      final double maxScrollExtent = _scrollController.position.maxScrollExtent;
+
+      // Calculate the approximate number of messages below the current view
+      // Assuming each message takes about 80 pixels (adjust this based on your MessageChat height)
+      final double viewportHeight =
+          _scrollController.position.viewportDimension;
+      final double remainingScrollDistance = maxScrollExtent - currentPosition;
+      final int messagesBelow =
+          (remainingScrollDistance / 80).ceil(); // Approximate messages below
+
+      // Check if the user is at the bottom (within 10px tolerance)
+      final bool isAtBottom = currentPosition >= maxScrollExtent - 10;
+
+      setState(() {
+        // Show button only if there are 10 or more messages below and not at bottom
+        _showScrollToBottomButton = messagesBelow >= 10 && !isAtBottom;
+        _updateFloatingDateHeader();
+      });
+
+      // Load more messages if at the top and there are more to load
+      if (currentPosition == maxScrollExtent &&
+          !_isLoading &&
+          _hasMoreMessages) {
+        _loadMessages();
+      }
     }
   }
 
-  void _sendImageMessage(String imagePath) async {
-    try {
-      // Add the image message to the local list immediately
-      final newMessage = {
-        "id": DateTime.now().millisecondsSinceEpoch, // Temporary ID
-        "group_id": widget.groupId,
-        "sender_id": "current_user_id", // Replace with actual user ID
-        "message": imagePath,
-        "type": "image",
-        "timestamp": DateTime.now().toIso8601String(),
-        "media_id": null, // Will be updated after inserting into the database
-        "status": "sent",
-      };
+  void _updateFloatingDateHeader() {
+    if (_scrollController.hasClients) {
+      final offset = _scrollController.offset;
+      String? newHeader;
 
-      setState(() {
-        _messages.add(newMessage); // Add the message to the local list
-        _groupedMessages = MessageUtils.groupMessagesByDate(_messages);
-      });
+      for (final dateKey in _groupedMessages.keys.toList().reversed) {
+        final messages = _groupedMessages[dateKey]!;
+        final firstMessageIndex = _messages.indexOf(messages.last);
+        final lastMessageIndex = _messages.indexOf(messages.first);
 
-      // Scroll to the last message
-      _scrollToLastMessage();
-      double _getMessageOffset(Map<String, dynamic> message) {
-        // Calculate the offset of a message in the list
-        // This is a simplified example; you may need to adjust it based on your UI
-        final index = _messages.indexOf(message);
-        return index * 100.0; // Adjust based on your message height
-      }
+        final firstMessageOffset =
+            (_messages.length - firstMessageIndex - 1) * 80.0;
+        final lastMessageOffset =
+            (_messages.length - lastMessageIndex - 1) * 80.0;
 
-      void _updateFloatingDateHeader() {
-        if (_scrollController.hasClients) {
-          final offset = _scrollController.offset;
-
-          // Find the visible messages and update the date header
-          for (final dateKey in _groupedMessages.keys) {
-            final messages = _groupedMessages[dateKey]!;
-            final firstMessage = messages.first;
-            final lastMessage = messages.last;
-
-            final firstMessageOffset = _getMessageOffset(firstMessage);
-            final lastMessageOffset = _getMessageOffset(lastMessage);
-
-            if (offset >= firstMessageOffset && offset <= lastMessageOffset) {
-              setState(() {
-                _currentDateHeader = dateKey;
-              });
-              break;
-            }
-          }
+        if (offset >= firstMessageOffset &&
+            offset <= lastMessageOffset + 80.0) {
+          newHeader = dateKey;
+          break;
         }
       }
 
-      // Insert the image into the database
-      final mediaId = await _dbHelper.insertImageFile(imagePath);
-      await _dbHelper.insertMessage({
-        ...newMessage,
-        "media_id": mediaId, // Update with the actual media ID
-      });
-
-      if (widget.onMessageSent != null) {
-        widget.onMessageSent!();
+      if (newHeader == null && _groupedMessages.isNotEmpty) {
+        newHeader = _groupedMessages.keys.last;
       }
+
+      if (newHeader != _currentDateHeader) {
+        setState(() => _currentDateHeader = newHeader);
+      }
+    }
+  }
+
+  void _setReplyMessage(Map<String, dynamic> message) {
+    setState(() {
+      _replyingToMessage = {
+        'id': message['id'],
+        'message': message['message'],
+        'sender_id': message['sender_id'],
+      };
+    });
+  }
+
+  Future<void> _sendImageMessage(String imagePath) async {
+    try {
+      final newMessage = {
+        "id": DateTime.now().millisecondsSinceEpoch,
+        "group_id": widget.groupId,
+        "sender_id": currentUserId,
+        "message": imagePath,
+        "type": "image",
+        "timestamp": DateTime.now().toIso8601String(),
+        "media_id": null,
+        "status": "sent",
+        "isMe": 1,
+        "reply_to_id": _replyingToMessage?['id'],
+        "reply_to_message": _replyingToMessage?['message'],
+      };
+
+      setState(() {
+        _messages.add(newMessage);
+        _groupedMessages = MessageSort.groupMessagesByDate(_messages);
+        _replyingToMessage = null;
+      });
+      _scrollToBottomIfAtBottom();
+
+      final mediaId = await _dbHelper.insertImageFile(imagePath);
+      await _dbHelper.insertMessage({...newMessage, "media_id": mediaId});
+
+      widget.onMessageSent?.call();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text("Failed to send image message: ${e.toString()}")),
+        SnackBar(content: Text("Failed to send image: $e")),
       );
     }
   }
 
-  void _sendMessage() async {
+  Future<void> _sendMessage() async {
     if (_controller.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Message cannot be empty")),
+        const SnackBar(content: Text("Message cannot be empty")),
       );
       return;
     }
 
     try {
-      final String messageText = _controller.text.trim();
-
-      // Create the new message data
+      final messageText = _controller.text.trim();
       final newMessage = {
-        "id": DateTime.now().millisecondsSinceEpoch, // Temporary ID
+        "id": DateTime.now().millisecondsSinceEpoch,
         "group_id": widget.groupId,
-        "sender_id": "current_user_id", // Replace with actual user ID
+        "sender_id": currentUserId,
         "message": messageText,
         "type": "text",
         "timestamp": DateTime.now().toIso8601String(),
         "status": "sent",
-        "isMe": 1, // Mark as sent by the current user
+        "isMe": 1,
+        "reply_to_id": _replyingToMessage?['id'],
+        "reply_to_message": _replyingToMessage?['message'],
       };
 
-      // Add the new message to the local list immediately
       setState(() {
-        _messages.add(newMessage); // Add to the main messages list
-        _groupedMessages = MessageUtils.groupMessagesByDate(
-            _messages); // Update grouped messages
+        _messages.add(newMessage);
+        _groupedMessages = MessageSort.groupMessagesByDate(_messages);
+        _replyingToMessage = null;
       });
-      // Clear the input field
       _controller.clear();
-      // Clear the input field
-      _controller.clear();
+      _scrollToBottomIfAtBottom();
 
-      // Insert the message into the database
       await _dbHelper.insertMessage(newMessage);
-
-      // Notify the parent widget (if needed)
-      if (widget.onMessageSent != null) {
-        widget.onMessageSent!();
-      }
-
-      // Scroll to the last message
-      _scrollToLastMessage();
+      widget.onMessageSent?.call();
     } catch (e) {
-      print("Error sending text message: $e");
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Failed to send text message: ${e.toString()}")),
+        SnackBar(content: Text("Failed to send message: $e")),
       );
     }
   }
@@ -293,53 +310,30 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
       _isRecording = true;
       _recordingDuration = Duration.zero;
     });
-
-    _recordingTimer = Timer.periodic(Duration(seconds: 1), (timer) {
-      setState(() {
-        _recordingDuration += Duration(seconds: 1);
-      });
+    _recordingTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      setState(() => _recordingDuration += const Duration(seconds: 1));
     });
-  }
-
-  void _scrollToBottom() {
-    if (_scrollController.hasClients) {
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
-        duration: Duration(milliseconds: 300),
-        curve: Curves.easeOut,
-      );
-    }
   }
 
   Future<void> _stopRecording() async {
     try {
-      // Stop the recording
       final path = await _audioFunctions.stopRecording();
-
-      // Cancel the recording timer
       _recordingTimer?.cancel();
-      _recordingTimer = null;
-
-      // Update the state to reflect that recording has stopped
       setState(() {
         _isRecording = false;
         _recordingDuration = Duration.zero;
       });
-
-      // Send the audio message if the file exists
-      if (path != null) {
-        await _sendAudioMessage(path);
-      }
+      if (path != null) await _sendAudioMessage(path);
     } catch (e) {
-      print("Error stopping recording: $e");
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Failed to stop recording: ${e.toString()}")),
+        SnackBar(content: Text("Failed to stop recording: $e")),
       );
     }
   }
 
   void _cancelRecording() async {
     await _audioFunctions.stopRecording();
+    _recordingTimer?.cancel();
     setState(() {
       _isRecording = false;
       _recordingDuration = Duration.zero;
@@ -348,54 +342,43 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
 
   Future<void> _sendAudioMessage(String path) async {
     try {
-      // Add the audio message to the local list immediately
       final newMessage = {
-        "id": DateTime.now().millisecondsSinceEpoch, // Temporary ID
+        "id": DateTime.now().millisecondsSinceEpoch,
         "group_id": widget.groupId,
-        "sender_id": "current_user_id", // Replace with actual user ID
+        "sender_id": currentUserId,
         "message": path,
         "type": "audio",
         "timestamp": DateTime.now().toIso8601String(),
-        "media_id": null, // Will be updated after inserting into the database
+        "media_id": null,
         "status": "sent",
+        "isMe": 1,
+        "reply_to_id": _replyingToMessage?['id'],
+        "reply_to_message": _replyingToMessage?['message'],
       };
 
       setState(() {
-        _messages.add(newMessage); // Add the message to the local list
-        _groupedMessages = MessageUtils.groupMessagesByDate(_messages);
+        _messages.add(newMessage);
+        _groupedMessages = MessageSort.groupMessagesByDate(_messages);
+        _replyingToMessage = null;
       });
+      _scrollToBottomIfAtBottom();
 
-      // Scroll to the last message
-      _scrollToLastMessage();
-
-      // Insert the audio file into the database
       final mediaId = await _dbHelper.insertAudioFile(path);
-      await _dbHelper.insertMessage({
-        ...newMessage,
-        "media_id": mediaId, // Update with the actual media ID
-      });
+      await _dbHelper.insertMessage({...newMessage, "media_id": mediaId});
 
-      if (widget.onMessageSent != null) {
-        widget.onMessageSent!();
-      }
+      widget.onMessageSent?.call();
     } catch (e) {
-      print("Error sending audio message: $e");
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content: Text("Failed to send audio message: ${e.toString()}")),
+        SnackBar(content: Text("Failed to send audio: $e")),
       );
     }
   }
 
   void _playAudio(dynamic messageId, String path) async {
-    // Convert messageId to String if it's an int
-    final String messageIdStr = messageId.toString();
-
+    final messageIdStr = messageId.toString();
     if (_isPlayingMap[messageIdStr] ?? false) {
       await _audioFunctions.pauseAudio();
-      setState(() {
-        _isPlayingMap[messageIdStr] = false;
-      });
+      setState(() => _isPlayingMap[messageIdStr] = false);
     } else {
       for (var id in _isPlayingMap.keys) {
         if (_isPlayingMap[id] == true && id != messageIdStr) {
@@ -408,29 +391,19 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
       }
 
       await _audioFunctions.playAudio(path);
-
       _audioFunctions.onPositionChanged((position) {
-        setState(() {
-          _audioPositionMap[messageIdStr] = position;
-        });
+        setState(() => _audioPositionMap[messageIdStr] = position);
       });
-
       _audioFunctions.onDurationChanged((duration) {
-        setState(() {
-          _audioDurationMap[messageIdStr] = duration;
-        });
+        setState(() => _audioDurationMap[messageIdStr] = duration);
       });
-
       _audioFunctions.onPlayerComplete(() {
         setState(() {
           _isPlayingMap[messageIdStr] = false;
           _audioPositionMap[messageIdStr] = Duration.zero;
         });
       });
-
-      setState(() {
-        _isPlayingMap[messageIdStr] = true;
-      });
+      setState(() => _isPlayingMap[messageIdStr] = true);
     }
   }
 
@@ -455,9 +428,7 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
           );
         },
         onBackPressed: () {
-          if (widget.onMessageSent != null) {
-            widget.onMessageSent!();
-          }
+          widget.onMessageSent?.call();
           Navigator.pop(context);
         },
       ),
@@ -471,75 +442,90 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
             ),
           ),
           NotificationListener<ScrollNotification>(
-            onNotification: (ScrollNotification scrollInfo) {
-              if (scrollInfo.metrics.pixels ==
-                      scrollInfo.metrics.minScrollExtent &&
-                  !_isLoading &&
-                  _hasMoreMessages) {
-                // User has scrolled to the top, load older messages
-                _loadMessages();
-              }
+            onNotification: (scrollInfo) {
+              _onScroll();
               return true;
             },
             child: ListView.builder(
               controller: _scrollController,
-              reverse: true, // Display most recent messages at the bottom
-              padding: EdgeInsets.only(top: 16, bottom: 80),
-              itemCount:
-                  _groupedMessages.length + 1, // +1 for the loading indicator
+              reverse: true,
+              padding: const EdgeInsets.only(top: 16, bottom: 80),
+              itemCount: _groupedMessages.length + 1,
               itemBuilder: (context, index) {
                 if (index == _groupedMessages.length) {
-                  // Show loading indicator at the top
                   return _isLoading
-                      ? Center(child: CircularProgressIndicator())
-                      : SizedBox.shrink();
+                      ? const Padding(
+                          padding: EdgeInsets.all(8.0),
+                          child: Center(child: Loader()),
+                        )
+                      : const SizedBox.shrink();
                 }
 
                 final dateKey = _groupedMessages.keys.elementAt(index);
                 final messagesForDate = _groupedMessages[dateKey]!;
 
                 return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        margin: const EdgeInsets.symmetric(vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[800]!.withOpacity(0.8),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Text(
+                          dateKey,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ),
                     ...messagesForDate.map((message) {
                       final bool isSameSender = messagesForDate
                                   .indexOf(message) >
                               0 &&
                           messagesForDate[messagesForDate.indexOf(message) - 1]
                                   ["isMe"] ==
-                              message["isMe"];
+                              message["isMe"] &&
+                          messagesForDate[messagesForDate.indexOf(message) - 1]
+                                  ["type"] !=
+                              "notification"; // Don't group notifications with regular messages
                       return GestureDetector(
                         onHorizontalDragEnd: (details) {
-                          if (details.primaryVelocity! < 0) {
-                            setState(() {
-                              _replyingToMessage = message["message"];
-                            });
+                          if (details.primaryVelocity! > 0 &&
+                              message["type"] != "notification") {
+                            _setReplyMessage(message);
                           }
                         },
                         child: MessageChat(
-                          isMe: true, // message["isMe"] ??
-
-                          //false, // Ensure non-null
-                          message: message[
-                              "message"], // The message content or file path
-                          time: message[
-                              "timestamp"], // Ensure this is the correct field
+                          senderAvatar: '', // Update with actual avatar logic
+                          senderName:
+                              'wasswa', // Update with actual sender name
+                          isMe: message["isMe"] == 1,
+                          message: message["message"],
+                          time: message["timestamp"],
                           isSameSender: isSameSender,
-                          replyTo: message["replyTo"],
+                          replyToId: message["reply_to_id"]?.toString(),
+                          replyTo: message["reply_to_message"],
                           isAudio: message["type"] == "audio",
                           isImage: message["type"] == "image",
-                          onPlayAudio: (messageId, path) => _playAudio(
-                              messageId, path), // Pass both arguments
-                          isPlaying: _isPlayingMap[message["id"].toString()] ??
-                              false, // Ensure messageId is a String
+                          isNotification: message["type"] ==
+                              "notification", // Added for notifications
+                          onPlayAudio: _playAudio,
+                          isPlaying:
+                              _isPlayingMap[message["id"].toString()] ?? false,
                           audioDuration:
                               _audioDurationMap[message["id"].toString()] ??
-                                  Duration.zero, // Ensure messageId is a String
+                                  Duration.zero,
                           audioPosition:
                               _audioPositionMap[message["id"].toString()] ??
-                                  Duration.zero, // Ensure messageId is a String
-                          messageId:
-                              message["id"].toString(), // Convert int to String
+                                  Duration.zero,
+                          messageId: message["id"].toString(),
                         ),
                       );
                     }).toList(),
@@ -548,56 +534,55 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
               },
             ),
           ),
-          // Floating Date Header
-          if (_currentDateHeader != null)
-            Positioned(
-              top: 8,
-              left: 0,
-              right: 0,
-              child: AnimatedSwitcher(
-                duration: Duration(milliseconds: 300), // Smooth transition
-                child: _currentDateHeader != null
-                    ? Center(
-                        child: Container(
-                          key: ValueKey<String>(
-                              _currentDateHeader!), // Unique key for animation
-                          padding:
-                              EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(
-                                0.7), // Semi-transparent background
-                            borderRadius:
-                                BorderRadius.circular(20), // Rounded corners
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black
-                                    .withOpacity(0.2), // Subtle shadow
-                                blurRadius: 4,
-                                offset: Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: Text(
-                            _currentDateHeader!,
-                            style: TextStyle(
-                              color: white,
-                              fontSize: 14, // Smaller font size
-                              fontWeight:
-                                  FontWeight.w500, // Lighter font weight
+          Positioned(
+            top: 8,
+            left: 0,
+            right: 0,
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 200),
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: child,
+              ),
+              child: _currentDateHeader != null
+                  ? Center(
+                      child: Container(
+                        key: ValueKey<String>(_currentDateHeader!),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[800]!.withOpacity(0.8),
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.2),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
                             ),
+                          ],
+                        ),
+                        child: Text(
+                          _currentDateHeader!,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
-                      )
-                    : SizedBox.shrink(), // Hide if no date header
-              ),
+                      ),
+                    )
+                  : const SizedBox.shrink(),
             ),
+          ),
           if (_showScrollToBottomButton)
             Positioned(
               bottom: 80,
               right: 16,
               child: FloatingActionButton(
-                onPressed: _scrollToLastMessage,
-                child: Icon(Icons.arrow_downward),
+                mini: true,
+                onPressed: _scrollToBottom,
+                backgroundColor: primaryTwo,
+                child: Icon(Icons.arrow_downward, color: primaryColor),
               ),
             ),
           Positioned(
@@ -609,20 +594,14 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
               controller: _controller,
               isRecording: _isRecording,
               recordingDuration: _recordingDuration,
-              onSendMessage: () {
-                _sendMessage();
-                _scrollToLastMessage();
-              },
+              onSendMessage: _sendMessage,
               onStartRecording: _startRecording,
               onStopRecording: _stopRecording,
               onSendImageMessage: _sendImageMessage,
               onCancelRecording: _cancelRecording,
-              replyingToMessage: _replyingToMessage,
-              onCancelReply: () {
-                setState(() {
-                  _replyingToMessage = null;
-                });
-              },
+              replyToId: _replyingToMessage?['id']?.toString(),
+              replyingToMessage: _replyingToMessage?['message'],
+              onCancelReply: () => setState(() => _replyingToMessage = null),
               audioFunctions: _audioFunctions,
             ),
           ),

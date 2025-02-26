@@ -6,24 +6,26 @@ import 'package:cyanase/helpers/database_helper.dart';
 import 'package:cyanase/helpers/get_currency.dart';
 import 'package:cyanase/helpers/api_helper.dart';
 
-class DepositScreen extends StatefulWidget {
+class DepositHelper extends StatefulWidget {
   final String? selectedFundClass;
   final String? selectedOption;
   final String? depositCategory;
   final String? selectedFundManager;
   final int? selectedOptionId;
-  DepositScreen(
+  final detailText;
+  DepositHelper(
       {this.selectedFundClass,
       this.selectedOption,
       this.selectedFundManager,
       this.selectedOptionId,
-      required this.depositCategory});
+      this.detailText,
+      this.depositCategory});
 
   @override
   _DepositScreenState createState() => _DepositScreenState();
 }
 
-class _DepositScreenState extends State<DepositScreen> {
+class _DepositScreenState extends State<DepositHelper> {
   final PageController _pageController = PageController();
   int _currentStep = 0;
   String? _selectedMethod;
@@ -53,7 +55,7 @@ class _DepositScreenState extends State<DepositScreen> {
 
 // Helper method to generate a unique reference_id
   String _generateReferenceId() {
-    return 'REF-ID-${DateTime.now().millisecondsSinceEpoch}';
+    return '${DateTime.now().millisecondsSinceEpoch}';
   }
 
   Future<void> _getNumber() async {
@@ -104,6 +106,11 @@ class _DepositScreenState extends State<DepositScreen> {
                 fontSize: 20, fontWeight: FontWeight.bold, color: primaryTwo),
           ),
           SizedBox(height: 10),
+          Text(
+            widget.detailText,
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 12, color: Colors.grey),
+          ),
           const Text(
             'Let us know how you want to deposit',
             textAlign: TextAlign.center,
@@ -341,7 +348,12 @@ class _DepositScreenState extends State<DepositScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.check_circle, color: Colors.green, size: 100),
+          Image.asset(
+            'assets/images/web.png',
+            width: 120,
+            height: 100,
+            fit: BoxFit.contain,
+          ),
           SizedBox(height: 20),
           Text(
             'Deposit Successful!',

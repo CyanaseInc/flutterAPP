@@ -156,7 +156,7 @@ class _DepositState extends State<Deposit> {
                         buildFundClassStep(),
                         buildOptionStep(),
                         buildFundManagerStep(),
-                        DepositScreen(
+                        DepositHelper(
                           selectedFundClass: selectedFundClass,
                           selectedOption:
                               selectedOption?['name'], // Pass the option name
@@ -181,7 +181,7 @@ class _DepositState extends State<Deposit> {
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: primaryTwo,
-                          foregroundColor: white,
+                          foregroundColor: primaryColor,
                         ),
                         child: Text('Back'),
                       )

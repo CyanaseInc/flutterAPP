@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:cyanase/helpers/database_helper.dart';
-import 'chat_screen.dart'; // Import your existing Message screen
+import 'chat_screen.dart';
 import 'package:cyanase/theme/theme.dart';
-import 'package:flutter_svg/flutter_svg.dart'; // Import your theme
-import 'new_group.dart'; // Import the new group screen
-import 'dart:io'; // Import for File and FileImage
+import 'package:flutter_svg/flutter_svg.dart';
+import 'new_group.dart';
+import 'dart:io';
 import 'dart:async';
 import 'package:cyanase/helpers/loader.dart';
 
@@ -20,22 +20,20 @@ class ChatListState extends State<ChatList> {
   final StreamController<void> _refreshController =
       StreamController<void>.broadcast();
   final TextEditingController _searchController = TextEditingController();
-  List<Map<String, dynamic>> _allChats = []; // Store all chats
-  List<Map<String, dynamic>> _filteredChats = []; // Store filtered chats
+  List<Map<String, dynamic>> _allChats = [];
+  List<Map<String, dynamic>> _filteredChats = [];
 
   @override
   void dispose() {
-    _refreshController.close(); // Close the stream controller
-    _searchController.dispose(); // Dispose the search controller
+    _refreshController.close();
+    _searchController.dispose();
     super.dispose();
   }
 
-  // Callback to reload the chat list
   void _reloadChats() {
-    _refreshController.add(null); // Trigger a refresh
+    _refreshController.add(null);
   }
 
-  // Filter chats based on search query
   void _filterChats(String query) {
     setState(() {
       _filteredChats = _allChats
@@ -45,15 +43,17 @@ class ChatListState extends State<ChatList> {
     });
   }
 
+  String _toSentenceCase(String input) {
+    if (input.isEmpty) return input;
+    return input[0].toUpperCase() + input.substring(1).toLowerCase();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Column(
         children: [
-          // Search Bar
-          SizedBox(
-            height: 20,
-          ),
+          const SizedBox(height: 20),
           Padding(
             padding: const EdgeInsets.all(8.0),
             child: TextField(
@@ -65,12 +65,10 @@ class ChatListState extends State<ChatList> {
                   borderRadius: BorderRadius.circular(10),
                 ),
               ),
-              onChanged: _filterChats, // Filter chats as the user types
+              onChanged: _filterChats,
             ),
           ),
-          SizedBox(
-            height: 20,
-          ),
+          const SizedBox(height: 20),
           Expanded(
             child: StreamBuilder<void>(
               stream: _refreshController.stream,
@@ -87,35 +85,32 @@ class ChatListState extends State<ChatList> {
                         ? _allChats
                         : _allChats
                             .where((chat) => chat["name"]
-                                .toSentenceCase()
+                                .toLowerCase()
                                 .contains(_searchController.text.toLowerCase()))
                             .toList();
 
                     if (_filteredChats.isEmpty) {
-                      // Display introduction message and button to create groups
                       return Center(
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            // Add an image before the welcome text with a circular grey background
                             Container(
-                              width: 140, // Adjust size as needed
-                              height: 140, // Adjust size as needed
+                              width: 140,
+                              height: 140,
                               decoration: BoxDecoration(
-                                color: Colors.grey[200], // Grey background
-                                shape: BoxShape.circle, // Circular shape
+                                color: Colors.grey[200],
+                                shape: BoxShape.circle,
                               ),
                               child: Center(
                                 child: SvgPicture.asset(
-                                  'assets/images/new_user.svg', // Replace with your SVG path
-                                  width: 100, // Adjust SVG size as needed
+                                  'assets/images/group.png',
+                                  width: 100,
                                   height: 100,
-                                  color: primaryColor, // Add color to the SVG
+                                  color: primaryColor,
                                 ),
                               ),
                             ),
                             const SizedBox(height: 16),
-                            // Welcome to Cyanase Groups
                             const Text(
                               "Welcome to Cyanase Groups",
                               style: TextStyle(
@@ -125,7 +120,6 @@ class ChatListState extends State<ChatList> {
                               ),
                             ),
                             const SizedBox(height: 8),
-                            // Small text below the welcome note
                             const Text(
                               "Start by creating a group to save and invest money with your friends or colleagues.",
                               style: TextStyle(
@@ -135,7 +129,6 @@ class ChatListState extends State<ChatList> {
                               textAlign: TextAlign.center,
                             ),
                             const SizedBox(height: 24),
-                            // Create a Group button with a plus icon
                             ElevatedButton.icon(
                               onPressed: () {
                                 Navigator.push(
@@ -145,15 +138,10 @@ class ChatListState extends State<ChatList> {
                                   ),
                                 );
                               },
-                              icon: Icon(
-                                Icons.add, // Plus icon
-                                color: primaryColor,
-                              ),
+                              icon: Icon(Icons.add, color: primaryColor),
                               label: Text(
                                 "Create a Group",
-                                style: TextStyle(
-                                  color: primaryColor,
-                                ),
+                                style: TextStyle(color: primaryColor),
                               ),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: primaryTwo,
@@ -166,7 +154,6 @@ class ChatListState extends State<ChatList> {
                       );
                     }
 
-                    // Display the list of chats
                     return ListView.builder(
                       itemCount: _filteredChats.length,
                       itemBuilder: (context, index) {
@@ -178,9 +165,9 @@ class ChatListState extends State<ChatList> {
                               chat["isGroup"]),
                           title: Text(
                             chat["name"],
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                            ),
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                           subtitle: chat["lastMessage"],
                           trailing: Column(
@@ -219,8 +206,7 @@ class ChatListState extends State<ChatList> {
                                   name: chat["name"],
                                   profilePic: chat["profilePic"],
                                   groupId: chat["isGroup"] ? chat["id"] : null,
-                                  onMessageSent:
-                                      _reloadChats, // Pass the callback
+                                  onMessageSent: _reloadChats,
                                 ),
                               ),
                             );
@@ -235,7 +221,6 @@ class ChatListState extends State<ChatList> {
           ),
         ],
       ),
-      // Show FloatingActionButton only when there are chats
       floatingActionButton: FutureBuilder<List<Map<String, dynamic>>>(
         future: _loadChats(),
         builder: (context, futureSnapshot) {
@@ -249,31 +234,27 @@ class ChatListState extends State<ChatList> {
                   ),
                 );
               },
-              child: Icon(
-                Icons.group_add,
-                color: primaryColor,
-              ),
+              child: Icon(Icons.group_add, color: primaryColor),
               backgroundColor: primaryTwo,
             );
           }
-          return Container(); // Hide FloatingActionButton when there are no chats
+          return Container();
         },
       ),
     );
   }
 
   Future<List<Map<String, dynamic>>> _loadChats() async {
-    // Remove the line that loads users
     final groups = await _dbHelper.getGroups();
-    final messages = await _dbHelper.getMessages();
 
     List<Map<String, dynamic>> chats = [];
 
-    // Load group chats
     for (var group in groups) {
-      final groupMessages =
-          messages.where((msg) => msg['group_id'] == group['id']).toList();
-      final lastMessage = groupMessages.isNotEmpty ? groupMessages.last : null;
+      final groupMessages = await _dbHelper.getMessages(
+        groupId: group['id'],
+        limit: 1, // Get only the most recent message
+      );
+      final lastMessage = groupMessages.isNotEmpty ? groupMessages.first : null;
       final unreadCount =
           _calculateUnreadCount(group['id'].toString(), groupMessages);
 
@@ -282,63 +263,81 @@ class ChatListState extends State<ChatList> {
         style: TextStyle(color: Colors.grey),
       );
       if (lastMessage != null) {
-        if (lastMessage['type'] == 'image') {
-          lastMessagePreview = Row(
-            children: const [
-              Icon(Icons.image, color: Colors.grey, size: 16),
-              SizedBox(width: 4),
-              Text(
-                "Image",
-                style: TextStyle(color: Colors.grey),
-              ),
-            ],
-          );
-        } else if (lastMessage['type'] == 'audio') {
-          lastMessagePreview = Row(
-            children: const [
-              Icon(Icons.mic, color: Colors.grey, size: 16),
-              SizedBox(width: 4),
-              Text(
-                "Audio",
-                style: TextStyle(color: Colors.grey),
-              ),
-            ],
-          );
-        } else {
-          lastMessagePreview = Text(
-            _truncateMessage(lastMessage['message']),
-            style: const TextStyle(color: Colors.grey),
-          );
+        switch (lastMessage['type']) {
+          case 'image':
+            lastMessagePreview = Row(
+              children: const [
+                Icon(Icons.image, color: Colors.grey, size: 16),
+                SizedBox(width: 4),
+                Text("Image", style: TextStyle(color: Colors.grey)),
+              ],
+            );
+            break;
+          case 'audio':
+            lastMessagePreview = Row(
+              children: const [
+                Icon(Icons.mic, color: Colors.grey, size: 16),
+                SizedBox(width: 4),
+                Text("Audio", style: TextStyle(color: Colors.grey)),
+              ],
+            );
+            break;
+          case 'notification':
+            lastMessagePreview = Row(
+              children: [
+                const Icon(Icons.info, color: Colors.grey, size: 16),
+                const SizedBox(width: 4),
+                Text(
+                  _truncateMessage(
+                      lastMessage['message']), // Truncate notification
+                  style: const TextStyle(
+                    color: Colors.grey,
+                    fontStyle:
+                        FontStyle.italic, // Visually distinguish notifications
+                  ),
+                ),
+              ],
+            );
+            break;
+          default:
+            lastMessagePreview = Text(
+              _truncateMessage(
+                  lastMessage['message']), // Truncate regular messages
+              style: const TextStyle(color: Colors.grey),
+            );
+            break;
         }
       }
 
       chats.add({
         "id": group['id'],
-        "name": group['name'],
+        "name": _toSentenceCase(group['name'] ?? ''),
         "profilePic": group['profile_pic'],
         "lastMessage": lastMessagePreview,
         "time": lastMessage != null
             ? _formatTime(lastMessage['timestamp'])
             : "Just now",
+        "timestamp": lastMessage != null
+            ? lastMessage['timestamp']
+            : DateTime.now().toIso8601String(), // Added for proper sorting
         "unreadCount": unreadCount,
         "isGroup": true,
       });
     }
 
-    // Sort chats by time (most recent first)
-    chats.sort((a, b) => b["time"].compareTo(a["time"]));
+    // Sort chats by timestamp, newest first
+    chats.sort((a, b) => DateTime.parse(b["timestamp"])
+        .compareTo(DateTime.parse(a["timestamp"])));
 
     return chats;
   }
 
-  // Calculate unread message count
   int _calculateUnreadCount(
       String chatId, List<Map<String, dynamic>> messages) {
-    // Example logic: Count messages not seen by the user
-    return messages.length; // Replace with your actual logic
+    // Placeholder: counts all messages; replace with actual unread logic
+    return messages.where((m) => m['isMe'] == 0).length;
   }
 
-  // Format timestamp to a readable time
   String _formatTime(String timestamp) {
     DateTime dateTime = DateTime.parse(timestamp);
     String formattedTime =
@@ -346,29 +345,24 @@ class ChatListState extends State<ChatList> {
     return formattedTime;
   }
 
-  // Truncate long messages
-  String _truncateMessage(String message, {int maxLength = 30}) {
+  String _truncateMessage(String message, {int maxLength = 20}) {
     if (message.length > maxLength) {
       return "${message.substring(0, maxLength)}...";
     }
     return message;
   }
 
-  // Get avatar for the chat
   Widget _getAvatar(String name, String? profilePic, bool isGroup) {
     if (profilePic != null && profilePic.isNotEmpty) {
-      // If a profile picture is available, use it
       return CircleAvatar(
-        backgroundImage:
-            FileImage(File(profilePic)), // Use FileImage for file paths
+        backgroundImage: FileImage(File(profilePic)),
         radius: 30,
       );
     } else if (isGroup) {
-      // If it's a group with no profile picture, use the group's initials
       final initials = name.isNotEmpty ? name[0].toUpperCase() : "G";
       return CircleAvatar(
         radius: 30,
-        backgroundColor: Colors.green, // Group avatar color
+        backgroundColor: Colors.green,
         child: Text(
           initials,
           style: const TextStyle(
@@ -379,11 +373,9 @@ class ChatListState extends State<ChatList> {
         ),
       );
     } else {
-      // If it's a user with no profile picture, use the default avatar (avat.png)
-      return CircleAvatar(
+      return const CircleAvatar(
         radius: 30,
-        backgroundImage: const AssetImage(
-            'assets/images/avatar.png'), // Default avatar for users
+        backgroundImage: AssetImage('assets/images/avatar.png'),
       );
     }
   }

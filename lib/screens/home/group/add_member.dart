@@ -18,8 +18,7 @@ class AddGroupMembersScreen extends StatefulWidget {
 class _AddGroupMembersScreenState extends State<AddGroupMembersScreen> {
   final DatabaseHelper _dbHelper = DatabaseHelper();
   List<Map<String, dynamic>> _allContacts = [];
-  List<Map<String, dynamic>> _onlineContacts =
-      []; // Separate list for online results
+  List<Map<String, dynamic>> _onlineContacts = [];
   Set<String> _selectedContactIds = Set<String>();
   List<Map<String, dynamic>> _selectedContacts = [];
   List<String> _existingMembers = [];
@@ -83,6 +82,7 @@ class _AddGroupMembersScreenState extends State<AddGroupMembersScreen> {
 
     try {
       for (final contact in _selectedContacts) {
+        // Insert the participant into the group
         await _dbHelper.insertParticipant({
           'group_id': widget.groupId,
           'user_id': contact['id'],
@@ -90,6 +90,13 @@ class _AddGroupMembersScreenState extends State<AddGroupMembersScreen> {
           'joined_at': DateTime.now().toIso8601String(),
           'muted': 0,
         });
+
+        // Insert a notification for the new member
+        await _dbHelper.insertNotification(
+          groupId: widget.groupId,
+          message: "${contact['name'] ?? 'A new member'} has joined the group",
+          senderId: 'system', // Could use current user ID if applicable
+        );
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -120,7 +127,7 @@ class _AddGroupMembersScreenState extends State<AddGroupMembersScreen> {
     _debounce = Timer(Duration(milliseconds: 800), () async {
       setState(() {
         _isOnlineSearching = true;
-        _onlineContacts.clear(); // Clear previous results
+        _onlineContacts.clear();
       });
 
       try {
@@ -145,7 +152,7 @@ class _AddGroupMembersScreenState extends State<AddGroupMembersScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('No contacts found'),
-              duration: Duration(seconds: 3), // Custom duration (3 seconds)
+              duration: Duration(seconds: 3),
             ),
           );
         }
@@ -256,9 +263,7 @@ class _AddGroupMembersScreenState extends State<AddGroupMembersScreen> {
               onChanged: (query) {
                 if (_debounce?.isActive ?? false) _debounce?.cancel();
                 _debounce = Timer(Duration(milliseconds: 500), () {
-                  setState(() {
-                    // Trigger rebuild to show loading or clear old results
-                  });
+                  setState(() {});
                   if (_filterLocalContacts(query).isEmpty) {
                     _searchOnline(query);
                   }

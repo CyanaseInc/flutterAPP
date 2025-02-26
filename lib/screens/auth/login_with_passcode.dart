@@ -17,7 +17,7 @@ class NumericLoginScreen extends StatefulWidget {
 class _NumericLoginScreenState extends State<NumericLoginScreen> {
   final int _passcodeLength = 4;
   String _input = "";
-
+  bool _passcode = false;
   void _onNumberPressed(String number) {
     if (_input.length < _passcodeLength) {
       setState(() {
@@ -102,7 +102,14 @@ class _NumericLoginScreenState extends State<NumericLoginScreen> {
         final userCountry = profile['country'];
         final phoneNumber = profile['phoneno'];
         final isVerified = profile['is_verified'] ?? false;
+        final mypasscode =
+            profile['passcode'] as String?; // Cast to String? for safety
 
+        setState(() {
+          // Always set email
+          _passcode = (mypasscode != null &&
+              mypasscode.isNotEmpty); // True if not empty
+        });
         if (isVerified) {
           // Store only the required profile details in the database
           final dbHelper = DatabaseHelper();
@@ -144,7 +151,9 @@ class _NumericLoginScreenState extends State<NumericLoginScreen> {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => HomeScreen(),
+              builder: (context) => HomeScreen(
+                passcode: _passcode,
+              ),
             ),
           );
         } else {

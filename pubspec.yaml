@@ -59,8 +59,9 @@ flutter:
     - assets/icons/goal-icon.svg
     - assets/images/back.svg
     - assets/images/white.png
-    - assets/images/new_user.svg
+    - assets/images/group.png
     - assets/images/done.png
+    - assets/images/web.png
   # Include custom fonts like Montserrat
   fonts:
     - family: Montserrat
