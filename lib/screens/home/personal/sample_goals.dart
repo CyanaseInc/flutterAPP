@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../theme/theme.dart';
 import 'package:cyanase/helpers/database_helper.dart';
 import 'package:cyanase/helpers/api_helper.dart';
+import 'dart:convert';
 
 class SampleGoals extends StatefulWidget {
   final VoidCallback onGoalTap;
@@ -13,8 +14,8 @@ class SampleGoals extends StatefulWidget {
 }
 
 class _SampleGoalsState extends State<SampleGoals> {
-  List<Map<String, dynamic>> goals = [];
   bool isLoading = true;
+  List<Map<String, dynamic>> goals = [];
 
   @override
   void initState() {
@@ -33,18 +34,24 @@ class _SampleGoalsState extends State<SampleGoals> {
       }
 
       final token = userProfile.first['token'] as String;
-      final List<Map<String, dynamic>> response =
-          await ApiService.getAllUserGoals(token);
 
-      // Since the API returns a List, but we know the actual data is nested,
-      // we need to get the 'goal' list from the first item if it exists
-      if (response.isNotEmpty) {
-        final firstItem = response[0];
-        if (firstItem.containsKey('goal') && firstItem['goal'] is List) {
+      // Fetch goals from the API
+      final response = await ApiService.getAllUserGoals(token);
+
+      // Check if the response is successful
+      if (response.statusCode == 200) {
+        // Decode the response body into a Map<String, dynamic>
+        final Map<String, dynamic> responseBody = jsonDecode(response.body);
+
+        // Extract the 'goal' list from the response
+        if (responseBody.containsKey('goal') && responseBody['goal'] is List) {
+          final List<dynamic> goalList = responseBody['goal'] as List<dynamic>;
+          final List<Map<String, dynamic>> fetchedGoals = goalList
+              .map((item) => Map<String, dynamic>.from(item as Map))
+              .toList();
+
           setState(() {
-            goals = (firstItem['goal'] as List)
-                .map((item) => Map<String, dynamic>.from(item as Map))
-                .toList();
+            goals = fetchedGoals;
             isLoading = false;
           });
         } else {
@@ -53,15 +60,15 @@ class _SampleGoalsState extends State<SampleGoals> {
           });
         }
       } else {
-        setState(() {
-          isLoading = false;
-        });
+        throw Exception('Failed to fetch goals: ${response.statusCode}');
       }
     } catch (e) {
       setState(() {
         isLoading = false;
       });
-      print('Error fetching goals: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load goals: $e')),
+      );
     }
   }
 
@@ -73,10 +80,11 @@ class _SampleGoalsState extends State<SampleGoals> {
 
     if (goals.isEmpty) {
       return const Center(
-          child: Text(
-        'No goals found',
-        style: TextStyle(fontSize: 16, color: primaryTwo),
-      ));
+        child: Text(
+          'No goals found',
+          style: TextStyle(fontSize: 16, color: primaryTwo),
+        ),
+      );
     }
 
     return Column(

@@ -123,13 +123,21 @@ class _PersonalTabState extends State<PersonalTab> {
             // Fund Manager Slider
             Text('Investment options',
                 style: TextStyle(
-                  color: primaryTwo,
-                  fontSize: 20,
-                )),
+                    color: primaryTwo,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
             FundManagerSlider(),
             const SizedBox(height: 10),
             // Goals Section
+            const SizedBox(height: 20),
+            // Fund Manager Slider
+            Text('My Goals',
+                style: TextStyle(
+                    color: primaryTwo,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
             SizedBox(
               height: 500, // Adjust height if necessary
               child: SampleGoals(

@@ -304,6 +304,82 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, dynamic>> CreateGoal(
+      String token, Map<String, dynamic> data, image) async {
+    try {
+      final uri = Uri.parse(ApiEndpoints.apiUrlGoal);
+      final request = http.MultipartRequest('POST', uri);
+
+      // Add headers
+      request.headers['Authorization'] = 'Token $token';
+      request.headers['Content-Type'] = 'multipart/form-data';
+
+      // Add form fields
+      request.fields
+          .addAll(data.map((key, value) => MapEntry(key, value.toString())));
+
+      // Add image if provided
+      if (image != null) {
+        request.files.add(
+          await http.MultipartFile.fromPath('goal_picture', image.path),
+        );
+      }
+
+      // Send request
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      // Parse response
+      final responseData = jsonDecode(response.body);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return responseData; // { "message": ..., "success": ... }
+      } else {
+        throw Exception('Goal creation failed: ${responseData['message']}');
+      }
+    } catch (e) {
+      throw Exception('Goal creation failed: $e');
+    }
+  }
+
+  static Future<Map<String, dynamic>> EditGoal(
+      String token, Map<String, dynamic> data, image) async {
+    try {
+      final uri = Uri.parse(ApiEndpoints.editGoal);
+      final request = http.MultipartRequest('POST', uri);
+
+      // Add headers
+      request.headers['Authorization'] = 'Token $token';
+      request.headers['Content-Type'] = 'multipart/form-data';
+
+      // Add form fields
+      request.fields
+          .addAll(data.map((key, value) => MapEntry(key, value.toString())));
+
+      // Add image if provided
+      if (image != null) {
+        request.files.add(
+          await http.MultipartFile.fromPath('goal_picture', image.path),
+        );
+      }
+
+      // Send request
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      // Parse response
+      final responseData = jsonDecode(response.body);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return responseData; // { "message": ..., "success": ... }
+      } else {
+        throw Exception('Goal creation failed: ${responseData['message']}');
+      }
+    } catch (e) {
+      throw Exception('Goal creation failed: $e');
+    }
+  }
+
   static Future<Map<String, dynamic>> submitRiskProfile(
       String token, Map<String, dynamic> data) async {
     final response = await http.post(
@@ -340,8 +416,7 @@ class ApiService {
     }
   }
 
-  static Future<List<Map<String, dynamic>>> getAllUserGoals(
-      String token) async {
+  static Future<http.Response> getAllUserGoals(String token) async {
     final response = await http.get(
       Uri.parse(ApiEndpoints.apiUrlGetGoal),
       headers: {
@@ -350,13 +425,7 @@ class ApiService {
       },
     );
 
-    if (response.statusCode == 200) {
-      // Decode the JSON response into a List<Map<String, dynamic>>
-      return List<Map<String, dynamic>>.from(jsonDecode(response.body));
-    } else {
-      throw Exception(
-          'Failed to fetch investment classes: ${response.statusCode}');
-    }
+    return response;
   }
 
   static Future<void> investDeposit(
