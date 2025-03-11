@@ -1,7 +1,6 @@
 import 'package:cyanase/helpers/loader.dart';
 import 'package:flutter/material.dart';
 import 'package:cyanase/theme/theme.dart';
-import 'package:flutter/material.dart';
 import 'package:cyanase/helpers/database_helper.dart';
 import 'package:cyanase/helpers/get_currency.dart';
 import 'package:cyanase/helpers/api_helper.dart';
@@ -233,9 +232,10 @@ class _DepositScreenState extends State<DepositHelper> {
                     const Text(
                       'Enter Details to continue',
                       style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: primaryTwo),
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: primaryTwo,
+                      ),
                     ),
                     SizedBox(height: 10),
                     const Text(
@@ -245,7 +245,7 @@ class _DepositScreenState extends State<DepositHelper> {
                     ),
                     SizedBox(height: 20),
                     SizedBox(
-                      width: 320,
+                      width: 320, // Phone number card width
                       child: Card(
                         elevation: 5,
                         shape: RoundedRectangleBorder(
@@ -291,25 +291,30 @@ class _DepositScreenState extends State<DepositHelper> {
                       ),
                     ),
                     SizedBox(height: 10),
-                    _textField('Enter Amount'),
-
-                    /// **Submit Button**
+                    _textField(
+                        'Enter Amount'), // TextField with same width as the phone number card
                     SizedBox(height: 20),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
-                        ElevatedButton(
-                          onPressed: _isSubmitting ? null : submitDepositor,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor:
-                                _isSubmitting ? Colors.grey : primaryTwo,
-                            foregroundColor: white,
-                            padding: EdgeInsets.symmetric(
-                                horizontal: 20, vertical: 10),
+                        Padding(
+                          padding: const EdgeInsets.only(
+                              right:
+                                  16.0), // Add padding to align with the card
+                          child: ElevatedButton(
+                            onPressed: _isSubmitting ? null : submitDepositor,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor:
+                                  _isSubmitting ? Colors.grey : primaryTwo,
+                              foregroundColor: white,
+                              padding: EdgeInsets.symmetric(
+                                  horizontal: 20, vertical: 10),
+                            ),
+                            child: _isSubmitting
+                                ? SizedBox(
+                                    height: 20, width: 20, child: Loader())
+                                : Text('Submit'),
                           ),
-                          child: _isSubmitting
-                              ? SizedBox(height: 20, width: 20, child: Loader())
-                              : Text('Submit'),
                         ),
                       ],
                     ),
@@ -324,20 +329,24 @@ class _DepositScreenState extends State<DepositHelper> {
   }
 
   Widget _textField(String label) {
-    return TextField(
-      keyboardType: TextInputType.number,
-      onChanged: (value) {
-        setState(() {
-          depositAmount = value.isNotEmpty ? double.parse(value) : null;
-        });
-      },
-      decoration: InputDecoration(
-        labelText: label,
-        enabledBorder: UnderlineInputBorder(
-          borderSide: BorderSide(color: primaryColor),
-        ),
-        focusedBorder: UnderlineInputBorder(
-          borderSide: BorderSide(color: primaryLight),
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+          horizontal: 16.0), // Add horizontal padding
+      child: TextField(
+        keyboardType: TextInputType.number,
+        onChanged: (value) {
+          setState(() {
+            depositAmount = value.isNotEmpty ? double.parse(value) : null;
+          });
+        },
+        decoration: InputDecoration(
+          labelText: label,
+          enabledBorder: UnderlineInputBorder(
+            borderSide: BorderSide(color: primaryColor),
+          ),
+          focusedBorder: UnderlineInputBorder(
+            borderSide: BorderSide(color: primaryLight),
+          ),
         ),
       ),
     );

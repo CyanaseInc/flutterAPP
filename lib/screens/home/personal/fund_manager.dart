@@ -1,3 +1,4 @@
+import 'package:cyanase/helpers/loader.dart';
 import 'package:flutter/material.dart';
 import 'package:cyanase/helpers/database_helper.dart';
 import 'package:cyanase/helpers/api_helper.dart';
@@ -98,7 +99,9 @@ class _FundManagerSliderState extends State<FundManagerSlider> {
     if (_isLoading) {
       return Container(
         height: 140,
-        child: Center(child: CircularProgressIndicator(color: primaryColor)),
+        child: Center(
+          child: Loader(),
+        ),
       );
     }
 

@@ -7,6 +7,9 @@ import 'new_group.dart';
 import 'dart:io';
 import 'dart:async';
 import 'package:cyanase/helpers/loader.dart';
+import 'package:cyanase/helpers/api_helper.dart';
+import 'package:cyanase/helpers/cache_image.dart';
+import 'package:path/path.dart';
 
 class ChatList extends StatefulWidget {
   const ChatList({Key? key}) : super(key: key);
@@ -24,10 +27,17 @@ class ChatListState extends State<ChatList> {
   List<Map<String, dynamic>> _filteredChats = [];
 
   @override
+  void initState() {
+    super.initState();
+    _getGroup(); // Fetch groups on initialization
+  }
+
+  @override
   void dispose() {
     _refreshController.close();
     _searchController.dispose();
     super.dispose();
+    // Removed _getGroup() from dispose as it’s an async call
   }
 
   void _reloadChats() {
@@ -46,6 +56,103 @@ class ChatListState extends State<ChatList> {
   String _toSentenceCase(String input) {
     if (input.isEmpty) return input;
     return input[0].toUpperCase() + input.substring(1).toLowerCase();
+  }
+
+  Future<void> _getGroup() async {
+    try {
+      final dbHelper = DatabaseHelper();
+      final db = await dbHelper.database;
+      final userProfile = await db.query('profile', limit: 1);
+
+      if (userProfile.isEmpty) {
+        throw Exception('No user profile found');
+      }
+
+      final token = userProfile.first['token'] as String;
+      final List<Map<String, dynamic>> groups =
+          await ApiService.getGroup(token);
+
+      for (final groupData in groups) {
+        final groupId = groupData['groupId'] as int?;
+        final groupName = groupData['name'] as String?;
+        final groupDescription = groupData['description'] as String?;
+        final profilePic = groupData['profile_pic'] as String?;
+        final createdAt = groupData['created_at'] as String?;
+        final createdBy = groupData['created_by'] as String?;
+        final lastActivity = groupData['last_activity'] as String?;
+        final participants = groupData['participants'] as List<dynamic>?;
+
+        if (groupId == null || groupName == null) {
+          print("Skipping group with missing ID or name: $groupData");
+          continue;
+        }
+
+        final existingGroup = await db.query(
+          'groups',
+          where: 'id = ?',
+          whereArgs: [groupId],
+          limit: 1,
+        );
+
+        if (existingGroup.isEmpty) {
+          String? localImagePath;
+          if (profilePic != null && profilePic.isNotEmpty) {
+            final String fileName = 'group_$groupId${extension(profilePic)}';
+            localImagePath =
+                await ImageHelper.downloadAndSaveImage(profilePic, fileName);
+          }
+
+          await dbHelper.insertGroup({
+            'id': groupId,
+            'name': groupName,
+            'description': groupDescription ?? '',
+            'profile_pic': localImagePath ?? '',
+            'type': 'group',
+            'created_at': createdAt ?? DateTime.now().toIso8601String(),
+            'created_by': createdBy ?? 'unknown',
+            'last_activity': lastActivity ?? DateTime.now().toIso8601String(),
+            'settings': '',
+          });
+        } else {
+          print(
+              "Group $groupName (ID: $groupId) already exists, skipping insert");
+        }
+
+        if (participants != null && participants.isNotEmpty) {
+          for (final participantData in participants) {
+            final userId = participantData['user_id'] as String?;
+            final role = participantData['role'] as String?;
+            final joinedAt = participantData['joined_at'] as String?;
+            final muted = participantData['muted'] as int?;
+
+            if (userId == null) {
+              print("Skipping participant with null user_id in group $groupId");
+              continue;
+            }
+
+            final existingParticipant = await db.query(
+              'participants',
+              where: 'group_id = ? AND user_id = ?',
+              whereArgs: [groupId, userId],
+              limit: 1,
+            );
+
+            if (existingParticipant.isEmpty) {
+              await dbHelper.insertParticipant({
+                'group_id': groupId,
+                'user_id': userId,
+                'role': role ?? 'member',
+                'joined_at': joinedAt ?? DateTime.now().toIso8601String(),
+                'muted': muted ?? 0,
+              });
+              print("Inserted participant $userId into group $groupId");
+            }
+          }
+        }
+      }
+    } catch (e) {
+      print("Error retrieving groups: $e");
+    }
   }
 
   @override
@@ -204,6 +311,8 @@ class ChatListState extends State<ChatList> {
                               MaterialPageRoute(
                                 builder: (context) => MessageChatScreen(
                                   name: chat["name"],
+                                  description:
+                                      chat["description"] ?? 'Our Saving Group',
                                   profilePic: chat["profilePic"],
                                   groupId: chat["isGroup"] ? chat["id"] : null,
                                   onMessageSent: _reloadChats,
@@ -226,7 +335,7 @@ class ChatListState extends State<ChatList> {
         builder: (context, futureSnapshot) {
           if (futureSnapshot.hasData && futureSnapshot.data!.isNotEmpty) {
             return FloatingActionButton(
-              onPressed: () async {
+              onPressed: () {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
@@ -252,8 +361,9 @@ class ChatListState extends State<ChatList> {
     for (var group in groups) {
       final groupMessages = await _dbHelper.getMessages(
         groupId: group['id'],
-        limit: 1, // Get only the most recent message
+        limit: 1,
       );
+
       final lastMessage = groupMessages.isNotEmpty ? groupMessages.first : null;
       final unreadCount =
           _calculateUnreadCount(group['id'].toString(), groupMessages);
@@ -262,6 +372,7 @@ class ChatListState extends State<ChatList> {
         "No messages yet",
         style: TextStyle(color: Colors.grey),
       );
+
       if (lastMessage != null) {
         switch (lastMessage['type']) {
           case 'image':
@@ -288,61 +399,72 @@ class ChatListState extends State<ChatList> {
                 const Icon(Icons.info, color: Colors.grey, size: 16),
                 const SizedBox(width: 4),
                 Text(
-                  _truncateMessage(
-                      lastMessage['message']), // Truncate notification
+                  _truncateMessage(lastMessage['message']),
                   style: const TextStyle(
-                    color: Colors.grey,
-                    fontStyle:
-                        FontStyle.italic, // Visually distinguish notifications
-                  ),
+                      color: Colors.grey, fontStyle: FontStyle.italic),
                 ),
               ],
             );
             break;
           default:
             lastMessagePreview = Text(
-              _truncateMessage(
-                  lastMessage['message']), // Truncate regular messages
+              _truncateMessage(lastMessage['message']),
               style: const TextStyle(color: Colors.grey),
             );
             break;
         }
       }
 
+      final timestamp = lastMessage != null
+          ? lastMessage['timestamp']
+          : group['created_at'] ?? DateTime.now().toIso8601String();
+
       chats.add({
         "id": group['id'],
         "name": _toSentenceCase(group['name'] ?? ''),
+        "description": group['description'], // Add description here
         "profilePic": group['profile_pic'],
         "lastMessage": lastMessagePreview,
         "time": lastMessage != null
             ? _formatTime(lastMessage['timestamp'])
             : "Just now",
-        "timestamp": lastMessage != null
-            ? lastMessage['timestamp']
-            : DateTime.now().toIso8601String(), // Added for proper sorting
+        "timestamp": timestamp,
         "unreadCount": unreadCount,
         "isGroup": true,
+        "hasMessages": lastMessage != null,
       });
     }
 
-    // Sort chats by timestamp, newest first
-    chats.sort((a, b) => DateTime.parse(b["timestamp"])
-        .compareTo(DateTime.parse(a["timestamp"])));
+    chats.sort((a, b) {
+      final bool aHasMessages = a["hasMessages"];
+      final bool bHasMessages = b["hasMessages"];
+
+      if (aHasMessages && bHasMessages) {
+        final DateTime timeA = DateTime.parse(a["timestamp"]);
+        final DateTime timeB = DateTime.parse(b["timestamp"]);
+        return timeB.compareTo(timeA);
+      } else if (aHasMessages) {
+        return -1;
+      } else if (bHasMessages) {
+        return 1;
+      } else {
+        final DateTime timeA = DateTime.parse(a["timestamp"]);
+        final DateTime timeB = DateTime.parse(b["timestamp"]);
+        return timeB.compareTo(timeA);
+      }
+    });
 
     return chats;
   }
 
   int _calculateUnreadCount(
       String chatId, List<Map<String, dynamic>> messages) {
-    // Placeholder: counts all messages; replace with actual unread logic
     return messages.where((m) => m['isMe'] == 0).length;
   }
 
   String _formatTime(String timestamp) {
     DateTime dateTime = DateTime.parse(timestamp);
-    String formattedTime =
-        "${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}";
-    return formattedTime;
+    return "${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}";
   }
 
   String _truncateMessage(String message, {int maxLength = 20}) {
@@ -354,15 +476,37 @@ class ChatListState extends State<ChatList> {
 
   Widget _getAvatar(String name, String? profilePic, bool isGroup) {
     if (profilePic != null && profilePic.isNotEmpty) {
-      return CircleAvatar(
-        backgroundImage: FileImage(File(profilePic)),
-        radius: 30,
-      );
+      if (profilePic.startsWith('http')) {
+        final String fileName =
+            'group_${name.hashCode}${extension(basename(profilePic))}';
+        return FutureBuilder<String?>(
+          future: ImageHelper.downloadAndSaveImage(profilePic, fileName),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.done &&
+                snapshot.hasData) {
+              return CircleAvatar(
+                backgroundImage: FileImage(File(snapshot.data!)),
+                radius: 30,
+              );
+            }
+            return CircleAvatar(
+              radius: 30,
+              backgroundColor: primaryColor,
+              child: const Icon(Icons.image, color: white),
+            );
+          },
+        );
+      } else {
+        return CircleAvatar(
+          backgroundImage: FileImage(File(profilePic)),
+          radius: 30,
+        );
+      }
     } else if (isGroup) {
       final initials = name.isNotEmpty ? name[0].toUpperCase() : "G";
       return CircleAvatar(
         radius: 30,
-        backgroundColor: Colors.green,
+        backgroundColor: primaryColor,
         child: Text(
           initials,
           style: const TextStyle(

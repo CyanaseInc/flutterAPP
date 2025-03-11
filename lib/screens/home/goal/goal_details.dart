@@ -68,12 +68,54 @@ class _GoalDetailsScreenState extends State<GoalDetailsScreen> {
       if (_goalPicture != null && !_goalPicture!.startsWith('http')) {
         goalImage = File(_goalPicture!);
       }
-      print('data : $data');
+
       final response = await ApiService.EditGoal(token, data, goalImage);
-      print('response : $response');
+
       if (response['success'] == true) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Goal saved successfully!')),
+        );
+
+        // Return the updated goal data
+        Navigator.pop(context, editableGoalData);
+      }
+    } catch (e) {
+      print('Error in _saveChanges: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to save changes: $e')),
+      );
+    } finally {
+      setState(() => _isSubmitting = false);
+    }
+  }
+
+  Future<void> _Delete() async {
+    editableGoalData['goal_name'] = _nameController.text;
+    editableGoalData['goal_picture'] = _goalPicture;
+
+    setState(() => _isSubmitting = true);
+
+    try {
+      final dbHelper = DatabaseHelper();
+      final db = await dbHelper.database;
+      final userProfile = await db.query('profile', limit: 1);
+
+      if (userProfile.isEmpty) {
+        throw Exception('No user profile found');
+      }
+
+      final token = userProfile.first['token'] as String;
+
+      final data = {
+        'goal_name': _nameController.text,
+        'goal_id': editableGoalData['goal_id'],
+      };
+
+      final response = await ApiService.DeleteGoal(token, data);
+
+      if (response['success'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Goal deleted successfully!')),
         );
 
         // Return the updated goal data
@@ -104,9 +146,7 @@ class _GoalDetailsScreenState extends State<GoalDetailsScreen> {
             onPressed: () {
               Navigator.pop(context); // Close dialog
               Navigator.pop(context, {'deleted': true}); // Indicate deletion
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Goal deleted')),
-              );
+              _Delete();
             },
             style: TextButton.styleFrom(foregroundColor: Colors.red),
             child: const Text('Delete'),

@@ -12,9 +12,11 @@ class GroupHeader extends StatefulWidget {
   final String groupName;
   final String profilePic;
   final int groupId;
+  final String description;
   const GroupHeader(
       {Key? key,
       required this.groupName,
+      required this.description,
       required this.profilePic,
       required this.groupId})
       : super(key: key);
@@ -229,8 +231,8 @@ class _GroupHeaderState extends State<GroupHeader> {
           const SizedBox(height: 10),
 
           // Group Description
-          const Text(
-            'This is a family saving group for us all in the family of twins',
+          Text(
+            widget.description,
             style: TextStyle(
               color: Colors.grey,
               fontSize: 15,

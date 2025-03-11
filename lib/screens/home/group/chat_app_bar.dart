@@ -11,15 +11,17 @@ class MessageAppBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback onDepositPressed; // Callback for deposit button
   final VoidCallback onBackPressed; // Callback for back button
   final int? groupId;
-  const MessageAppBar({
-    Key? key,
-    required this.name,
-    required this.groupId,
-    required this.profilePic,
-    required this.memberNames,
-    required this.onDepositPressed,
-    required this.onBackPressed,
-  }) : super(key: key);
+  final String description;
+  const MessageAppBar(
+      {Key? key,
+      required this.name,
+      required this.groupId,
+      required this.profilePic,
+      required this.memberNames,
+      required this.onDepositPressed,
+      required this.onBackPressed,
+      required this.description})
+      : super(key: key);
 
   @override
   Size get preferredSize => Size.fromHeight(kToolbarHeight);
@@ -77,10 +79,10 @@ class MessageAppBar extends StatelessWidget implements PreferredSizeWidget {
             context,
             MaterialPageRoute(
               builder: (context) => GroupInfoPage(
-                groupName: name,
-                profilePic: profilePic,
-                groupId: groupId ?? 0,
-              ),
+                  groupName: name,
+                  profilePic: profilePic,
+                  groupId: groupId ?? 0,
+                  description: description),
             ),
           );
         },
@@ -159,6 +161,7 @@ class MessageAppBar extends StatelessWidget implements PreferredSizeWidget {
                       groupName: name,
                       profilePic: profilePic,
                       groupId: groupId ?? 0,
+                      description: description,
                     ),
                   ),
                 );

@@ -46,7 +46,12 @@ class ApiEndpoints {
   static const String apiUrlGetGoalWithdraw =
       "$server/api/v1/en/get/goal/withdraw/";
   static const String apiUrlGoal = "$server/api/v1/en/create/goal/";
+  static const String editGroup = "$server/api/v1/en/editgroup/group/";
+  static const String addMembers = "$server/api/v1/en/addmembers/group/";
   static const String editGoal = "$server/api/v1/en/edit/goal/";
+  static const String deleteGoal = "$server/api/v1/en/delete/goal/";
+  static const String newGroup = "$server/api/v1/en/newgroup/group/";
+  static const String getGroup = "$server/api/v1/en/getgroup/group/";
   static const String apiUrlGetAllFundManagers =
       "$server/api/v1/en/auth/fundmanagers/all/";
   static const String apiUrlGetGoalDeposit =

@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:cyanase/helpers/database_helper.dart';
 import 'package:cyanase/theme/theme.dart';
 import 'package:cyanase/screens/home/home.dart';
+import 'package:cyanase/helpers/api_helper.dart';
 
 class GroupDetailsScreen extends StatefulWidget {
   final List<Map<String, dynamic>> selectedContacts;
@@ -20,7 +21,7 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
       TextEditingController();
   File? _groupImage;
   final DatabaseHelper _dbHelper = DatabaseHelper();
-  bool _isSaving = false; // To handle loading state
+  bool _isSaving = false;
 
   Future<void> _pickImage() async {
     final picker = ImagePicker();
@@ -43,54 +44,101 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
     }
 
     setState(() {
-      _isSaving = true; // Show loading indicator
+      _isSaving = true;
     });
 
     try {
-      // Insert the group into the database
-      final groupId = await _dbHelper.insertGroup({
-        'name': groupName,
-        'description':
-            _groupDescriptionController.text.trim(), // Add description
-        'profile_pic': _groupImage?.path ?? '', // Save image path if available
-        'type': 'group', // Default type
-        'created_at': DateTime.now().toIso8601String(),
-        'created_by': 'current_user_id', // Replace with actual user ID
-        'last_activity': DateTime.now().toIso8601String(),
-        'settings': '', // Add settings if needed
-      });
+      final dbHelper = DatabaseHelper();
+      final db = await dbHelper.database;
+      final userProfile = await db.query('profile', limit: 1);
 
-      // Save participants to the SQLite database
-      for (final contact in widget.selectedContacts) {
-        // Ensure each contact has a valid ID
-        final userId = contact['id'];
-        if (userId == null) {
-          continue;
-        }
-
-        // Insert the participant into the participants table
-        await _dbHelper.insertParticipant({
-          'group_id': groupId,
-          'user_id': userId, // Use the ID from the contacts table
-          'role': 'member', // Default role
-          'joined_at': DateTime.now().toIso8601String(),
-          'muted':
-              0, // Use 0 for false, 1 for true (SQLite does not support bool directly)
-        });
+      if (userProfile.isEmpty) {
+        throw Exception('No user profile found');
       }
 
-      // Navigate to the group chat screen
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => HomeScreen(),
-        ),
-      );
+      final token = userProfile.first['token'] as String;
+      final userId =
+          userProfile.first['id'] as String; // Current user's ID (creator)
 
-      // Show a success message
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Group created successfully!')),
-      );
+      // Prepare the data for the POST request
+      final Map<String, dynamic> groupData = {
+        'name': groupName,
+        'description': _groupDescriptionController.text.trim(),
+        'profile_pic': _groupImage?.path ?? '',
+        'type': 'group',
+        'created_by': userId,
+        'participants': widget.selectedContacts
+            .map((contact) => {
+                  'user_id': contact['id'],
+                  'role': contact['id'] == userId
+                      ? 'admin'
+                      : 'member', // Creator as admin
+                })
+            .toList()
+          ..add({
+            'user_id': userId,
+            'role': 'admin'
+          }), // Ensure creator is included
+      };
+
+      // Make the POST request to create the group
+      final response = await ApiService.NewGroup(token, groupData);
+
+      if (response['success'] == true) {
+        final groupId = response['data']['groupId'];
+
+        // Insert the group into the local SQLite database
+        await _dbHelper.insertGroup({
+          'id': groupId,
+          'name': groupName,
+          'description': _groupDescriptionController.text.trim(),
+          'profile_pic': _groupImage?.path ?? '',
+          'type': 'group',
+          'created_at': DateTime.now().toIso8601String(),
+          'created_by': userId, // Use actual user ID
+          'last_activity': DateTime.now().toIso8601String(),
+          'settings': '',
+        });
+
+        // Insert the creator as an admin explicitly
+        await _dbHelper.insertParticipant({
+          'group_id': groupId,
+          'user_id': userId,
+          'role': 'admin', // Creator is admin
+          'joined_at': DateTime.now().toIso8601String(),
+          'muted': 0,
+        });
+
+        // Save other participants to the SQLite database
+        for (final contact in widget.selectedContacts) {
+          final contactId = contact['id'];
+          if (contactId == null || contactId == userId)
+            continue; // Skip creator (already added)
+
+          await _dbHelper.insertParticipant({
+            'group_id': groupId,
+            'user_id': contactId,
+            'role': 'member', // All others are members
+            'joined_at': DateTime.now().toIso8601String(),
+            'muted': 0,
+          });
+        }
+
+        // Navigate to the home screen
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => HomeScreen(),
+          ),
+        );
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Group created successfully!')),
+        );
+      } else {
+        throw Exception(
+            'Failed to create group: No group ID returned from API');
+      }
     } catch (e) {
       print("Error creating group: $e");
       ScaffoldMessenger.of(context).showSnackBar(
@@ -98,7 +146,7 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
       );
     } finally {
       setState(() {
-        _isSaving = false; // Hide loading indicator
+        _isSaving = false;
       });
     }
   }
@@ -116,10 +164,9 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
         actions: [
           IconButton(
             icon: _isSaving
-                ? CircularProgressIndicator(color: white) // Show loader
+                ? CircularProgressIndicator(color: white)
                 : Icon(Icons.check, color: white),
-            onPressed:
-                _isSaving ? null : _saveGroup, // Disable button when saving
+            onPressed: _isSaving ? null : _saveGroup,
           ),
         ],
       ),
@@ -128,7 +175,6 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
           padding: const EdgeInsets.all(16.0),
           child: Column(
             children: [
-              // Centered Profile Picture
               Center(
                 child: GestureDetector(
                   onTap: _pickImage,
@@ -146,7 +192,6 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                 ),
               ),
               SizedBox(height: 20),
-              // Left-Aligned Group Name
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
@@ -167,7 +212,6 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                 textAlign: TextAlign.left,
               ),
               SizedBox(height: 20),
-              // Left-Aligned Group Description
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
@@ -188,7 +232,6 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                 textAlign: TextAlign.left,
               ),
               SizedBox(height: 20),
-              // Left-Aligned Selected Members
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(

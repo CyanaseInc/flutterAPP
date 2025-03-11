@@ -6,6 +6,7 @@ import 'package:cyanase/helpers/deposit.dart';
 import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:vibration/vibration.dart';
 import 'goal_details.dart'; // Import the new GoalDetailsScreen
+import 'package:intl/intl.dart'; // Import the intl package
 
 class GoalScreen extends StatefulWidget {
   final List<Map<String, dynamic>> goals;
@@ -66,6 +67,7 @@ class _GoalScreenState extends State<GoalScreen> {
           defaultColor: const Color(0xFF9D50DD),
           ledColor: white,
           importance: NotificationImportance.High,
+          soundSource: null, // Do not specify a custom sound
         ),
       ],
     );
@@ -260,6 +262,31 @@ class GoalCard extends StatelessWidget {
     }
   }
 
+  void _showDepositBottomSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true, // Allow the bottom sheet to expand
+      backgroundColor:
+          Colors.transparent, // Transparent background for the sheet
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: Colors.white, // Default background color
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(20), // Rounded corners at the top
+          ),
+        ),
+        child: DepositHelper(
+          depositCategory: "goals",
+          selectedFundClass: "default_class", // Provide default value
+          selectedOption: "default_option", // Provide default value
+          selectedFundManager: "default_manager", // Provide default value
+          selectedOptionId: 0, // Provide default value
+          detailText: "Default detail text", // Provide default value
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     double totalDeposits = 0.0;
@@ -277,10 +304,13 @@ class GoalCard extends StatelessWidget {
     final goalPicture = goalData['goal_picture'] as String?;
     final hasImage = goalPicture != null && goalPicture.isNotEmpty;
 
+    // Create a NumberFormat instance for formatting numbers with commas
+    final NumberFormat numberFormat = NumberFormat.decimalPattern();
+
     return GestureDetector(
       onTap: onTap,
       child: Card(
-        margin: const EdgeInsets.only(bottom: 16.0), // Should be 'bottom'
+        margin: const EdgeInsets.only(bottom: 16.0),
         elevation: 4,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
@@ -292,7 +322,6 @@ class GoalCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  // Circular Goal Image
                   Container(
                     width: 40,
                     height: 40,
@@ -300,7 +329,7 @@ class GoalCard extends StatelessWidget {
                       shape: BoxShape.circle,
                       image: DecorationImage(
                         image: hasImage
-                            ? NetworkImage(goalPicture!)
+                            ? NetworkImage(goalPicture)
                             : AssetImage('assets/images/goal.png')
                                 as ImageProvider,
                         fit: BoxFit.cover,
@@ -308,7 +337,6 @@ class GoalCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  // Goal Name
                   Expanded(
                     child: Text(
                       goalData['goal_name'] as String? ?? 'Unnamed Goal',
@@ -328,25 +356,20 @@ class GoalCard extends StatelessWidget {
                 backgroundColor: Colors.grey[200],
               ),
               const SizedBox(height: 8),
+              // Display "% completed out of amount" with commas
               Text(
-                '${(progress * 100).toInt()}% completed',
-                style: const TextStyle(color: Colors.grey),
+                '${(progress * 100).toStringAsFixed(1)}% completed (${numberFormat.format(totalDeposits)} / ${numberFormat.format(goalAmount)})',
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey,
+                ),
               ),
               const SizedBox(height: 12),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => DepositHelper(
-                            depositCategory: "goals",
-                          ),
-                        ),
-                      );
-                    },
+                    onPressed: () => _showDepositBottomSheet(context),
                     icon: const Icon(Icons.account_balance_wallet),
                     label: const Text('Deposit'),
                     style: ElevatedButton.styleFrom(
