@@ -3,6 +3,7 @@ import 'package:cyanase/helpers/loader.dart';
 import 'package:flutter/material.dart';
 import 'package:cyanase/helpers/api_helper.dart';
 import '../../theme/theme.dart';
+import 'package:flutter_verification_code_field/flutter_verification_code_field.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   @override
@@ -58,7 +59,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
       try {
         final response = await ApiService.CheckResetPassword(userData);
-        if (response['status'] == 'success') {
+        print(response['success']);
+        if (response['success'] == true) {
           // Code sent successfully, navigate to the next screen
           _nextPage();
         } else {
@@ -98,9 +100,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             );
           } else {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content:
-                    const Text('Invalid verification code. Please try again.'),
+              const SnackBar(
+                content: Text('Invalid verification code. Please try again.'),
                 backgroundColor: Colors.red,
               ),
             );
@@ -116,8 +117,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       }
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Please fill out all required fields correctly.'),
+        const SnackBar(
+          content: Text('Please fill out all required fields correctly.'),
           backgroundColor: Colors.red,
         ),
       );
@@ -147,8 +148,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
     if (newPassword != confirmPassword) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Passwords do not match. Please try again.'),
+        const SnackBar(
+          content: Text('Passwords do not match. Please try again.'),
           backgroundColor: Colors.red,
         ),
       );
@@ -161,12 +162,16 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       'confirmpassword':
           confirmPassword, // Include confirm password in POST data
     };
+    final queryParams = {
+      'email': email,
+      'password': newPassword,
+    };
 
     try {
-      final response = await ApiService.ResetPassword(userData);
-      if (response['status'] == 'success') {
+      final response = await ApiService.ResetPassword(userData, queryParams);
+      if (response['success'] == true) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Text('Password reset successful!'),
             backgroundColor: Colors.green,
           ),
@@ -301,19 +306,34 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               style: TextStyle(fontSize: 15, color: Colors.grey),
               textAlign: TextAlign.center,
             ),
-            TextField(
-              controller: _verificationCodeController,
-              onChanged: (_) {
-                setState(
-                    () {}); // Trigger state update to enable/disable the Next button
+            VerificationCodeField(
+              length: 6,
+              onFilled: (value) {
+                if (value.length == 6) {
+                  // Check if the code has been filled
+                  setState(() {
+                    // Trigger the state update here
+                    _verificationCodeController.text = value;
+                  });
+                }
               },
-              keyboardType: TextInputType.number,
-              maxLength: 6,
-              decoration: const InputDecoration(
-                labelText: 'Verification Code',
-                border: UnderlineInputBorder(),
-              ),
+              size: const Size(30, 60),
+              spaceBetween: 16,
+              matchingPattern: RegExp(r'^\d+$'),
             ),
+            // TextField(
+            //   controller: _verificationCodeController,
+            //   onChanged: (_) {
+            //     setState(
+            //         () {}); // Trigger state update to enable/disable the Next button
+            //   },
+            //   keyboardType: TextInputType.number,
+            //   maxLength: 6,
+            //   decoration: const InputDecoration(
+            //     labelText: 'Verification Code',
+            //     border: UnderlineInputBorder(),
+            //   ),
+            // ),
           ],
         ),
       ),

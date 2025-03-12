@@ -1,7 +1,6 @@
 import 'package:cyanase/helpers/loader.dart';
 import 'package:flutter/material.dart';
 import 'package:cyanase/theme/theme.dart';
-import 'package:flutter/material.dart';
 import 'package:cyanase/helpers/database_helper.dart';
 import 'package:cyanase/helpers/get_currency.dart';
 import 'package:cyanase/helpers/api_helper.dart';

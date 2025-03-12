@@ -94,7 +94,7 @@ class _PersonalTabState extends State<PersonalTab> {
                     borderRadius: BorderRadius.circular(10),
                   ),
                 ),
-                child: Text(
+                child: const Text(
                   'My Portfolio',
                   style: TextStyle(
                     color: primaryTwo,

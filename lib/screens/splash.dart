@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:cyanase/theme/theme.dart'; // Import the theme file
 
 class SplashScreen extends StatelessWidget {
   const SplashScreen({super.key});

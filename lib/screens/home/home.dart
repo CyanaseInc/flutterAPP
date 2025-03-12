@@ -282,14 +282,14 @@ class _HomeScreenState extends State<HomeScreen>
                   color: white.withOpacity(0.2),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(
+                child: const Icon(
                   Icons.lock_outline,
                   size: 40,
                   color: white,
                 ),
               ),
               const SizedBox(height: 20),
-              Text(
+              const Text(
                 'Secure Your Account!',
                 style: TextStyle(
                   fontSize: 24,
@@ -339,7 +339,7 @@ class _HomeScreenState extends State<HomeScreen>
                   ),
                   elevation: 5,
                 ),
-                child: Text(
+                child: const Text(
                   'Create Now',
                   style: TextStyle(
                     fontSize: 18,
@@ -378,6 +378,7 @@ class _HomeScreenState extends State<HomeScreen>
     return Scaffold(
       appBar: AppBar(
         backgroundColor: white,
+        leading: _profile(),
         title: _isSearching
             ? TextField(
                 controller: _searchController,
@@ -487,6 +488,16 @@ class _HomeScreenState extends State<HomeScreen>
         height: 24,
       ),
     );
+  }
+
+  Widget _profile() {
+    return Container(
+        padding: const EdgeInsets.all(8.0),
+        child: const CircleAvatar(
+            // backgroundImage: NetworkImage(userAvatarUrl),
+            backgroundColor: primaryTwo,
+            foregroundColor: Colors.white,
+            child: Text('AH')));
   }
 
   List<Widget> _buildAppBarActions() {

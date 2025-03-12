@@ -1,2 +1,2 @@
 
-stooped at making graphs work
+// stopped at making graphs work

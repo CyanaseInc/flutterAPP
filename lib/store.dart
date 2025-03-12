@@ -1,3 +1,5 @@
+// ignore_for_file: avoid_print
+
 import 'package:contacts_service/contacts_service.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:http/http.dart' as http;

@@ -63,7 +63,7 @@ class ApiEndpoints {
   static const String apiUrlUserGetProfilePhoto = "$server/static/photo.png";
   static const String apiUrlUserNetWorth =
       "$server/api/v1/en/auth/user/networth/";
-  static const String login = "$server/api/v1/en/auth/user/login/";
+  static const String login = "$server/api/v1/en/app/user/login/";
   static const String passcodeLogin = "$server/api/v1/en/auth/user/passcode/";
   static const String apiUrlUserNextOfKin = "$server/api/v1/en/user/nextOfKin/";
   static const String apiUrlGetNextOfKin = "$server/api/v1/en/get/nextOfKin/";
@@ -77,9 +77,9 @@ class ApiEndpoints {
       "$server/api/v1/en/auth/user/riskprofile/";
   static const String apiUrlGetRiskProfile =
       "$server/api/v1/en/auth/get/riskprofile/";
-  static const String checkPasswordEmail = "$server/api/v1/en/password/reset/";
-  static const String apiUrlPasswordReset =
-      "$server/api/v1/en/auth/user/update/password/";
+  static const String checkPasswordEmail =
+      "$server/api/v1/en/app/password/reset/";
+  static const String apiUrlPasswordReset = "$server/app/reset/password/";
   static const String apiUrlGetUserVerification =
       "$server/api/v1/en/get/verification/";
   static const String apiUrlGetRiskAnalysisPercentages =

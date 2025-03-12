@@ -164,7 +164,7 @@ class ApiService {
   }
 
   static Future<Map<String, dynamic>> ResetPassword(
-      Map<String, dynamic> userData) async {
+      Map<String, dynamic> userData, Map<String, dynamic> queryParams) async {
     final url = Uri.parse(ApiEndpoints
         .apiUrlPasswordReset); // Ensure this path matches your Django URL
 
