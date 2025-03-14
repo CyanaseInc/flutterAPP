@@ -1,3 +1,4 @@
+import 'package:cyanase/helpers/web_db.dart';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../../theme/theme.dart';
@@ -30,14 +31,19 @@ class _PortfolioState extends State<Portfolio> {
 
   Future<void> _fetchPortfolioData() async {
     try {
-      final dbHelper = DatabaseHelper();
-      final db = await dbHelper.database;
-      final userProfile = await db.query('profile', limit: 1);
+      // final dbHelper = DatabaseHelper();
+      // final db = await dbHelper.database;
+      // final userProfile = await db.query('profile', limit: 1);
+      await WebSharedStorage.init();
+      var existingProfile = WebSharedStorage();
 
-      if (userProfile.isNotEmpty) {
-        final token = userProfile.first['token'] as String;
+      // if (userProfile.isNotEmpty) {
+      if (existingProfile.getCommon('token') != '') {
+        // final token = userProfile.first['token'] as String;
+        final token = existingProfile.getCommon('token');
         final response = await ApiService.depositNetworth(token);
         final data = response['data'] ?? {};
+        print(data);
 
         final investmentPerformance =
             data['investment_performance'] as List? ?? [];
@@ -102,28 +108,28 @@ class _PortfolioState extends State<Portfolio> {
       body: CustomScrollView(
         slivers: [
           _buildSliverAppBar(),
-          SliverToBoxAdapter(child: SizedBox(height: 20)),
+          const SliverToBoxAdapter(child: SizedBox(height: 20)),
           isLoading
-              ? SliverToBoxAdapter(
+              ? const SliverToBoxAdapter(
                   child: Center(
                       child: CircularProgressIndicator(color: primaryColor)),
                 )
               : SliverToBoxAdapter(child: _buildPortfolioCarousel(context)),
-          SliverToBoxAdapter(child: SizedBox(height: 30)),
+          const SliverToBoxAdapter(child: SizedBox(height: 30)),
           isLoading
-              ? SliverToBoxAdapter(child: SizedBox.shrink())
+              ? const SliverToBoxAdapter(child: SizedBox.shrink())
               : SliverToBoxAdapter(child: _buildPerformanceSection()),
-          SliverToBoxAdapter(child: SizedBox(height: 30)),
+          const SliverToBoxAdapter(child: SizedBox(height: 30)),
           isLoading
-              ? SliverToBoxAdapter(child: SizedBox.shrink())
+              ? const SliverToBoxAdapter(child: SizedBox.shrink())
               : SliverToBoxAdapter(
                   child: ActivitySummaryCard(portfolios: portfolios)),
-          SliverToBoxAdapter(child: SizedBox(height: 30)),
+          const SliverToBoxAdapter(child: SizedBox(height: 30)),
           isLoading
-              ? SliverToBoxAdapter(child: SizedBox.shrink())
+              ? const SliverToBoxAdapter(child: SizedBox.shrink())
               : SliverToBoxAdapter(
                   child: InvestmentDistribution(portfolios: portfolios)),
-          SliverToBoxAdapter(child: SizedBox(height: 20)),
+          const SliverToBoxAdapter(child: SizedBox(height: 20)),
         ],
       ),
     );
@@ -136,13 +142,13 @@ class _PortfolioState extends State<Portfolio> {
       pinned: true,
       backgroundColor: white,
       elevation: 0,
-      title: Text(
+      title: const Text(
         'My Portfolio',
         style: TextStyle(
             fontWeight: FontWeight.bold, color: primaryTwo, fontSize: 18),
       ),
       bottom: PreferredSize(
-        preferredSize: Size.fromHeight(1),
+        preferredSize: const Size.fromHeight(1),
         child: Container(color: Colors.grey[300], height: 1),
       ),
     );
@@ -160,7 +166,7 @@ class _PortfolioState extends State<Portfolio> {
             itemBuilder: (context, index) {
               final portfolio = portfolios[index];
               return Padding(
-                padding: EdgeInsets.symmetric(horizontal: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
                 child: _buildPortfolioCard(portfolio, index, maxWidth),
               );
             },
@@ -181,23 +187,23 @@ class _PortfolioState extends State<Portfolio> {
           color: gradientColors[index % gradientColors.length],
           borderRadius: BorderRadius.circular(20),
         ),
-        padding: EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
               portfolio['name'],
-              style: TextStyle(
+              style: const TextStyle(
                   fontSize: 20, fontWeight: FontWeight.bold, color: white),
             ),
-            SizedBox(height: 16),
+            const SizedBox(height: 16),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Flexible(
                     child: _buildValueWidget('Deposit', portfolio['deposit'])),
-                SizedBox(width: 16),
+                const SizedBox(width: 16),
                 Flexible(
                     child:
                         _buildValueWidget('Net Worth', portfolio['netWorth'])),
@@ -217,16 +223,16 @@ class _PortfolioState extends State<Portfolio> {
           label,
           style: TextStyle(color: white.withOpacity(0.8), fontSize: 12),
         ),
-        SizedBox(height: 4),
+        const SizedBox(height: 4),
         Text.rich(
           TextSpan(
             children: [
               TextSpan(
                   text: '${widget.currency ?? "UGX"} ',
-                  style: TextStyle(color: white, fontSize: 12)),
+                  style: const TextStyle(color: white, fontSize: 12)),
               TextSpan(
                 text: numberFormat.format(value),
-                style: TextStyle(
+                style: const TextStyle(
                     color: white, fontSize: 18, fontWeight: FontWeight.bold),
               ),
             ],
@@ -259,7 +265,7 @@ class _PortfolioState extends State<Portfolio> {
         maxY != double.negativeInfinity;
 
     if (!hasData) {
-      return Center(
+      return const Center(
         child: Text(
           'No performance data available',
           style: TextStyle(fontSize: 16, color: Colors.grey),
@@ -301,8 +307,8 @@ class _PortfolioState extends State<Portfolio> {
     print('Intervals: xInterval=$xInterval, yInterval=$yInterval');
 
     return Container(
-      margin: EdgeInsets.symmetric(horizontal: 16),
-      padding: EdgeInsets.all(16),
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: white,
         borderRadius: BorderRadius.circular(20),
@@ -316,12 +322,12 @@ class _PortfolioState extends State<Portfolio> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
+          const Text(
             'Performance Overview',
             style: TextStyle(
                 fontSize: 20, fontWeight: FontWeight.bold, color: primaryTwo),
           ),
-          SizedBox(height: 16),
+          const SizedBox(height: 16),
           SizedBox(
             height: 200,
             child: LineChart(
@@ -348,7 +354,7 @@ class _PortfolioState extends State<Portfolio> {
                       interval: xInterval,
                       getTitlesWidget: (value, meta) {
                         if (value < minX || value > maxX)
-                          return SizedBox.shrink();
+                          return const SizedBox.shrink();
                         final referenceDate = DateTime(2000, 1, 1);
                         final date = DateTime(
                           referenceDate.year + (value ~/ 12),
@@ -356,7 +362,8 @@ class _PortfolioState extends State<Portfolio> {
                         );
                         return Text(
                           DateFormat('MMMyy').format(date),
-                          style: TextStyle(fontSize: 10, color: Colors.grey),
+                          style:
+                              const TextStyle(fontSize: 10, color: Colors.grey),
                         );
                       },
                     ),
@@ -368,29 +375,32 @@ class _PortfolioState extends State<Portfolio> {
                       interval: yInterval,
                       getTitlesWidget: (value, meta) {
                         if (value < minY || value > maxY)
-                          return SizedBox.shrink();
+                          return const SizedBox.shrink();
                         if (value.abs() >= 1000000) {
                           return Text(
                             '${(value / 1000000).toStringAsFixed(1)}M',
-                            style: TextStyle(fontSize: 10, color: Colors.grey),
+                            style: const TextStyle(
+                                fontSize: 10, color: Colors.grey),
                           );
                         } else if (value.abs() >= 1000) {
                           return Text(
                             '${(value / 1000).toStringAsFixed(1)}k',
-                            style: TextStyle(fontSize: 10, color: Colors.grey),
+                            style: const TextStyle(
+                                fontSize: 10, color: Colors.grey),
                           );
                         }
                         return Text(
                           value.toStringAsFixed(0),
-                          style: TextStyle(fontSize: 10, color: Colors.grey),
+                          style:
+                              const TextStyle(fontSize: 10, color: Colors.grey),
                         );
                       },
                     ),
                   ),
-                  topTitles:
-                      AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  rightTitles:
-                      AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  topTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false)),
+                  rightTitles: const AxisTitles(
+                      sideTitles: SideTitles(showTitles: false)),
                 ),
                 lineBarsData: portfolios.asMap().entries.map((entry) {
                   final index = entry.key;
@@ -401,7 +411,7 @@ class _PortfolioState extends State<Portfolio> {
                       isCurved: false,
                       barWidth: 3,
                       color: gradientColors[index % gradientColors.length],
-                      dotData: FlDotData(show: true),
+                      dotData: const FlDotData(show: true),
                       belowBarData: BarAreaData(show: false),
                     );
                   }
@@ -410,7 +420,7 @@ class _PortfolioState extends State<Portfolio> {
                     isCurved: true,
                     barWidth: 3,
                     color: gradientColors[index % gradientColors.length],
-                    dotData: FlDotData(show: false),
+                    dotData: const FlDotData(show: false),
                     belowBarData: BarAreaData(
                       show: true,
                       gradient: LinearGradient(
@@ -433,7 +443,7 @@ class _PortfolioState extends State<Portfolio> {
               ),
             ),
           ),
-          SizedBox(height: 16),
+          const SizedBox(height: 16),
           Wrap(
             spacing: 16,
             children: portfolios.asMap().entries.map((entry) {
@@ -449,7 +459,7 @@ class _PortfolioState extends State<Portfolio> {
                       color: gradientColors[index % gradientColors.length],
                     ),
                   ),
-                  SizedBox(width: 8),
+                  const SizedBox(width: 8),
                   Text(
                     entry.value['name'],
                     style: TextStyle(color: Colors.grey[700], fontSize: 12),

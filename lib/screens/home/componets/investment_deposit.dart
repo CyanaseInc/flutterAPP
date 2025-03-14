@@ -1,4 +1,5 @@
 import 'package:cyanase/helpers/loader.dart';
+import 'package:cyanase/helpers/web_db.dart';
 import 'package:flutter/material.dart';
 import '../../../theme/theme.dart';
 import 'package:cyanase/screens/settings/riskprofiler.dart';
@@ -13,7 +14,7 @@ class Deposit extends StatefulWidget {
 }
 
 class _DepositState extends State<Deposit> {
-  PageController _pageController = PageController();
+  final PageController _pageController = PageController();
   int currentStep = 0;
 
   // Data storage
@@ -43,10 +44,15 @@ class _DepositState extends State<Deposit> {
   // Fetch investment data from the API
   Future<void> _fetchInvestmentData() async {
     try {
-      final dbHelper = DatabaseHelper();
-      final db = await dbHelper.database;
-      final userProfile = await db.query('profile', limit: 1);
-      final token = userProfile.first['token'] as String;
+      // final dbHelper = DatabaseHelper();
+      // final db = await dbHelper.database;
+      // final userProfile = await db.query('profile', limit: 1);
+      // final token = userProfile.first['token'] as String;
+
+      await WebSharedStorage.init();
+      var existingProfile = WebSharedStorage();
+
+      final token = existingProfile.getCommon('token');
 
       // Fetch investment data from the API
       final response = await ApiService.getClasses(token);
@@ -122,18 +128,19 @@ class _DepositState extends State<Deposit> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => RiskProfilerForm(),
+                    builder: (context) => const RiskProfilerForm(),
                   ),
                 );
               },
               style: OutlinedButton.styleFrom(
-                side: BorderSide(color: primaryTwo, width: 2),
-                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                side: const BorderSide(color: primaryTwo, width: 2),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
               ),
-              child: Text(
+              child: const Text(
                 'Edit Risk Profile',
                 style: TextStyle(
                   fontSize: 16,
@@ -143,7 +150,7 @@ class _DepositState extends State<Deposit> {
             ),
             Expanded(
               child: _isLoading
-                  ? Center(child: Loader()) // Show preloader
+                  ? const Center(child: Loader()) // Show preloader
                   : PageView(
                       controller: _pageController,
                       onPageChanged: (page) {
@@ -151,7 +158,7 @@ class _DepositState extends State<Deposit> {
                           currentStep = page;
                         });
                       },
-                      physics: NeverScrollableScrollPhysics(),
+                      physics: const NeverScrollableScrollPhysics(),
                       children: [
                         buildFundClassStep(),
                         buildOptionStep(),
@@ -163,12 +170,12 @@ class _DepositState extends State<Deposit> {
                           selectedOptionId:
                               selectedOption?['id'], // Pass the option ID
                           selectedFundManager: selectedFundManager,
-                          depositCategory: 'personal_investment',
+                          depositCategory: 'personal',
                         ), // for ID),
                       ],
                     ),
             ),
-            SizedBox(height: 10),
+            const SizedBox(height: 10),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -176,16 +183,16 @@ class _DepositState extends State<Deposit> {
                     ? ElevatedButton(
                         onPressed: () {
                           _pageController.previousPage(
-                              duration: Duration(milliseconds: 300),
+                              duration: const Duration(milliseconds: 300),
                               curve: Curves.easeIn);
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: primaryTwo,
                           foregroundColor: primaryColor,
                         ),
-                        child: Text('Back'),
+                        child: const Text('Back'),
                       )
-                    : SizedBox(),
+                    : const SizedBox(),
               ],
             )
           ],
@@ -198,7 +205,7 @@ class _DepositState extends State<Deposit> {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Text(
+        const Text(
           'Select Investment Class',
           style: TextStyle(
             fontSize: 20,
@@ -218,7 +225,7 @@ class _DepositState extends State<Deposit> {
         ),
         DropdownButton<String>(
           value: selectedFundClass,
-          hint: Text('Choose an investment class'),
+          hint: const Text('Choose an investment class'),
           items: _fundClasses.map((fundClass) {
             return DropdownMenuItem<String>(
               value: fundClass,
@@ -233,7 +240,7 @@ class _DepositState extends State<Deposit> {
             });
             _extractOptions(value!); // Extract options for the selected class
             _pageController.nextPage(
-              duration: Duration(milliseconds: 300),
+              duration: const Duration(milliseconds: 300),
               curve: Curves.easeIn,
             );
           },
@@ -243,12 +250,12 @@ class _DepositState extends State<Deposit> {
   }
 
   Widget buildOptionStep() {
-    if (selectedFundClass == null) return SizedBox.shrink();
+    if (selectedFundClass == null) return const SizedBox.shrink();
 
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Text(
+        const Text(
           'Select Option',
           style: TextStyle(
             fontSize: 20,
@@ -268,7 +275,7 @@ class _DepositState extends State<Deposit> {
         ),
         DropdownButton<Map<String, dynamic>>(
           value: selectedOption,
-          hint: Text('Choose an option'),
+          hint: const Text('Choose an option'),
           items: _options.map((option) {
             return DropdownMenuItem<Map<String, dynamic>>(
               value: option, // Store the entire option Map
@@ -282,7 +289,7 @@ class _DepositState extends State<Deposit> {
             });
             _extractFundManagers(value!['name']); // Pass the option name
             _pageController.nextPage(
-              duration: Duration(milliseconds: 300),
+              duration: const Duration(milliseconds: 300),
               curve: Curves.easeIn,
             );
           },
@@ -292,12 +299,12 @@ class _DepositState extends State<Deposit> {
   }
 
   Widget buildFundManagerStep() {
-    if (selectedOption == null) return SizedBox.shrink();
+    if (selectedOption == null) return const SizedBox.shrink();
 
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Text(
+        const Text(
           'Select Fund Manager',
           style: TextStyle(
             fontSize: 20,
@@ -317,7 +324,7 @@ class _DepositState extends State<Deposit> {
         ),
         DropdownButton<String>(
           value: selectedFundManager,
-          hint: Text('Choose a fund manager'),
+          hint: const Text('Choose a fund manager'),
           items: _fundManagers.map((manager) {
             return DropdownMenuItem<String>(
               value: manager,
@@ -329,7 +336,7 @@ class _DepositState extends State<Deposit> {
               selectedFundManager = value;
             });
             _pageController.nextPage(
-              duration: Duration(milliseconds: 300),
+              duration: const Duration(milliseconds: 300),
               curve: Curves.easeIn,
             );
           },

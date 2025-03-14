@@ -1,3 +1,4 @@
+import 'package:cyanase/helpers/web_db.dart';
 import 'package:flutter/material.dart';
 import 'goal_screen.dart'; // Import the modified GoalScreen
 import 'add_goal.dart'; // Ensure this is implemented
@@ -25,26 +26,29 @@ class _GoalsTabState extends State<GoalsTab> {
 
   Future<void> fetchGoalData() async {
     try {
-      final dbHelper = DatabaseHelper();
-      final db = await dbHelper.database;
-      final userProfile = await db.query('profile', limit: 1);
+      // final dbHelper = DatabaseHelper();
+      // final db = await dbHelper.database;
+      // final userProfile = await db.query('profile', limit: 1);
 
-      if (userProfile.isEmpty) {
-        throw Exception('No user profile found');
-      }
+      // if (userProfile.isEmpty) {
+      //   throw Exception('No user profile found');
+      // }
 
-      final token = userProfile.first['token'] as String;
+      // final token = userProfile.first['token'] as String;
+
+      await WebSharedStorage.init();
+      var existingProfile = WebSharedStorage();
+
+      final token = existingProfile.getCommon('token');
 
       // Fetch goals from the API
       final response = await ApiService.getAllUserGoals(token);
 
-      // Check if the response is successful
-      if (response.statusCode == 200) {
+      if (response['success'] = true) {
         // Decode the response body into a Map<String, dynamic>
-        final Map<String, dynamic> responseBody = jsonDecode(response.body);
 
         // Extract the 'goal' list from the response
-        final List<dynamic> goalList = responseBody['goal'] as List<dynamic>;
+        final List<dynamic> goalList = response['data'][2] as List<dynamic>;
         final List<Map<String, dynamic>> fetchedGoals = goalList
             .map((item) => Map<String, dynamic>.from(item as Map))
             .toList();
@@ -53,8 +57,6 @@ class _GoalsTabState extends State<GoalsTab> {
           goals = fetchedGoals;
           isLoading = false;
         });
-      } else {
-        throw Exception('Failed to fetch goals: ${response.statusCode}');
       }
     } catch (e) {
       setState(() {
@@ -87,17 +89,17 @@ class _GoalsTabState extends State<GoalsTab> {
         onPressed: () {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => AddGoalScreen()),
+            MaterialPageRoute(builder: (context) => const AddGoalScreen()),
           ).then((_) {
             // Refresh goals after adding a new one
             fetchGoalData();
           });
         },
-        child: Icon(
+        backgroundColor: primaryTwo,
+        child: const Icon(
           Icons.add,
           color: primaryColor,
         ),
-        backgroundColor: primaryTwo,
       ),
     );
   }

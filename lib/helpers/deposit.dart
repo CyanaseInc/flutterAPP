@@ -1,9 +1,12 @@
 import 'package:cyanase/helpers/loader.dart';
+import 'package:cyanase/helpers/web_db.dart';
+import 'package:cyanase/screens/pay/flutterwave.dart';
 import 'package:flutter/material.dart';
 import 'package:cyanase/theme/theme.dart';
 import 'package:cyanase/helpers/database_helper.dart';
 import 'package:cyanase/helpers/get_currency.dart';
 import 'package:cyanase/helpers/api_helper.dart';
+import 'dart:math';
 
 class DepositHelper extends StatefulWidget {
   final String? selectedFundClass;
@@ -11,9 +14,10 @@ class DepositHelper extends StatefulWidget {
   final String? depositCategory;
   final String? selectedFundManager;
   final int? selectedOptionId;
-  final detailText;
-  DepositHelper(
-      {this.selectedFundClass,
+  final String? detailText;
+  const DepositHelper(
+      {super.key,
+      this.selectedFundClass,
       this.selectedOption,
       this.selectedFundManager,
       this.selectedOptionId,
@@ -28,9 +32,9 @@ class _DepositScreenState extends State<DepositHelper> {
   final PageController _pageController = PageController();
   int _currentStep = 0;
   String? _selectedMethod;
-  String Phonenumber = '';
+  String phonenumber = '';
   bool _isSubmitting = false;
-  double? depositAmount;
+  double? depositAmount = 0;
   void initState() {
     super.initState();
     _getNumber(); // Fetch data when the widget initializes
@@ -42,7 +46,7 @@ class _DepositScreenState extends State<DepositHelper> {
         _currentStep++;
       });
       _pageController.nextPage(
-        duration: Duration(milliseconds: 300),
+        duration: const Duration(milliseconds: 300),
         curve: Curves.easeInOut,
       );
     }
@@ -59,12 +63,18 @@ class _DepositScreenState extends State<DepositHelper> {
 
   Future<void> _getNumber() async {
     try {
-      final dbHelper = DatabaseHelper();
-      final db = await dbHelper.database;
-      final userProfile = await db.query('profile', limit: 1);
-      final userPhone = userProfile.first['phone_number'] as String;
+      // final dbHelper = DatabaseHelper();
+      // final db = await dbHelper.database;
+      // final userProfile = await db.query('profile', limit: 1);
+      await WebSharedStorage.init();
+      var existingProfile = WebSharedStorage();
+
+      final token = existingProfile.getCommon('token');
+      final userPhone = existingProfile.getCommon('phone_number');
+
+      // final userPhone = userProfile.first['phone_number'] as String;
       setState(() {
-        Phonenumber = userPhone;
+        phonenumber = userPhone;
         // Data has been fetched, stop loading
       });
     } catch (e) {
@@ -79,7 +89,7 @@ class _DepositScreenState extends State<DepositHelper> {
 
       body: PageView(
         controller: _pageController,
-        physics: BouncingScrollPhysics(), // Allows scrolling left & right
+        physics: const BouncingScrollPhysics(), // Allows scrolling left & right
         onPageChanged: (index) {
           setState(() {
             _currentStep = index;
@@ -87,11 +97,20 @@ class _DepositScreenState extends State<DepositHelper> {
         },
         children: [
           _buildChooseDepositMethod(),
-          _buildEnterAmount(),
+          _buildOption(_selectedMethod),
           _buildSuccessScreen(),
         ],
       ),
     );
+  }
+
+  Widget _buildOption(String? method) {
+    print(method);
+    if (method == 'Mobile Money') {
+      return _buildMMOption();
+    } else {
+      return _buildBankOption();
+    }
   }
 
   Widget _buildChooseDepositMethod() {
@@ -104,9 +123,10 @@ class _DepositScreenState extends State<DepositHelper> {
             style: TextStyle(
                 fontSize: 20, fontWeight: FontWeight.bold, color: primaryTwo),
           ),
-          SizedBox(height: 10),
-          Text(
-            widget.detailText,
+          const SizedBox(height: 10),
+          const Text(
+            // widget.detailText!,
+            'hey',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 12, color: Colors.grey),
           ),
@@ -115,9 +135,9 @@ class _DepositScreenState extends State<DepositHelper> {
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 12, color: Colors.grey),
           ),
-          SizedBox(height: 10),
+          const SizedBox(height: 10),
           _depositOption('Mobile Money', Icons.phone_android),
-          SizedBox(height: 10),
+          const SizedBox(height: 10),
           _depositOption('Bank Transfer', Icons.account_balance),
         ],
       ),
@@ -140,14 +160,14 @@ class _DepositScreenState extends State<DepositHelper> {
             borderRadius: BorderRadius.circular(10),
           ),
           child: Padding(
-            padding: EdgeInsets.symmetric(vertical: 15, horizontal: 20),
+            padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
             child: Row(
               children: [
                 Icon(icon, size: 30),
-                SizedBox(width: 10),
+                const SizedBox(width: 10),
                 Text(
                   method,
-                  style: TextStyle(fontSize: 16),
+                  style: const TextStyle(fontSize: 16),
                 ),
               ],
             ),
@@ -158,11 +178,25 @@ class _DepositScreenState extends State<DepositHelper> {
   }
 
   void submitDepositor() async {
-    if (depositAmount == null || depositAmount! <= 0 || Phonenumber.isEmpty) {
+    if (depositAmount == null || depositAmount! <= 0 || phonenumber.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Please enter a valid amount and phone number')),
+        const SnackBar(
+            content: Text('Please enter a valid amount and phone number')),
       );
-      return;
+    }
+    String referenceID() {
+      Random random = Random();
+
+      String rand() {
+        return random.nextInt(36).toRadixString(
+            36); // Generate a random value and convert to base 36
+      }
+
+      String ref() {
+        return rand() + rand() + rand(); // To make it longer
+      }
+
+      return ref();
     }
 
     setState(() {
@@ -170,11 +204,16 @@ class _DepositScreenState extends State<DepositHelper> {
     });
 
     try {
-      final dbHelper = DatabaseHelper();
-      final db = await dbHelper.database;
-      final userProfile = await db.query('profile', limit: 1);
-      final token = userProfile.first['token'] as String;
-      final userCountry = userProfile.first['country'] as String; // e.g., "UG"
+      // final dbHelper = DatabaseHelper();
+      // final db = await dbHelper.database;
+      // final userProfile = await db.query('profile', limit: 1);
+      // final token = userProfile.first['token'] as String;
+      // final userCountry = userProfile.first['country'] as String; // e.g., "UG"
+      await WebSharedStorage.init();
+      var existingProfile = WebSharedStorage();
+
+      final token = existingProfile.getCommon('token');
+      final userCountry = existingProfile.getCommon('country');
 
       final currency = CurrencyHelper.getCurrencyCode(userCountry);
 
@@ -193,21 +232,88 @@ class _DepositScreenState extends State<DepositHelper> {
         "account_type": "basic",
         "reference": reference,
         "reference_id": referenceId,
-        "phone_number": Phonenumber,
+        "phone_number": phonenumber,
       };
-      print('response $requestData');
-      // Make API call
-      final response = await ApiService.investDeposit(token, requestData);
+      print(requestData);
+      var amount = requestData['deposit_amount'] as String;
 
-      // If successful, navigate to the success screen
-      _pageController.nextPage(
-        duration: Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-      );
+      double getFee() {
+        var fee = ((1.4 / 100) * int.parse(amount)).toStringAsFixed(2);
+        var result = double.parse(fee);
+        return result;
+      }
+
+      double relCharge() {
+        var fee = (2.5 / 100) * int.parse(amount);
+        fee = fee + getFee();
+        return fee;
+      }
+
+      double getTotalDeposit2() {
+        var totalDeposit = getFee() + int.parse(amount) + relCharge();
+        return totalDeposit;
+      }
+
+      var phone = {
+        "msisdn": requestData['phone_number'],
+      };
+      var data = {
+        "account_no": "REL6AEDF95B5A",
+        "reference": requestData['reference'],
+        "msisdn": requestData['phone_number'],
+        "currency": requestData['currency'],
+        "amount": getTotalDeposit2(),
+        "description": "Payment Request."
+      };
+      // validate phone number
+      final validatePhone = await ApiService.validatePhone(token, phone);
+      if (validatePhone['success'] == true) {
+        // proceed to request payment
+        final requestPayment = await ApiService.requestPayment(token, data);
+        if (requestPayment['success'] == true) {
+          // get transaction
+          final authPayment = await ApiService.getTransaction(token, data);
+          if (authPayment['success'] == true) {
+            //deposit
+            final response = await ApiService.investDeposit(token, requestData);
+            if (response['success'] == true) {
+              String message = response['message'];
+              // If successful, navigate to the success screen
+              _pageController.nextPage(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
+              );
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(message)),
+              );
+            } else {
+              String message = response['message'];
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(message)),
+              );
+            }
+          } else {
+            String message = authPayment['message'];
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(message)),
+            );
+          }
+        } else {
+          String message = requestPayment['message'];
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(message)),
+          );
+        }
+      } else {
+        String message = validatePhone['message'];
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message)),
+        );
+      }
     } catch (e) {
-      print('Error submitting deposit: $e');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to submit deposit. Please try again.')),
+        const SnackBar(
+            content: Text('Failed to submit deposit. Please try again.')),
       );
     } finally {
       setState(() {
@@ -216,7 +322,7 @@ class _DepositScreenState extends State<DepositHelper> {
     }
   }
 
-  Widget _buildEnterAmount() {
+  Widget _buildMMOption() {
     return LayoutBuilder(
       builder: (context, constraints) {
         return SingleChildScrollView(
@@ -229,50 +335,51 @@ class _DepositScreenState extends State<DepositHelper> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
+                    const Padding(padding: EdgeInsets.only(top: 8)),
                     const Text(
-                      'Enter Details to continue',
+                      'Deposit via Mobile Money',
                       style: TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
                           color: primaryTwo),
                     ),
-                    SizedBox(height: 10),
+                    const SizedBox(height: 10),
                     const Text(
                       'Enter how much you want to deposit',
                       textAlign: TextAlign.center,
                       style: TextStyle(fontSize: 15, color: Colors.grey),
                     ),
-                    SizedBox(height: 20),
+                    const SizedBox(height: 20),
                     SizedBox(
                       width: 320,
                       child: Card(
                         elevation: 5,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
-                          side: BorderSide(color: primaryColor, width: 1),
+                          side: const BorderSide(color: primaryColor, width: 1),
                         ),
                         child: Padding(
-                          padding: EdgeInsets.symmetric(
+                          padding: const EdgeInsets.symmetric(
                               vertical: 15, horizontal: 10),
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Icon(Icons.phone_android,
+                              const Icon(Icons.phone_android,
                                   size: 35, color: primaryTwo),
-                              SizedBox(width: 15),
+                              const SizedBox(width: 15),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      Phonenumber,
-                                      style: TextStyle(
+                                      phonenumber,
+                                      style: const TextStyle(
                                         fontSize: 18,
                                         fontWeight: FontWeight.bold,
                                         color: Colors.black87,
                                       ),
                                     ),
-                                    SizedBox(height: 4),
+                                    const SizedBox(height: 4),
                                     Text(
                                       'This number will be used for deposits.',
                                       style: TextStyle(
@@ -289,11 +396,11 @@ class _DepositScreenState extends State<DepositHelper> {
                         ),
                       ),
                     ),
-                    SizedBox(height: 10),
+                    const SizedBox(height: 10),
                     _textField('Enter Amount'),
 
                     /// **Submit Button**
-                    SizedBox(height: 20),
+                    const SizedBox(height: 20),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
@@ -303,12 +410,13 @@ class _DepositScreenState extends State<DepositHelper> {
                             backgroundColor:
                                 _isSubmitting ? Colors.grey : primaryTwo,
                             foregroundColor: white,
-                            padding: EdgeInsets.symmetric(
+                            padding: const EdgeInsets.symmetric(
                                 horizontal: 20, vertical: 10),
                           ),
                           child: _isSubmitting
-                              ? SizedBox(height: 20, width: 20, child: Loader())
-                              : Text('Submit'),
+                              ? const SizedBox(
+                                  height: 20, width: 20, child: Loader())
+                              : const Text('Submit'),
                         ),
                       ],
                     ),
@@ -322,24 +430,50 @@ class _DepositScreenState extends State<DepositHelper> {
     );
   }
 
-  Widget _textField(String label) {
-    return TextField(
-      keyboardType: TextInputType.number,
-      onChanged: (value) {
-        setState(() {
-          depositAmount = value.isNotEmpty ? double.parse(value) : null;
-        });
+  Widget _buildBankOption() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: constraints.maxHeight, // Ensures scrolling
+            ),
+            child: const IntrinsicHeight(
+              child: Center(
+                  child: FlutterPay(
+                amount: 0,
+                name: '',
+                data: '',
+                email: '',
+                currency: '',
+              )),
+            ),
+          ),
+        );
       },
-      decoration: InputDecoration(
-        labelText: label,
-        enabledBorder: UnderlineInputBorder(
-          borderSide: BorderSide(color: primaryColor),
-        ),
-        focusedBorder: UnderlineInputBorder(
-          borderSide: BorderSide(color: primaryLight),
-        ),
-      ),
     );
+  }
+
+  Widget _textField(String label) {
+    return Container(
+        padding: const EdgeInsets.all(10.0),
+        child: TextField(
+          keyboardType: TextInputType.number,
+          onChanged: (value) {
+            setState(() {
+              depositAmount = value.isNotEmpty ? double.parse(value) : null;
+            });
+          },
+          decoration: InputDecoration(
+            labelText: label,
+            enabledBorder: const UnderlineInputBorder(
+              borderSide: BorderSide(color: primaryColor),
+            ),
+            focusedBorder: const UnderlineInputBorder(
+              borderSide: BorderSide(color: primaryLight),
+            ),
+          ),
+        ));
   }
 
   Widget _buildSuccessScreen() {
@@ -353,17 +487,17 @@ class _DepositScreenState extends State<DepositHelper> {
             height: 100,
             fit: BoxFit.contain,
           ),
-          SizedBox(height: 20),
-          Text(
+          const SizedBox(height: 20),
+          const Text(
             'Deposit Successful!',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
-          SizedBox(height: 20),
+          const SizedBox(height: 20),
           ElevatedButton(
             onPressed: () {
               Navigator.pop(context);
             },
-            child: Text('Finish'),
+            child: const Text('Finish'),
           ),
         ],
       ),

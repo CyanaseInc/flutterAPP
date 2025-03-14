@@ -1,6 +1,9 @@
+import 'dart:io';
+
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'endpoints.dart'; // Import the file with API endpoints
+import 'package:http_parser/http_parser.dart';
 
 class ApiService {
   // Helper function to handle API responses
@@ -241,24 +244,111 @@ class ApiService {
 
   static Future<Map<String, dynamic>> depositNetworth(String token) async {
     try {
-      // Define the URL
-      final Uri url = Uri.parse(ApiEndpoints.apiUrlGetDeposit);
+      final response = await http.get(
+        Uri.parse(ApiEndpoints.apiUrlGetDeposit),
+        headers: {
+          'Authorization': 'Token $token',
+          'Content-Type': 'application/json',
+        },
+      );
+      // Check the response status
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body); // Convert response to Map
+      } else {
+        throw Exception(
+            'Failed to fetch subscription status: ${response.reasonPhrase}');
+      }
+    } catch (e) {
+      throw Exception('Error fetching subscription status: $e');
+    }
+  }
 
-      // Set the headers correctly
-      final Map<String, String> headers = {
-        'Authorization': 'Token $token',
-        'Content-Type': 'application/json',
-      };
+  static Future<Map<String, dynamic>> userTrack(String token) async {
+    try {
+      final response = await http.get(
+        Uri.parse(ApiEndpoints.apiUrlGetUserTrack),
+        headers: {
+          'Authorization': 'Token $token',
+          'Content-Type': 'application/json',
+        },
+      );
+      // Check the response status
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body); // Convert response to Map
+      } else {
+        throw Exception(
+            'Failed to fetch subscription status: ${response.reasonPhrase}');
+      }
+    } catch (e) {
+      throw Exception('Error fetching subscription status: $e');
+    }
+  }
 
-      // Make a GET request (same as the working version)
-      final http.Request request = http.Request('GET', url);
-      request.headers.addAll(headers);
+  static Future<Map<String, dynamic>> withdraw(String token, data) async {
+    try {
+      final response = await http.post(
+        Uri.parse(ApiEndpoints.apiUrlMmWithdraw),
+        headers: {
+          'Authorization': 'Token $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(data), // Convert requestData to JSON
+      );
+      // Check the response status
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body); // Convert response to Map
+      } else {
+        throw Exception(
+            'Failed to fetch subscription status: ${response.reasonPhrase}');
+      }
+    } catch (e) {
+      throw Exception('Error fetching subscription status: $e');
+    }
+  }
 
-      // Send the request and get the response
-      final http.StreamedResponse streamedResponse = await request.send();
-      final http.Response response =
-          await http.Response.fromStream(streamedResponse);
+  static Future<Map<String, dynamic>> uploadProfileImage(
+      String token, File imageFile) async {
+    try {
+      final uri = Uri.parse(ApiEndpoints.apiUrlUserProfilePhoto);
 
+      // Create a multipart request
+      var request = http.MultipartRequest('POST', uri)
+        ..headers['Authorization'] = 'Token $token';
+
+      // Add the image file to the request
+      var pic = await http.MultipartFile.fromPath(
+        'profile_image', // This should be the field name that Django expects
+        imageFile.path,
+        contentType:
+            MediaType('image', 'jpeg'), // or 'png' if the image is a PNG
+      );
+      request.files.add(pic);
+
+      // Send the request
+      var response = await request.send();
+
+      // Check the response
+      if (response.statusCode == 200) {
+        final responseData = await response.stream.bytesToString();
+        return jsonDecode(responseData);
+      } else {
+        throw Exception('Failed to upload image: ${response.reasonPhrase}');
+      }
+    } catch (e) {
+      throw Exception('Error uploading image: $e');
+    }
+  }
+
+  static Future<Map<String, dynamic>> goalWithdraw(String token, data) async {
+    try {
+      final response = await http.post(
+        Uri.parse(ApiEndpoints.apiUrlGoalMmWithdraw),
+        headers: {
+          'Authorization': 'Token $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(data), // Convert requestData to JSON
+      );
       // Check the response status
       if (response.statusCode == 200) {
         return jsonDecode(response.body); // Convert response to Map
@@ -380,6 +470,37 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, dynamic>> DeleteGoal(
+      String token, Map<String, dynamic> data) async {
+    try {
+      final uri = Uri.parse(ApiEndpoints.deleteGoal);
+      final request = http.MultipartRequest('POST', uri);
+
+      // Add headers
+      request.headers['Authorization'] = 'Token $token';
+      request.headers['Content-Type'] = 'multipart/form-data';
+
+      // Add form fields
+      request.fields
+          .addAll(data.map((key, value) => MapEntry(key, value.toString())));
+
+      // Send request
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      // Parse response
+      final responseData = jsonDecode(response.body);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return responseData; // { "message": ..., "success": ... }
+      } else {
+        throw Exception('Goal creation failed: ${responseData['message']}');
+      }
+    } catch (e) {
+      throw Exception('Goal creation failed: $e');
+    }
+  }
+
   static Future<Map<String, dynamic>> submitRiskProfile(
       String token, Map<String, dynamic> data) async {
     final response = await http.post(
@@ -406,7 +527,6 @@ class ApiService {
         'Content-Type': 'application/json',
       },
     );
-
     if (response.statusCode == 200) {
       // Decode the JSON response into a List<Map<String, dynamic>>
       return List<Map<String, dynamic>>.from(jsonDecode(response.body));
@@ -416,7 +536,7 @@ class ApiService {
     }
   }
 
-  static Future<http.Response> getAllUserGoals(String token) async {
+  static Future<Map<String, dynamic>> getAllUserGoals(String token) async {
     final response = await http.get(
       Uri.parse(ApiEndpoints.apiUrlGetGoal),
       headers: {
@@ -424,11 +544,72 @@ class ApiService {
         'Content-Type': 'application/json',
       },
     );
-
-    return response;
+    if (response.statusCode == 200) {
+      // Decode the JSON response into a List<Map<String, dynamic>>
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to fetch goals: ${response.statusCode}');
+    }
   }
 
-  static Future<void> investDeposit(
+  static Future<Map<String, dynamic>> validatePhone(
+      String token, Map<String, dynamic> phone) async {
+    final response = await http.post(
+      Uri.parse(ApiEndpoints.validatePhone), // Replace with your API endpoint
+      headers: {
+        'Authorization': 'Token $token',
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode(phone), // Convert requestData to JSON
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to validate phone: ${response.statusCode}');
+    } else {
+      return jsonDecode(response.body);
+    }
+  }
+
+  static Future<Map<String, dynamic>> requestPayment(
+      String token, Map<String, dynamic> data) async {
+    final response = await http.post(
+      Uri.parse(ApiEndpoints.requestPayment), // Replace with your API endpoint
+      headers: {
+        'Authorization': 'Token $token',
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode(data), // Convert requestData to JSON
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to submit deposit: ${response.statusCode}');
+    } else {
+      return jsonDecode(response.body);
+    }
+  }
+
+  static Future<Map<String, dynamic>> getTransaction(
+      String token, Map<String, dynamic> data) async {
+    final response = await http.post(
+      Uri.parse(ApiEndpoints.getTransaction), // Replace with your API endpoint
+      headers: {
+        'Authorization': 'Token $token',
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode(data), // Convert requestData to JSON
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to submit deposit: ${response.statusCode}');
+    } else {
+      return jsonDecode(response.body);
+    }
+  }
+
+  static Future<Map<String, dynamic>> investDeposit(
       String token, Map<String, dynamic> requestData) async {
     final response = await http.post(
       Uri.parse(ApiEndpoints.apiUrlDeposit), // Replace with your API endpoint
@@ -441,6 +622,8 @@ class ApiService {
 
     if (response.statusCode != 200) {
       throw Exception('Failed to submit deposit: ${response.statusCode}');
+    } else {
+      return jsonDecode(response.body);
     }
   }
 

@@ -24,7 +24,7 @@ class DepositWithdrawButtons extends StatelessWidget {
             foregroundColor: primaryTwo,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),
-              side: BorderSide(
+              side: const BorderSide(
                   color: primaryTwo, width: 1), // Border with primaryTwo color
             ),
           ),
@@ -56,11 +56,11 @@ class DepositWithdrawButtons extends StatelessWidget {
             foregroundColor: primaryTwo,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),
-              side: BorderSide(
+              side: const BorderSide(
                   color: primaryTwo, width: 1), // Border with primaryTwo color
             ),
           ),
-          child: Row(
+          child: const Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(

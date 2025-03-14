@@ -57,6 +57,7 @@ class _LoginScreenState extends State<LoginScreen> {
   String phoneNumber = '';
   bool _passcode = false;
   String _email = '';
+  String name = '';
   bool _showPasscodeOption = false;
   final TextEditingController _phoneController =
       TextEditingController(text: '+256');
@@ -103,7 +104,6 @@ class _LoginScreenState extends State<LoginScreen> {
       });
       return;
     }
-    print('username $username password: $password');
     try {
       final loginResponse = await ApiService.login({
         'username': username,
@@ -111,7 +111,6 @@ class _LoginScreenState extends State<LoginScreen> {
       });
 
       if (loginResponse.containsKey('success') && !loginResponse['success']) {
-        print('LOGIN $loginResponse');
         throw Exception(loginResponse['message'] ?? 'Login failed');
       }
 
@@ -124,6 +123,9 @@ class _LoginScreenState extends State<LoginScreen> {
         final email = user['email'];
         final userName = user['username'];
         final profile = user['profile'];
+        final picture = profile['profile_picture'];
+        final name = user["first_name"];
+        final lastName = user['last_name'];
         final userCountry = profile['country'];
         final phoneNumber = profile['phoneno'];
         final isVerified = profile['is_verified'] ?? false;
@@ -150,6 +152,9 @@ class _LoginScreenState extends State<LoginScreen> {
             existingProfile.setCommon('token', token);
             existingProfile.setCommon('username', userName);
             existingProfile.setCommon('country', userCountry);
+            existingProfile.setCommon('phone_number', phoneNumber);
+            existingProfile.setCommon('name', '$name $lastName');
+            existingProfile.setCommon('picture', picture);
 
             // await db.update(
             //   'profile',
@@ -183,9 +188,10 @@ class _LoginScreenState extends State<LoginScreen> {
             context,
             MaterialPageRoute(
               builder: (context) => HomeScreen(
-                passcode: _passcode,
-                email: _email,
-              ),
+                  passcode: _passcode,
+                  email: _email,
+                  name: name,
+                  picture: picture),
             ),
           );
         } else {

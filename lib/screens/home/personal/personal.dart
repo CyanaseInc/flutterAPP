@@ -1,3 +1,5 @@
+import 'package:cyanase/helpers/web_db.dart';
+import 'package:cyanase/screens/home/personal/conversion.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart'; // Import the intl package
 import '../../../theme/theme.dart'; // Your custom theme file
@@ -23,6 +25,7 @@ class _PersonalTabState extends State<PersonalTab> {
   double _totalDepositUGX = 0.0;
   double _totalDepositUSD = 0.0;
   double _totalNetworthy = 0.0;
+  double _totalNetworthyUSD = 0.0;
   String currency = ''; // Default currency
 
   @override
@@ -39,29 +42,61 @@ class _PersonalTabState extends State<PersonalTab> {
 
   Future<void> _getDepositNetworth() async {
     try {
-      final dbHelper = DatabaseHelper();
-      final db = await dbHelper.database;
-      final userProfile = await db.query('profile', limit: 1);
+      // final dbHelper = DatabaseHelper();
+      // final db = await dbHelper.database;
+      // final userProfile = await db.query('profile', limit: 1);
 
-      if (userProfile.isNotEmpty) {
-        final token = userProfile.first['token'] as String;
-        final userCountry = userProfile.first['country'] as String;
+      await WebSharedStorage.init();
+      var existingProfile = WebSharedStorage();
+
+      // if (userProfile.isNotEmpty) {
+      if (existingProfile.getCommon('token') != '') {
+        // final token = userProfile.first['token'] as String;
+        // final userCountry = userProfile.first['country'] as String;
+        final token = existingProfile.getCommon('token');
+        final userCountry = existingProfile.getCommon('country');
         final currencyCode = CurrencyHelper.getCurrencyCode(userCountry);
+
         final response = await ApiService.depositNetworth(token);
+        final userTrack = await ApiService.userTrack(token);
+        print(userTrack);
+
+        if (userTrack['success'] == true) {
+          double totalDeposit = 0;
+          double totalWithdraw = 0;
+          for (var track in userTrack['data']) {
+            totalDeposit += track['deposit_amount'] + track['opening_balance'];
+            totalWithdraw += track['closing_balance'];
+          }
+          var conversion = Conversion(currencyCode.toLowerCase(),
+              totalWithdraw < 0 ? totalWithdraw * -1 : totalWithdraw, 'usd');
+          var result = await conversion.executeConversion();
+          var depositConversion = Conversion(currencyCode.toLowerCase(),
+              totalDeposit < 0 ? totalDeposit * -1 : totalDeposit, 'usd');
+          var depositUSD = await depositConversion.executeConversion();
+          setState(() {
+            _totalDepositUGX = totalDeposit;
+            _totalDepositUSD = double.parse(depositUSD);
+            _totalNetworthy = totalWithdraw;
+            _totalNetworthyUSD = double.parse(result);
+            currency = currencyCode;
+          });
+        }
+
         final data = response['data'] ?? {};
 
-        // Safely extract the required fields with null checks
-        final totalDeposit =
-            (data['total_deposits'] as num?)?.toDouble() ?? 0.0;
-        final totalNetWorthy = (data['net_worth'] as num?)?.toDouble() ?? 0.0;
+        // // Safely extract the required fields with null checks
+        // final totalDeposit =
+        //     (data['total_deposits'] as num?)?.toDouble() ?? 0.0;
+        // final totalNetWorthy = (data['net_worth'] as num?)?.toDouble() ?? 0.0;
 
-        // Update the state
-        setState(() {
-          _totalDepositUGX = totalDeposit;
-          _totalDepositUSD = totalDeposit;
-          _totalNetworthy = totalNetWorthy;
-          currency = currencyCode;
-        });
+        // // Update the state
+        // setState(() {
+        //   _totalDepositUGX = totalDeposit;
+        //   _totalDepositUSD = totalDeposit;
+        //   _totalNetworthy = totalNetWorthy;
+        //   currency = currencyCode;
+        // });
       }
     } catch (e) {
       print('Error: $e');
@@ -89,7 +124,7 @@ class _PersonalTabState extends State<PersonalTab> {
                   );
                 },
                 style: OutlinedButton.styleFrom(
-                  side: BorderSide(color: primaryTwo),
+                  side: const BorderSide(color: primaryTwo),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),
@@ -115,13 +150,13 @@ class _PersonalTabState extends State<PersonalTab> {
             const SizedBox(height: 10),
             // Net Worth Card
             NetworthCard(
-              NetworthLocal: formatNumberWithCommas(_totalNetworthy),
+              networthLocal: formatNumberWithCommas(_totalNetworthy),
               currency: currency,
-              NetworthForeign: formatNumberWithCommas(_totalDepositUSD),
+              networthForeign: formatNumberWithCommas(_totalNetworthyUSD),
             ),
             const SizedBox(height: 20),
             // Fund Manager Slider
-            Text('Investment options',
+            const Text('Investment options',
                 style: TextStyle(
                     color: primaryTwo,
                     fontSize: 20,
@@ -132,7 +167,7 @@ class _PersonalTabState extends State<PersonalTab> {
             // Goals Section
             const SizedBox(height: 20),
             // Fund Manager Slider
-            Text('My Goals',
+            const Text('My Goals',
                 style: TextStyle(
                     color: primaryTwo,
                     fontSize: 20,

@@ -5,12 +5,20 @@ import '../../../theme/theme.dart';
 import 'package:cyanase/helpers/api_helper.dart'; // Import the API helper
 
 class Withdraw extends StatefulWidget {
+  final Map<String, dynamic> goalData;
+
+  const Withdraw({
+    Key? key,
+    required this.goalData,
+  }) : super(key: key);
+
   @override
   _WithdrawState createState() => _WithdrawState();
 }
 
 class _WithdrawState extends State<Withdraw> {
   PageController _pageController = PageController();
+  dynamic goalData;
   int currentStep = 0;
 
   // Sample portfolios data
@@ -21,45 +29,15 @@ class _WithdrawState extends State<Withdraw> {
   String? phoneNumber;
   String? bankDetails;
   double? withdrawAmount;
+  String? goalName;
 
   bool isLoading = false; // Flag to track if the withdrawal is in progress
 
   @override
   void initState() {
     super.initState();
-    _userTrack(); // Fetch data when the widget initializes
-  }
-
-  Future<void> _userTrack() async {
-    try {
-      // final dbHelper = DatabaseHelper();
-      // final db = await dbHelper.database;
-      // final userProfile = await db.query('profile', limit: 1);
-      // final token = userProfile.first['token'] as String;
-
-      await WebSharedStorage.init();
-      var existingProfile = WebSharedStorage();
-
-      final token = existingProfile.getCommon('token');
-
-      // Fetch investment data from the API
-      final response = await ApiService.userTrack(token);
-
-      if (response['success'] == true) {
-        // Update the state with the fetched data
-        for (var data in response['data']) {
-          portfoliosData.add(data);
-          setState(() {
-            isLoading = false;
-          });
-        }
-      }
-    } catch (e) {
-      print('Error fetching investment data: $e');
-      setState(() {
-        isLoading = true;
-      });
-    }
+    goalData = widget.goalData;
+    print(goalData);
   }
 
   void _withdraw() async {
@@ -88,8 +66,8 @@ class _WithdrawState extends State<Withdraw> {
       final requestData = {
         "withdraw_channel": withdrawMethod == 'Online' ? 'online' : 'online',
         "currency": currency,
-        "withdraw_amount": withdrawAmount ?? "",
-        "investment_id": selectedPortfolio ?? "",
+        "withdraw_amount": goalData['deposit'][0] ?? "",
+        "goal_id": goalData['goal_id'] ?? "",
         "account_type": "basic",
         "phone_number": phoneNumber,
         "account_bank": 'MPS',
@@ -97,7 +75,7 @@ class _WithdrawState extends State<Withdraw> {
       };
 
       // Fetch investment data from the API
-      final response = await ApiService.withdraw(token, requestData);
+      final response = await ApiService.goalWithdraw(token, requestData);
       print(response);
 
       if (response['success'] == true) {
@@ -142,7 +120,6 @@ class _WithdrawState extends State<Withdraw> {
                 });
               },
               children: [
-                buildPortfolioStep(),
                 buildWithdrawMethodStep(),
                 _buildOption(withdrawMethod),
                 _buildSuccessScreen(),
@@ -215,85 +192,7 @@ class _WithdrawState extends State<Withdraw> {
     );
   }
 
-  Widget buildPortfolioStep() {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        const Text(
-          'Select Portfolio',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: primaryTwo,
-          ),
-        ),
-        const SizedBox(height: 20),
-        // ListView to show the portfolios as scrollable cards
-        Expanded(
-          // Use Expanded to make sure the list fills the available space
-          child: ListView(
-            children: portfoliosData.map((portfolio) {
-              return GestureDetector(
-                onTap: () {
-                  setState(() {
-                    selectedPortfolio = portfolio['investment_option'];
-                  });
-                  _pageController.nextPage(
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeIn);
-                },
-                child: Card(
-                  color: primaryTwo, // Applying primaryTwo color
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12), // Rounded corners
-                  ),
-                  elevation: 5, // Adding elevation for a more stylish look
-                  margin: const EdgeInsets.symmetric(
-                      vertical: 8), // Vertical spacing
-                  child: Padding(
-                    padding: const EdgeInsets.all(
-                        16), // Internal padding for the card
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          portfolio['investment_option'], // Portfolio name
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: white,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Deposit Amount: \$${portfolio['deposit_amount'].toStringAsFixed(2)}', // Dynamic deposit amount
-                          style: const TextStyle(
-                            fontSize: 16,
-                            color: white,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Net Worth: \$${portfolio['closing_balance'].toStringAsFixed(2)}', // Dynamic net worth
-                          style: const TextStyle(
-                            fontSize: 16,
-                            color: white,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            }).toList(),
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildOption(String? method) {
-    print(method);
     if (method == 'mobile money') {
       return buildMobileMoneyStep();
     } else {
@@ -302,13 +201,14 @@ class _WithdrawState extends State<Withdraw> {
   }
 
   Widget buildWithdrawMethodStep() {
+    goalName = goalData['goal_name'];
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         // Display Withdraw from as a heading
-        if (selectedPortfolio != null)
+        if (goalData['goal_name'] != null)
           Text(
-            'Withdraw from $selectedPortfolio',
+            'Withdraw from $goalName',
             style: const TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
@@ -349,6 +249,7 @@ class _WithdrawState extends State<Withdraw> {
 
   Widget buildMobileMoneyStep() {
     if (withdrawMethod != 'mobile money') return const SizedBox.shrink();
+    withdrawAmount = goalData['deposit'][0];
 
     return Scaffold(
         backgroundColor: Colors.transparent,
@@ -371,6 +272,15 @@ class _WithdrawState extends State<Withdraw> {
               style: TextStyle(
                   fontSize: 18, fontWeight: FontWeight.bold, color: primaryTwo),
             ),
+            const SizedBox(height: 4),
+            Text(
+              'You are withdrawing $withdrawAmount',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[600],
+              ),
+              softWrap: true,
+            ),
             const SizedBox(height: 10),
             TextField(
               decoration: const InputDecoration(
@@ -383,38 +293,27 @@ class _WithdrawState extends State<Withdraw> {
                 phoneNumber = value;
               },
             ),
-            const SizedBox(height: 10),
-            TextField(
-              decoration: const InputDecoration(
-                labelText: 'Amount',
-                // Use UnderlineInputBorder for only a bottom border
-                border: UnderlineInputBorder(),
-              ),
-              keyboardType: TextInputType.number,
-              onChanged: (value) {
-                withdrawAmount = double.tryParse(value);
-              },
-            ),
           ],
         ));
   }
 
   Widget buildBankDetailsStep() {
     if (withdrawMethod != 'bank') return const SizedBox.shrink();
+    withdrawAmount = goalData['deposit'][0];
 
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         // Display Withdraw from as a heading
-        if (selectedPortfolio != null)
-          Text(
-            'Withdraw from: $selectedPortfolio',
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: primaryTwo,
-            ),
+        const SizedBox(height: 4),
+        Text(
+          'You are withdrawing $withdrawAmount',
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.grey[600],
           ),
+          softWrap: true,
+        ),
         const SizedBox(height: 20),
         const Text(
           'Bank Details',
@@ -429,17 +328,6 @@ class _WithdrawState extends State<Withdraw> {
           keyboardType: TextInputType.text,
           onChanged: (value) {
             bankDetails = value;
-          },
-        ),
-        const SizedBox(height: 10),
-        TextField(
-          decoration: const InputDecoration(
-            labelText: 'Amount',
-            border: OutlineInputBorder(),
-          ),
-          keyboardType: TextInputType.number,
-          onChanged: (value) {
-            withdrawAmount = double.tryParse(value);
           },
         ),
       ],

@@ -1,4 +1,5 @@
 import 'package:cyanase/helpers/loader.dart';
+import 'package:cyanase/helpers/web_db.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cyanase/theme/theme.dart';
@@ -544,15 +545,19 @@ class _AddGoalScreenState extends State<AddGoalScreen> {
     setState(() => _isSubmitting = true);
 
     try {
-      final dbHelper = DatabaseHelper();
-      final db = await dbHelper.database;
-      final userProfile = await db.query('profile', limit: 1);
+      // final dbHelper = DatabaseHelper();
+      // final db = await dbHelper.database;
+      // final userProfile = await db.query('profile', limit: 1);
+      await WebSharedStorage.init();
+      var existingProfile = WebSharedStorage();
 
-      if (userProfile.isEmpty) {
-        throw Exception('No user profile found');
-      }
+      final token = existingProfile.getCommon('token');
 
-      final token = userProfile.first['token'] as String;
+      // if (userProfile.isEmpty) {
+      //   throw Exception('No user profile found');
+      // }
+
+      // final token = userProfile.first['token'] as String;
 
       final data = {
         'goal_name': finalGoalName,

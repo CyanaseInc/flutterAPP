@@ -1,4 +1,5 @@
 import 'package:cyanase/helpers/loader.dart';
+import 'package:cyanase/helpers/web_db.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../../theme/theme.dart';
@@ -16,13 +17,16 @@ import 'package:cyanase/helpers/get_currency.dart';
 
 class HomeScreen extends StatefulWidget {
   final bool? passcode;
-  final String? email; // Made email nullable since it wasn't required before
+  final String? email;
+  final String? name;
+  final String? picture; // Made email nullable since it wasn't required before
 
-  const HomeScreen({
-    super.key, // Modern Flutter key convention
-    this.passcode,
-    this.email,
-  });
+  const HomeScreen(
+      {super.key, // Modern Flutter key convention
+      this.passcode,
+      this.email,
+      this.name,
+      this.picture});
 
   @override
   _HomeScreenState createState() => _HomeScreenState();
@@ -30,6 +34,9 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen>
     with SingleTickerProviderStateMixin {
+  final String? email1 = '';
+  final String? name1 = '';
+  String? picture1 = '';
   late TabController _tabController;
   String _currentTabTitle = 'Cyanase';
   bool _isSearching = false;
@@ -45,6 +52,7 @@ class _HomeScreenState extends State<HomeScreen>
       _fetchAndHashContacts();
       _initSubscriptionCheck();
     });
+    getLocalStorage();
   }
 
   void _fetchAndHashContacts() async {
@@ -102,6 +110,22 @@ class _HomeScreenState extends State<HomeScreen>
     } catch (e) {
       print('Error during initialization: $e');
     }
+  }
+
+  void getLocalStorage() async {
+    try {
+      // final dbHelper = DatabaseHelper();
+      // final db = await dbHelper.database;
+      // final userProfile = await db.query('profile', limit: 1);
+
+      await WebSharedStorage.init();
+      var existingProfile = WebSharedStorage();
+
+      setState(() {
+        picture1 = existingProfile.getCommon('picture');
+      });
+    } catch (e) {}
+    ;
   }
 
   Future<void> _showSubscriptionReminder() {
@@ -409,7 +433,7 @@ class _HomeScreenState extends State<HomeScreen>
               children: [
                 PersonalTab(tabController: _tabController),
                 GroupsTab(),
-                GoalsTab(),
+                const GoalsTab(),
               ],
             ),
           ),
@@ -427,9 +451,9 @@ class _HomeScreenState extends State<HomeScreen>
             ),
             child: TabBar(
               controller: _tabController,
-              indicator: UnderlineTabIndicator(
+              indicator: const UnderlineTabIndicator(
                 borderSide: BorderSide(width: 2.0, color: primaryTwo),
-                insets: const EdgeInsets.symmetric(horizontal: 16.0),
+                insets: EdgeInsets.symmetric(horizontal: 16.0),
               ),
               labelColor: primaryTwo,
               unselectedLabelColor: primaryTwoLight.withOpacity(0.6),
@@ -491,13 +515,24 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Widget _profile() {
-    return Container(
-        padding: const EdgeInsets.all(8.0),
-        child: const CircleAvatar(
-            // backgroundImage: NetworkImage(userAvatarUrl),
-            backgroundColor: primaryTwo,
-            foregroundColor: Colors.white,
-            child: Text('AH')));
+    final picture = widget.picture;
+    print(picture);
+    return IconButton(
+      onPressed: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => SettingsPage(),
+        ),
+      ),
+      padding: const EdgeInsets.all(8.0),
+      icon: CircleAvatar(
+        radius: 30,
+        backgroundImage: picture != null
+            ? NetworkImage(picture)
+            : const AssetImage("assets/images/avatar.png")
+                as ImageProvider, // Default image
+      ),
+    );
   }
 
   List<Widget> _buildAppBarActions() {
@@ -552,14 +587,14 @@ class _HomeScreenState extends State<HomeScreen>
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => NewGroupScreen(),
+            builder: (context) => const NewGroupScreen(),
           ),
         );
       } else if (value == 'logout') {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => NumericLoginScreen(),
+            builder: (context) => const NumericLoginScreen(),
           ),
         );
       }
