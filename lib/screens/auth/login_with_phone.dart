@@ -59,7 +59,6 @@ class _LoginScreenState extends State<LoginScreen> {
   String _email = '';
   String name = '';
   bool _showPasscodeOption = false;
-  bool _obscurePassword = true; // Track password visibility
   final TextEditingController _phoneController =
       TextEditingController(text: '+256');
 
@@ -293,10 +292,6 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 20),
               ElevatedButton(
                 onPressed: _isLoading ? null : () => _submitOTP(phoneNumber),
-                child: _isLoading
-                    ? Loader()
-                    : const Text('Verify',
-                        style: TextStyle(color: primaryColor)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: primaryTwo,
                   shape: RoundedRectangleBorder(
@@ -305,6 +300,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   padding: const EdgeInsets.symmetric(vertical: 15),
                   minimumSize: const Size(double.infinity, 60),
                 ),
+                child: _isLoading
+                    ? const Loader()
+                    : const Text('Verify',
+                        style: TextStyle(color: primaryColor)),
               ),
             ],
           ),
@@ -406,27 +405,13 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 20),
                 TextFormField(
-                  obscureText: _obscurePassword, // Use the visibility toggle
+                  obscureText: true,
                   onChanged: (value) {
                     password = value;
                   },
-                  decoration: InputDecoration(
+                  decoration: const InputDecoration(
                     labelText: 'Password',
                     prefixIcon: Icon(Icons.lock, color: primaryColor),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscurePassword
-                            ? Icons.visibility
-                            : Icons.visibility_off,
-                        color: primaryColor,
-                      ),
-                      onPressed: () {
-                        setState(() {
-                          _obscurePassword =
-                              !_obscurePassword; // Toggle visibility
-                        });
-                      },
-                    ),
                     border: UnderlineInputBorder(),
                   ),
                 ),
