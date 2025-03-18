@@ -90,7 +90,7 @@ class _GoalScreenState extends State<GoalScreen> {
   @override
   Widget build(BuildContext context) {
     if (widget.isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(child: Loader());
     }
 
     if (_goals.isEmpty) {

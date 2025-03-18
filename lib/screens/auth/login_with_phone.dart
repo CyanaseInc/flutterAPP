@@ -57,6 +57,7 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _passcode = false;
   String _email = '';
   bool _showPasscodeOption = false;
+  bool _obscurePassword = true; // Track password visibility
   final TextEditingController _phoneController =
       TextEditingController(text: '+256');
 
@@ -385,13 +386,27 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 20),
                 TextFormField(
-                  obscureText: true,
+                  obscureText: _obscurePassword, // Use the visibility toggle
                   onChanged: (value) {
                     password = value;
                   },
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Password',
                     prefixIcon: Icon(Icons.lock, color: primaryColor),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscurePassword
+                            ? Icons.visibility
+                            : Icons.visibility_off,
+                        color: primaryColor,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _obscurePassword =
+                              !_obscurePassword; // Toggle visibility
+                        });
+                      },
+                    ),
                     border: UnderlineInputBorder(),
                   ),
                 ),

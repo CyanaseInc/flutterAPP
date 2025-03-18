@@ -37,7 +37,6 @@ class ChatListState extends State<ChatList> {
     _refreshController.close();
     _searchController.dispose();
     super.dispose();
-    // Removed _getGroup() from dispose as it’s an async call
   }
 
   void _reloadChats() {
@@ -69,8 +68,29 @@ class ChatListState extends State<ChatList> {
       }
 
       final token = userProfile.first['token'] as String;
-      final List<Map<String, dynamic>> groups =
-          await ApiService.getGroup(token);
+      final dynamic response = await ApiService.getGroup(token);
+
+      List<Map<String, dynamic>> groups;
+      if (response is List && response.isNotEmpty) {
+        final firstItem = response[0];
+        if (firstItem is Map<String, dynamic> &&
+            firstItem['data'] is Map<String, dynamic> &&
+            firstItem['data']['data'] is List) {
+          groups = List<Map<String, dynamic>>.from(firstItem['data']['data']);
+        } else {
+          throw Exception('Unexpected list item format: $firstItem');
+        }
+      } else if (response is Map<String, dynamic> &&
+          response['data'] is Map<String, dynamic> &&
+          response['data']['data'] is List) {
+        groups = List<Map<String, dynamic>>.from(response['data']['data']);
+      } else if (response is List<Map<String, dynamic>>) {
+        groups = response;
+      } else {
+        throw Exception('Invalid API response format: $response');
+      }
+
+      print("Extracted groups: $groups");
 
       for (final groupData in groups) {
         final groupId = groupData['groupId'] as int?;
@@ -86,6 +106,8 @@ class ChatListState extends State<ChatList> {
           print("Skipping group with missing ID or name: $groupData");
           continue;
         }
+
+        print("Processing group: $groupName (ID: $groupId)");
 
         final existingGroup = await db.query(
           'groups',
@@ -113,22 +135,47 @@ class ChatListState extends State<ChatList> {
             'last_activity': lastActivity ?? DateTime.now().toIso8601String(),
             'settings': '',
           });
+          print("Inserted group: $groupName (ID: $groupId)");
         } else {
           print(
               "Group $groupName (ID: $groupId) already exists, skipping insert");
         }
 
         if (participants != null && participants.isNotEmpty) {
+          print("Participants to process: $participants");
           for (final participantData in participants) {
-            final userId = participantData['user_id'] as String?;
-            final role = participantData['role'] as String?;
-            final joinedAt = participantData['joined_at'] as String?;
-            final muted = participantData['muted'] as int?;
+            print("Raw participant data: $participantData");
+
+            // Safe type extraction
+            final userIdDynamic = participantData['user_id'];
+            final roleDynamic = participantData['role'];
+            final joinedAtDynamic = participantData['joined_at'];
+            final mutedDynamic = participantData['muted'];
+
+            // Convert types safely
+            final String? userId = userIdDynamic is String
+                ? userIdDynamic
+                : userIdDynamic?.toString();
+            final String? role = roleDynamic is String ? roleDynamic : null;
+            final String? joinedAt =
+                joinedAtDynamic is String ? joinedAtDynamic : null;
+            int? muted;
+            if (mutedDynamic is bool) {
+              muted = mutedDynamic ? 1 : 0;
+            } else if (mutedDynamic is int) {
+              muted = mutedDynamic;
+            } else {
+              print(
+                  "Unexpected muted type: ${mutedDynamic?.runtimeType}, value: $mutedDynamic");
+              muted = 0; // Default to 0 for unknown types
+            }
 
             if (userId == null) {
               print("Skipping participant with null user_id in group $groupId");
               continue;
             }
+
+            print("Attempting to add participant: $userId to group $groupId");
 
             final existingParticipant = await db.query(
               'participants',
@@ -136,6 +183,7 @@ class ChatListState extends State<ChatList> {
               whereArgs: [groupId, userId],
               limit: 1,
             );
+            print("Existing participant check: $existingParticipant");
 
             if (existingParticipant.isEmpty) {
               await dbHelper.insertParticipant({
@@ -146,12 +194,27 @@ class ChatListState extends State<ChatList> {
                 'muted': muted ?? 0,
               });
               print("Inserted participant $userId into group $groupId");
+            } else {
+              print("Participant $userId already in group $groupId, skipping");
             }
           }
+
+          // Verify participants in DB after insertion
+          final participantCheck = await db.query(
+            'participants',
+            where: 'group_id = ?',
+            whereArgs: [groupId],
+          );
+          print("Participants in DB for group $groupId: $participantCheck");
+        } else {
+          print("No participants found for group $groupId");
         }
       }
+
+      _reloadChats();
     } catch (e) {
       print("Error retrieving groups: $e");
+      rethrow; // Temporarily keep for stack trace
     }
   }
 
@@ -422,7 +485,7 @@ class ChatListState extends State<ChatList> {
       chats.add({
         "id": group['id'],
         "name": _toSentenceCase(group['name'] ?? ''),
-        "description": group['description'], // Add description here
+        "description": group['description'],
         "profilePic": group['profile_pic'],
         "lastMessage": lastMessagePreview,
         "time": lastMessage != null

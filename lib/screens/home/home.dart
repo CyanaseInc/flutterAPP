@@ -8,7 +8,7 @@ import './goal/goal.dart';
 import './group/new_group.dart';
 import '../settings/settings.dart';
 import '../auth/login_with_passcode.dart';
-import '../auth/set_three_code.dart'; // Ensure this matches your actual file name
+import '../auth/set_three_code.dart';
 import 'package:cyanase/helpers/hash_numbers.dart';
 import 'package:cyanase/helpers/database_helper.dart';
 import 'package:cyanase/helpers/api_helper.dart';
@@ -16,10 +16,10 @@ import 'package:cyanase/helpers/get_currency.dart';
 
 class HomeScreen extends StatefulWidget {
   final bool? passcode;
-  final String? email; // Made email nullable since it wasn't required before
+  final String? email;
 
   const HomeScreen({
-    super.key, // Modern Flutter key convention
+    super.key,
     this.passcode,
     this.email,
   });
@@ -33,7 +33,10 @@ class _HomeScreenState extends State<HomeScreen>
   late TabController _tabController;
   String _currentTabTitle = 'Cyanase';
   bool _isSearching = false;
+  String Phonenumber = '';
   final TextEditingController _searchController = TextEditingController();
+  bool _isSyncingContacts = false;
+  double _syncProgress = 0.0;
 
   @override
   void initState() {
@@ -42,16 +45,92 @@ class _HomeScreenState extends State<HomeScreen>
     _tabController.addListener(_updateTabTitle);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _fetchAndHashContacts();
-      _initSubscriptionCheck();
+      _initApp();
     });
+  }
+
+  Future<void> _initApp() async {
+    final dbHelper = DatabaseHelper();
+    final existingContacts = await dbHelper.getContacts();
+
+    if (existingContacts.isEmpty) {
+      setState(() {
+        _isSyncingContacts = true;
+        _syncProgress = 0.0;
+      });
+      await _syncContactsForNewUser();
+      setState(() {
+        _isSyncingContacts = false;
+      });
+    }
+
+    _fetchAndHashContacts();
+    _initSubscriptionCheck();
+    _getNumber();
+  }
+
+  Future<void> _syncContactsForNewUser() async {
+    try {
+      setState(() => _syncProgress = 0.2);
+      final fetchedContacts = await fetchAndHashContacts();
+
+      setState(() => _syncProgress = 0.5);
+      final registeredContacts = await getRegisteredContacts(fetchedContacts);
+
+      setState(() => _syncProgress = 0.8);
+      final dbHelper = DatabaseHelper();
+      await dbHelper.insertContacts(registeredContacts);
+
+      setState(() => _syncProgress = 1.0);
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Welcome aboard! Contacts synced successfully.'),
+            backgroundColor: primaryTwo,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() => _syncProgress = 0.0);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Oops! Failed to sync contacts: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+            action: SnackBarAction(
+              label: 'Retry',
+              textColor: white,
+              onPressed: () => _initApp(),
+            ),
+          ),
+        );
+      }
+    }
   }
 
   void _fetchAndHashContacts() async {
     try {
       await fetchAndHashContacts();
     } catch (e) {
-      // Handle the error silently (e.g., log to a file or retry later)
+      // Handle silently
+    }
+  }
+
+  Future<void> _getNumber() async {
+    try {
+      final dbHelper = DatabaseHelper();
+      final db = await dbHelper.database;
+      final userProfile = await db.query('profile', limit: 1);
+      final userPhone = userProfile.first['phone_number'] as String;
+      setState(() {
+        Phonenumber = userPhone;
+      });
+    } catch (e) {
+      print('Error: $e');
     }
   }
 
@@ -86,15 +165,11 @@ class _HomeScreenState extends State<HomeScreen>
       if (userProfile.isNotEmpty) {
         final token = userProfile.first['token'] as String;
 
-        // Check subscription status first
         final subscriptionResponse = await ApiService.subscriptionStatus(token);
-
         if (subscriptionResponse['status'] == 'pending') {
-          // Show subscription reminder and wait for it to complete
           await _showSubscriptionReminder();
         }
 
-        // Check passcode status
         if (widget.passcode == false || widget.passcode == null) {
           _showPasscodeCreationModal();
         }
@@ -123,11 +198,15 @@ class _HomeScreenState extends State<HomeScreen>
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
                   color: primaryTwo,
+                  decoration: TextDecoration.none, // Explicitly no underline
                 ),
               ),
               const SizedBox(height: 8),
               const Text(
                 'Your subscription fees are due. Please ensure payment of UGX 20,500 per year to continue enjoying our services.',
+                style: TextStyle(
+                  decoration: TextDecoration.none, // Explicitly no underline
+                ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
@@ -144,7 +223,11 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
                 child: const Text(
                   'Pay Now',
-                  style: TextStyle(fontSize: 16, color: primaryColor),
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: primaryColor,
+                    decoration: TextDecoration.none, // Explicitly no underline
+                  ),
                 ),
               ),
             ],
@@ -155,9 +238,6 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   void _showPhoneNumberInput() {
-    TextEditingController phoneController = TextEditingController();
-    bool isLoading = false;
-
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -165,69 +245,110 @@ class _HomeScreenState extends State<HomeScreen>
       ),
       isScrollControlled: true,
       builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return Padding(
-              padding: EdgeInsets.only(
-                left: 16.0,
-                right: 16.0,
-                bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-                top: 16.0,
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 16.0,
+            right: 16.0,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+            top: 16.0,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Confirm Your Phone Number',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: primaryTwo,
+                  decoration: TextDecoration.none, // Explicitly no underline
+                ),
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    'Enter Your Phone Number',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: primaryTwo,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: phoneController,
-                    keyboardType: TextInputType.phone,
-                    decoration: const InputDecoration(
-                      labelText: 'Phone Number',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: isLoading
-                        ? null
-                        : () {
-                            String phoneNumber = phoneController.text.trim();
-                            if (phoneNumber.isNotEmpty) {
-                              setState(() => isLoading = true);
-                              _processPayment(phoneNumber, setState);
-                            }
-                          },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: primaryTwo,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.grey[800],
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.phone_android, size: 35, color: primaryTwo),
+                    const SizedBox(width: 15),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            Phonenumber,
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black87,
+                              decoration: TextDecoration
+                                  .none, // Explicitly no underline
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'This number will be used for deposits.',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                              decoration: TextDecoration
+                                  .none, // Explicitly no underline
+                            ),
+                            softWrap: true,
+                          ),
+                        ],
                       ),
                     ),
-                    child: isLoading
-                        ? const SizedBox(width: 20, height: 20, child: Loader())
-                        : const Text(
-                            'Proceed to Pay',
-                            style: TextStyle(fontSize: 16, color: primaryColor),
-                          ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            );
-          },
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: () {
+                  _processPayment(Phonenumber);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryTwo,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 15),
+                  minimumSize: const Size(double.infinity, 50),
+                ),
+                child: const Text(
+                  'Proceed to Pay',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: primaryColor,
+                    decoration: TextDecoration.none, // Explicitly no underline
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text(
+                  'Cancel',
+                  style: TextStyle(
+                    color: Colors.grey,
+                    fontSize: 14,
+                    decoration: TextDecoration.none, // Explicitly no underline
+                  ),
+                ),
+              ),
+            ],
+          ),
         );
       },
     );
   }
 
-  void _processPayment(String phoneNumber, StateSetter setState) async {
+  void _processPayment(String phoneNumber) async {
     try {
       final dbHelper = DatabaseHelper();
       final db = await dbHelper.database;
@@ -249,7 +370,6 @@ class _HomeScreenState extends State<HomeScreen>
       print('Error: $e');
     }
 
-    // Fixed: Added missing isLoading variable
     Navigator.pop(context);
   }
 
@@ -261,15 +381,16 @@ class _HomeScreenState extends State<HomeScreen>
       builder: (context) => Container(
         height: MediaQuery.of(context).size.height * 0.5,
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              primaryTwo.withOpacity(0.95),
-              primaryTwoLight.withOpacity(0.95),
-            ],
-          ),
+          color: white,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(25)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.grey.withOpacity(0.3),
+              spreadRadius: 2,
+              blurRadius: 10,
+              offset: const Offset(0, -2),
+            ),
+          ],
         ),
         child: Padding(
           padding: const EdgeInsets.all(20.0),
@@ -279,29 +400,23 @@ class _HomeScreenState extends State<HomeScreen>
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: white.withOpacity(0.2),
+                  color: primaryTwo.withOpacity(0.1),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
                   Icons.lock_outline,
                   size: 40,
-                  color: white,
+                  color: primaryTwo,
                 ),
               ),
               const SizedBox(height: 20),
               Text(
                 'Secure Your Account!',
                 style: TextStyle(
-                  fontSize: 24,
+                  fontSize: 20,
                   fontWeight: FontWeight.bold,
-                  color: white,
-                  shadows: [
-                    Shadow(
-                      color: Colors.black26,
-                      offset: Offset(2, 2),
-                      blurRadius: 4,
-                    ),
-                  ],
+                  color: primaryTwo,
+                  decoration: TextDecoration.none, // Explicitly no underline
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -309,9 +424,10 @@ class _HomeScreenState extends State<HomeScreen>
               Text(
                 'Add a passcode for quick and secure access to your Cyanase account. It takes just a moment!',
                 style: TextStyle(
-                  fontSize: 16,
-                  color: white.withOpacity(0.9),
+                  fontSize: 14,
+                  color: Colors.grey[800],
                   height: 1.5,
+                  decoration: TextDecoration.none, // Explicitly no underline
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -323,13 +439,13 @@ class _HomeScreenState extends State<HomeScreen>
                     context,
                     MaterialPageRoute(
                       builder: (context) => SetCodeScreen(
-                        email: widget.email ?? '', // Handle null case
+                        email: widget.email ?? '',
                       ),
                     ),
                   );
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: white,
+                  backgroundColor: primaryTwo,
                   padding: const EdgeInsets.symmetric(
                     horizontal: 40,
                     vertical: 15,
@@ -342,9 +458,10 @@ class _HomeScreenState extends State<HomeScreen>
                 child: Text(
                   'Create Now',
                   style: TextStyle(
-                    fontSize: 18,
+                    fontSize: 16,
                     fontWeight: FontWeight.bold,
-                    color: primaryTwo,
+                    color: white,
+                    decoration: TextDecoration.none, // Explicitly no underline
                   ),
                 ),
               ),
@@ -353,8 +470,9 @@ class _HomeScreenState extends State<HomeScreen>
                 child: Text(
                   'Maybe Later',
                   style: TextStyle(
-                    color: white.withOpacity(0.7),
-                    fontSize: 16,
+                    color: Colors.grey[600],
+                    fontSize: 14,
+                    decoration: TextDecoration.none, // Explicitly no underline
                   ),
                 ),
               ),
@@ -375,98 +493,192 @@ class _HomeScreenState extends State<HomeScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: white,
-        title: _isSearching
-            ? TextField(
-                controller: _searchController,
-                decoration: InputDecoration(
-                  hintText: 'Search groups...',
-                  border: InputBorder.none,
-                  hintStyle: TextStyle(color: Colors.grey[400]),
-                ),
-                style: const TextStyle(color: Colors.black),
-                onChanged: (value) {},
-              )
-            : Text(
-                _currentTabTitle,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: primaryTwo,
-                  fontSize: 25,
+    return Stack(
+      children: [
+        Scaffold(
+          appBar: AppBar(
+            backgroundColor: white,
+            title: _isSearching
+                ? TextField(
+                    controller: _searchController,
+                    decoration: InputDecoration(
+                      hintText: 'Search groups...',
+                      border: InputBorder.none,
+                      hintStyle: TextStyle(color: Colors.grey[400]),
+                    ),
+                    style: const TextStyle(color: Colors.black),
+                    onChanged: (value) {},
+                  )
+                : Text(
+                    _currentTabTitle,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: primaryTwo,
+                      fontSize: 25,
+                      decoration:
+                          TextDecoration.none, // Explicitly no underline
+                    ),
+                  ),
+            automaticallyImplyLeading: false,
+            actions: _buildAppBarActions(),
+          ),
+          body: Column(
+            children: [
+              Expanded(
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    PersonalTab(tabController: _tabController),
+                    GroupsTab(),
+                    GoalsTab(),
+                  ],
                 ),
               ),
-        automaticallyImplyLeading: false,
-        actions: _buildAppBarActions(),
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                PersonalTab(tabController: _tabController),
-                GroupsTab(),
-                GoalsTab(),
-              ],
-            ),
+              Container(
+                decoration: BoxDecoration(
+                  color: white,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.grey.withOpacity(0.2),
+                      spreadRadius: 1,
+                      blurRadius: 5,
+                      offset: const Offset(0, -2),
+                    ),
+                  ],
+                ),
+                child: TabBar(
+                  controller: _tabController,
+                  indicator: UnderlineTabIndicator(
+                    borderSide: BorderSide(width: 2.0, color: primaryTwo),
+                    insets: const EdgeInsets.symmetric(horizontal: 16.0),
+                  ),
+                  labelColor: primaryTwo,
+                  unselectedLabelColor: primaryTwoLight.withOpacity(0.6),
+                  labelStyle: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    decoration: TextDecoration.none, // Explicitly no underline
+                  ),
+                  unselectedLabelStyle: const TextStyle(
+                    fontWeight: FontWeight.normal,
+                    fontSize: 14,
+                    decoration: TextDecoration.none, // Explicitly no underline
+                  ),
+                  tabs: [
+                    Tab(
+                      icon: _buildTabIcon(
+                        iconPath: 'assets/icons/person.svg',
+                        isActive: _tabController.index == 0,
+                      ),
+                      text: 'Personal',
+                    ),
+                    Tab(
+                      icon: _buildTabIcon(
+                        iconPath: 'assets/icons/groups.svg',
+                        isActive: _tabController.index == 1,
+                      ),
+                      text: 'Groups',
+                    ),
+                    Tab(
+                      icon: _buildTabIcon(
+                        iconPath: 'assets/icons/goal-icon.svg',
+                        isActive: _tabController.index == 2,
+                      ),
+                      text: 'Goals',
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
+        ),
+        if (_isSyncingContacts)
           Container(
-            decoration: BoxDecoration(
-              color: white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.grey.withOpacity(0.2),
-                  spreadRadius: 1,
-                  blurRadius: 5,
-                  offset: const Offset(0, -2),
+            color:
+                Colors.black.withOpacity(0.5), // Matches bottom sheet overlay
+            child: Center(
+              child: Container(
+                width: 300,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.grey.withOpacity(0.3),
+                      spreadRadius: 2,
+                      blurRadius: 10,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            child: TabBar(
-              controller: _tabController,
-              indicator: UnderlineTabIndicator(
-                borderSide: BorderSide(width: 2.0, color: primaryTwo),
-                insets: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: primaryTwo.withOpacity(0.1),
+                      ),
+                      child: SvgPicture.asset(
+                        'assets/icons/groups.svg', // Replace with your app logo
+                        width: 60,
+                        height: 60,
+                        color: primaryTwo,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Text(
+                      'Setting Up Your Cyanase',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: primaryTwo,
+                        decoration:
+                            TextDecoration.none, // Explicitly no underline
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Syncing your contacts to connect you with friends.',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[800],
+                        decoration:
+                            TextDecoration.none, // Explicitly no underline
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: 200,
+                      child: LinearProgressIndicator(
+                        value: _syncProgress,
+                        backgroundColor: Colors.grey[300],
+                        valueColor: AlwaysStoppedAnimation<Color>(primaryTwo),
+                        minHeight: 6,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      '${(_syncProgress * 100).toInt()}% Complete',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[700],
+                        decoration:
+                            TextDecoration.none, // Explicitly no underline
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
               ),
-              labelColor: primaryTwo,
-              unselectedLabelColor: primaryTwoLight.withOpacity(0.6),
-              labelStyle: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
-              ),
-              unselectedLabelStyle: const TextStyle(
-                fontWeight: FontWeight.normal,
-                fontSize: 14,
-              ),
-              tabs: [
-                Tab(
-                  icon: _buildTabIcon(
-                    iconPath: 'assets/icons/person.svg',
-                    isActive: _tabController.index == 0,
-                  ),
-                  text: 'Personal',
-                ),
-                Tab(
-                  icon: _buildTabIcon(
-                    iconPath: 'assets/icons/groups.svg',
-                    isActive: _tabController.index == 1,
-                  ),
-                  text: 'Groups',
-                ),
-                Tab(
-                  icon: _buildTabIcon(
-                    iconPath: 'assets/icons/goal-icon.svg',
-                    isActive: _tabController.index == 2,
-                  ),
-                  text: 'Goals',
-                ),
-              ],
             ),
           ),
-        ],
-      ),
+      ],
     );
   }
 
@@ -518,15 +730,27 @@ class _HomeScreenState extends State<HomeScreen>
       items: [
         const PopupMenuItem(
           value: 'settings',
-          child: Text('Settings'),
+          child: Text(
+            'Settings',
+            style: TextStyle(
+                decoration: TextDecoration.none), // Explicitly no underline
+          ),
         ),
         const PopupMenuItem(
           value: 'new_group_investment',
-          child: Text('New Group'),
+          child: Text(
+            'New Group',
+            style: TextStyle(
+                decoration: TextDecoration.none), // Explicitly no underline
+          ),
         ),
         const PopupMenuItem(
           value: 'logout',
-          child: Text('Logout'),
+          child: Text(
+            'Logout',
+            style: TextStyle(
+                decoration: TextDecoration.none), // Explicitly no underline
+          ),
         ),
       ],
     ).then((value) {

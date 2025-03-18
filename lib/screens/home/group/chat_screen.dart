@@ -111,6 +111,7 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
     if (widget.isGroup && widget.groupId != null) {
       try {
         final members = await _dbHelper.getGroupMemberNames(widget.groupId!);
+        print(widget.groupId);
         setState(() {
           _memberNames = members.map((e) => e["name"] ?? "").toList();
         });
