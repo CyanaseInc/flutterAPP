@@ -94,10 +94,10 @@ class _HomeScreenState extends State<HomeScreen>
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Text('Welcome aboard! Contacts synced successfully.'),
             backgroundColor: primaryTwo,
-            duration: const Duration(seconds: 2),
+            duration: Duration(seconds: 2),
           ),
         );
       }
@@ -298,7 +298,8 @@ class _HomeScreenState extends State<HomeScreen>
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.phone_android, size: 35, color: primaryTwo),
+                    const Icon(Icons.phone_android,
+                        size: 35, color: primaryTwo),
                     const SizedBox(width: 15),
                     Expanded(
                       child: Column(
@@ -409,7 +410,7 @@ class _HomeScreenState extends State<HomeScreen>
           borderRadius: const BorderRadius.vertical(top: Radius.circular(25)),
           boxShadow: [
             BoxShadow(
-              color: Colors.grey.withOpacity(0.3),
+              color: Colors.grey.withValues(alpha: 0.3),
               spreadRadius: 2,
               blurRadius: 10,
               offset: const Offset(0, -2),
@@ -424,7 +425,7 @@ class _HomeScreenState extends State<HomeScreen>
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: primaryTwo.withOpacity(0.1),
+                  color: primaryTwo.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
@@ -554,6 +555,17 @@ class _HomeScreenState extends State<HomeScreen>
                 const GoalsTab(),
               ],
             ),
+          ),
+          Container(
+            decoration: BoxDecoration(
+              color: white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.grey.withValues(alpha: 0.2),
+                  spreadRadius: 1,
+                  blurRadius: 5,
+                  offset: const Offset(0, -2),
+                ),
               ],
             ),
             child: TabBar(
@@ -563,160 +575,130 @@ class _HomeScreenState extends State<HomeScreen>
                 insets: EdgeInsets.symmetric(horizontal: 16.0),
               ),
               labelColor: primaryTwo,
-              unselectedLabelColor: primaryTwoLight.withOpacity(0.6),
+              unselectedLabelColor: primaryTwoLight.withValues(alpha: 0.6),
               labelStyle: const TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 14,
+                decoration: TextDecoration.none, // Explicitly no underline
               ),
               unselectedLabelStyle: const TextStyle(
                 fontWeight: FontWeight.normal,
                 fontSize: 14,
+                decoration: TextDecoration.none, // Explicitly no underline
               ),
-              Container(
-                decoration: BoxDecoration(
-                  color: white,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.grey.withOpacity(0.2),
-                      spreadRadius: 1,
-                      blurRadius: 5,
-                      offset: const Offset(0, -2),
-                    ),
-                  ],
+              tabs: [
+                Tab(
+                  icon: _buildTabIcon(
+                    iconPath: 'assets/icons/person.svg',
+                    isActive: _tabController.index == 0,
+                  ),
+                  text: 'Personal',
                 ),
-                child: TabBar(
-                  controller: _tabController,
-                  indicator: UnderlineTabIndicator(
-                    borderSide: BorderSide(width: 2.0, color: primaryTwo),
-                    insets: const EdgeInsets.symmetric(horizontal: 16.0),
+                Tab(
+                  icon: _buildTabIcon(
+                    iconPath: 'assets/icons/groups.svg',
+                    isActive: _tabController.index == 1,
                   ),
-                  labelColor: primaryTwo,
-                  unselectedLabelColor: primaryTwoLight.withOpacity(0.6),
-                  labelStyle: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                    decoration: TextDecoration.none, // Explicitly no underline
-                  ),
-                  unselectedLabelStyle: const TextStyle(
-                    fontWeight: FontWeight.normal,
-                    fontSize: 14,
-                    decoration: TextDecoration.none, // Explicitly no underline
-                  ),
-                  tabs: [
-                    Tab(
-                      icon: _buildTabIcon(
-                        iconPath: 'assets/icons/person.svg',
-                        isActive: _tabController.index == 0,
-                      ),
-                      text: 'Personal',
-                    ),
-                    Tab(
-                      icon: _buildTabIcon(
-                        iconPath: 'assets/icons/groups.svg',
-                        isActive: _tabController.index == 1,
-                      ),
-                      text: 'Groups',
-                    ),
-                    Tab(
-                      icon: _buildTabIcon(
-                        iconPath: 'assets/icons/goal-icon.svg',
-                        isActive: _tabController.index == 2,
-                      ),
-                      text: 'Goals',
-                    ),
-                  ],
+                  text: 'Groups',
                 ),
-              ),
-            ],
+                Tab(
+                  icon: _buildTabIcon(
+                    iconPath: 'assets/icons/goal-icon.svg',
+                    isActive: _tabController.index == 2,
+                  ),
+                  text: 'Goals',
+                ),
+              ],
+            ),
           ),
-        ),
-        if (_isSyncingContacts)
-          Container(
-            color:
-                Colors.black.withOpacity(0.5), // Matches bottom sheet overlay
-            child: Center(
-              child: Container(
-                width: 300,
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: white,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.grey.withOpacity(0.3),
-                      spreadRadius: 2,
-                      blurRadius: 10,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: primaryTwo.withOpacity(0.1),
+          if (_isSyncingContacts)
+            Container(
+              color: Colors.black
+                  .withValues(alpha: 0.5), // Matches bottom sheet overlay
+              child: Center(
+                child: Container(
+                  width: 300,
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.grey.withValues(alpha: 0.3),
+                        spreadRadius: 2,
+                        blurRadius: 10,
+                        offset: const Offset(0, 2),
                       ),
-                      child: SvgPicture.asset(
-                        'assets/icons/groups.svg', // Replace with your app logo
-                        width: 60,
-                        height: 60,
-                        color: primaryTwo,
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: primaryTwo.withValues(alpha: 0.1),
+                        ),
+                        child: SvgPicture.asset(
+                          'assets/icons/groups.svg', // Replace with your app logo
+                          width: 60,
+                          height: 60,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      'Setting Up Your Cyanase',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: primaryTwo,
-                        decoration:
-                            TextDecoration.none, // Explicitly no underline
+                      const SizedBox(height: 20),
+                      const Text(
+                        'Setting Up Your Cyanase',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: primaryTwo,
+                          decoration:
+                              TextDecoration.none, // Explicitly no underline
+                        ),
+                        textAlign: TextAlign.center,
                       ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      'Syncing your contacts to connect you with friends.',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey[800],
-                        decoration:
-                            TextDecoration.none, // Explicitly no underline
+                      const SizedBox(height: 10),
+                      Text(
+                        'Syncing your contacts to connect you with friends.',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey[800],
+                          decoration:
+                              TextDecoration.none, // Explicitly no underline
+                        ),
+                        textAlign: TextAlign.center,
                       ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 20),
-                    SizedBox(
-                      width: 200,
-                      child: LinearProgressIndicator(
-                        value: _syncProgress,
-                        backgroundColor: Colors.grey[300],
-                        valueColor: AlwaysStoppedAnimation<Color>(primaryTwo),
-                        minHeight: 6,
-                        borderRadius: BorderRadius.circular(4),
+                      const SizedBox(height: 20),
+                      SizedBox(
+                        width: 200,
+                        child: LinearProgressIndicator(
+                          value: _syncProgress,
+                          backgroundColor: Colors.grey[300],
+                          valueColor:
+                              const AlwaysStoppedAnimation<Color>(primaryTwo),
+                          minHeight: 6,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      '${(_syncProgress * 100).toInt()}% Complete',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[700],
-                        decoration:
-                            TextDecoration.none, // Explicitly no underline
+                      const SizedBox(height: 10),
+                      Text(
+                        '${(_syncProgress * 100).toInt()}% Complete',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[700],
+                          decoration:
+                              TextDecoration.none, // Explicitly no underline
+                        ),
+                        textAlign: TextAlign.center,
                       ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 

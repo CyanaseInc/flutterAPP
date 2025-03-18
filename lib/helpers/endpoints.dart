@@ -15,6 +15,8 @@ class ApiEndpoints {
   static const String requestPayment = "$server/api/v1/en/request/payment/";
   static const String requestPaymentWebhook =
       "$server/api/v1/en/requestpaymentshook/";
+  static const String newGroup = '';
+  static const String getGroup = '';
   static const String getTransaction = "$server/api/v1/en/get/transaction/";
   static const String verifyOtp = "$server/api/v1/en/verifyemail/user/";
   static const String passcode = "$server/api/v1/en/passcode/user/";
