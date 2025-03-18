@@ -8,6 +8,7 @@ import '../home/home.dart';
 import 'package:cyanase/helpers/database_helper.dart';
 import 'package:cyanase/helpers/loader.dart';
 import 'package:cyanase/helpers/api_helper.dart';
+import 'package:cyanase/helpers/web_db.dart';
 
 // Custom formatter to enforce '+' at the beginning
 class PhoneNumberFormatter extends TextInputFormatter {
@@ -56,6 +57,7 @@ class _LoginScreenState extends State<LoginScreen> {
   String phoneNumber = '';
   bool _passcode = false;
   String _email = '';
+  String name = '';
   bool _showPasscodeOption = false;
   bool _obscurePassword = true; // Track password visibility
   final TextEditingController _phoneController =
@@ -103,7 +105,6 @@ class _LoginScreenState extends State<LoginScreen> {
       });
       return;
     }
-    print('username $username password: $password');
     try {
       final loginResponse = await ApiService.login({
         'username': username,
@@ -120,10 +121,12 @@ class _LoginScreenState extends State<LoginScreen> {
         final token = loginResponse['token'];
         final userId = loginResponse['user_id'];
         final user = loginResponse['user'];
-
         final email = user['email'];
         final userName = user['username'];
         final profile = user['profile'];
+        final picture = profile['profile_picture'];
+        final name = user["first_name"];
+        final lastName = user['last_name'];
         final userCountry = profile['country'];
         final phoneNumber = profile['phoneno'];
         final isVerified = profile['is_verified'] ?? false;
@@ -135,44 +138,61 @@ class _LoginScreenState extends State<LoginScreen> {
         });
 
         if (isVerified) {
-          final dbHelper = DatabaseHelper();
-          final db = await dbHelper.database;
-          final existingProfile = await db.query('profile');
+          // final dbHelper = DatabaseHelper();
+          // final db = await dbHelper.database;
+          // final existingProfile = await db.query('profile');
 
-          if (existingProfile.isNotEmpty) {
-            await db.update(
-              'profile',
-              {
-                'email': email,
-                'country': userCountry,
-                'phone_number': phoneNumber,
-                'token': token,
-                'name': userName,
-                'created_at': DateTime.now().toIso8601String(),
-              },
-            );
-          } else {
-            await db.insert(
-              'profile',
-              {
-                'id': userId,
-                'email': email,
-                'country': userCountry,
-                'token': token,
-                'phone_number': phoneNumber,
-                'name': userName,
-                'created_at': DateTime.now().toIso8601String(),
-              },
-            );
+          // initialise shared storage
+          await WebSharedStorage.init();
+          var existingProfile = WebSharedStorage();
+          final readExistingProfile =
+              existingProfile.getCommon(userId.toString());
+          if (readExistingProfile == null) {
+            // we have some id already reated to this login user
+            //lets set some items to localstorage
+            existingProfile.setCommon('token', token);
+            existingProfile.setCommon('username', userName);
+            existingProfile.setCommon('country', userCountry);
+            existingProfile.setCommon('phone_number', phoneNumber);
+            existingProfile.setCommon('name', '$name $lastName');
+            existingProfile.setCommon('picture', picture);
+
+            // await db.update(
+            //   'profile',
+            //   {
+            //     'email': email,
+            //     'country': userCountry,
+            //     'phone_number': phoneNumber,
+            //     'token': token,
+            //     'name': userName,
+            //     'created_at': DateTime.now().toIso8601String(),
+            //   },
+            // );
           }
+          // will work for mobile device
+          // else {
+          //   await db.insert(
+          //     'profile',
+          //     {
+          //       'id': userId,
+          //       'email': email,
+          //       'country': userCountry,
+          //       'token': token,
+          //       'phone_number': phoneNumber,
+          //       'name': userName,
+          //       'created_at': DateTime.now().toIso8601String(),
+          //     },
+          //   );
+          // }
 
           Navigator.push(
             context,
             MaterialPageRoute(
               builder: (context) => HomeScreen(
-                passcode: _passcode,
-                email: _email,
-              ),
+                  passcode: _passcode,
+                  email: _email,
+                  name: name,
+                  picture: picture),
             ),
           );
         } else {
@@ -293,7 +313,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  List<TextEditingController> _controllers =
+  final List<TextEditingController> _controllers =
       List.generate(6, (_) => TextEditingController());
 
   Future<void> _submitOTP(String phoneNumber) async {
@@ -374,7 +394,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       if (value.startsWith('+')) {
                         String stripped = value.substring(1);
                         if (stripped.length >= 3) {
-                          countryCode = '+' + stripped.substring(0, 3);
+                          countryCode = '+${stripped.substring(0, 3)}';
                           phoneNumber = stripped.substring(3);
                         } else {
                           countryCode = value;
@@ -438,7 +458,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     minimumSize: const Size(double.infinity, 60),
                   ),
                   child: _isLoading
-                      ? Loader()
+                      ? const Loader()
                       : const Text(
                           'Login',
                           style: TextStyle(

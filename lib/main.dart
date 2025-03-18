@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:awesome_notifications/awesome_notifications.dart';
+import 'package:smile_id/smile_id.dart';
 import '/screens/splash.dart'; // Splash screen widget
 import 'screens/auth/login_with_passcode.dart'; // Login screen
 import 'screens/auth/login_with_phone.dart'; // Your phone login screen (if needed)
@@ -17,6 +18,8 @@ class NotificationHandler {
 }
 
 void main() async {
+  // initialise smile id auth
+  // SmileID.initialize(useSandbox: true);
   WidgetsFlutterBinding.ensureInitialized();
 
   await AwesomeNotifications().initialize(

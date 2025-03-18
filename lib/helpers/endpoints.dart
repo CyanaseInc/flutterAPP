@@ -11,7 +11,11 @@ class ApiEndpoints {
   static const String apiUrlDeposit = "$server/api/v1/en/make/deposit/";
   static const String updateProfile = "$server/api/v1/en/register/user/";
   static const String fetchMessages = "$server/api/v1/en/register/user/";
-
+  static const String validatePhone = "$server/api/v1/en/validate/mm/number/";
+  static const String requestPayment = "$server/api/v1/en/request/payment/";
+  static const String requestPaymentWebhook =
+      "$server/api/v1/en/requestpaymentshook/";
+  static const String getTransaction = "$server/api/v1/en/get/transaction/";
   static const String verifyOtp = "$server/api/v1/en/verifyemail/user/";
   static const String passcode = "$server/api/v1/en/passcode/user/";
   static const String fetchUserDetails = "$server/api/v1/en/register/user/";
@@ -35,6 +39,7 @@ class ApiEndpoints {
   static const String apiUrlGoalDeposit =
       "$server/api/v1/en/make/goal/deposit/";
   static const String apiUrlGetDeposit = "$server/api/v1/en/get/deposit/";
+  static const String apiUrlGetUserTrack = "$server/api/v1/en/get/user/track/";
   static const String apiUrlGetSubStatus =
       "$server/api/v1/en/get/subscription/status/";
   static const String paySubscription = "$server/api/v1/en/make/subscription/";
@@ -49,9 +54,9 @@ class ApiEndpoints {
   static const String editGroup = "$server/api/v1/en/editgroup/group/";
   static const String addMembers = "$server/api/v1/en/addmembers/group/";
   static const String editGoal = "$server/api/v1/en/edit/goal/";
-  static const String deleteGoal = "$server/api/v1/en/delete/goal/";
-  static const String newGroup = "$server/api/v1/en/newgroup/group/";
-  static const String getGroup = "$server/api/v1/en/getgroup/group/";
+  static const String deleteGoal = "$server/api/v1/en/delete/goal/by/id/";
+  static const String uploadGoalPhoto =
+      "$server/api/v1/en/auth/upload/goal/photo/";
   static const String apiUrlGetAllFundManagers =
       "$server/api/v1/en/auth/fundmanagers/all/";
   static const String apiUrlGetGoalDeposit =
@@ -68,7 +73,7 @@ class ApiEndpoints {
   static const String apiUrlUserGetProfilePhoto = "$server/static/photo.png";
   static const String apiUrlUserNetWorth =
       "$server/api/v1/en/auth/user/networth/";
-  static const String login = "$server/api/v1/en/auth/user/login/";
+  static const String login = "$server/api/v1/en/app/user/login/";
   static const String passcodeLogin = "$server/api/v1/en/auth/user/passcode/";
   static const String apiUrlUserNextOfKin = "$server/api/v1/en/user/nextOfKin/";
   static const String apiUrlGetNextOfKin = "$server/api/v1/en/get/nextOfKin/";
@@ -82,9 +87,9 @@ class ApiEndpoints {
       "$server/api/v1/en/auth/user/riskprofile/";
   static const String apiUrlGetRiskProfile =
       "$server/api/v1/en/auth/get/riskprofile/";
-  static const String checkPasswordEmail = "$server/api/v1/en/password/reset/";
-  static const String apiUrlPasswordReset =
-      "$server/api/v1/en/auth/user/update/password/";
+  static const String checkPasswordEmail =
+      "$server/api/v1/en/app/password/reset/";
+  static const String apiUrlPasswordReset = "$server/app/reset/password/";
   static const String apiUrlGetUserVerification =
       "$server/api/v1/en/get/verification/";
   static const String apiUrlGetRiskAnalysisPercentages =
@@ -95,7 +100,6 @@ class ApiEndpoints {
   static const String goalPhoto = "$server/media/goal/default_picture.jpg";
   static const String apiUrlGetInvestmentWithdraws =
       "$server/api/v1/en/get/investment/withdraws/";
-  static const String apiUrlGetUserTrack = "$server/api/v1/en/get/user/track/";
   static const String apiUrlGetUserBanks = "$server/api/v1/en/auth/user/banks/";
   static const String apiDocs = "developers.cyanase.app";
 }

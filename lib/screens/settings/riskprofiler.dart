@@ -3,9 +3,10 @@ import 'package:cyanase/helpers/loader.dart'; // Import your loader widget
 import 'package:cyanase/theme/theme.dart'; // Import your theme file
 import 'package:cyanase/helpers/database_helper.dart'; // Import the database helper
 import 'package:cyanase/helpers/api_helper.dart'; // Import the API helper
-import 'package:flutter_svg/flutter_svg.dart';
 
 class RiskProfilerForm extends StatefulWidget {
+  const RiskProfilerForm({super.key});
+
   @override
   _RiskProfilerFormState createState() => _RiskProfilerFormState();
 }
@@ -276,7 +277,7 @@ class _RiskProfilerFormState extends State<RiskProfilerForm> {
         if (response['success'] == true) {
           // Show a success message
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
+            const SnackBar(
               content: Text("Risk profile submitted successfully!"),
               duration: Duration(seconds: 2), // Duration of the success message
             ),

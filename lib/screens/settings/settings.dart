@@ -1,3 +1,6 @@
+import 'package:cyanase/helpers/api_helper.dart';
+import 'package:cyanase/helpers/web_db.dart';
+// import 'package:cyanase/helpers/web_socket.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io'; // For handling file paths
@@ -15,6 +18,16 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   File? _profileImage; // To store the selected image
+  String? name;
+  String? email;
+  String? picture;
+  String? token;
+
+  @override
+  void initState() {
+    super.initState();
+    getProfile(); // Fetch data when the widget is initialized
+  }
 
   // Function to pick an image from the gallery
   Future<void> _pickImage() async {
@@ -22,24 +35,38 @@ class _SettingsPageState extends State<SettingsPage> {
     final pickedFile = await picker.pickImage(source: ImageSource.gallery);
 
     if (pickedFile != null) {
-      setState(() {
-        _profileImage = File(pickedFile.path); // Update the profile image
-      });
+      final upload =
+          await ApiService.uploadProfileImage(token!, _profileImage!);
     }
+  }
+
+  void getProfile() async {
+    // final dbHelper = DatabaseHelper();
+    // final db = await dbHelper.database;
+    // final userProfile = await db.query('profile', limit: 1);
+
+    await WebSharedStorage.init();
+    var existingProfile = WebSharedStorage();
+    setState(() {
+      name = existingProfile.getCommon('name');
+      email = existingProfile.getCommon('name');
+      picture = existingProfile.getCommon('picture');
+      token = existingProfile.getCommon('token');
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text("Settings"),
-        titleTextStyle: TextStyle(
+        title: const Text("Settings"),
+        titleTextStyle: const TextStyle(
           color: white, // Custom color
           fontSize: 24,
         ),
         backgroundColor: primaryTwo, // WhatsApp green color
         elevation: 0,
-        iconTheme: IconThemeData(
+        iconTheme: const IconThemeData(
           color: white, // Change the back arrow color to white
         ),
       ),
@@ -59,7 +86,7 @@ class _SettingsPageState extends State<SettingsPage> {
   // Profile Section
   Widget _buildProfileSection() {
     return Container(
-      padding: EdgeInsets.all(16),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: white,
         border: Border(
@@ -76,21 +103,21 @@ class _SettingsPageState extends State<SettingsPage> {
             onTap: _pickImage, // Allow tapping on the profile picture to edit
             child: CircleAvatar(
               radius: 30,
-              backgroundImage: _profileImage != null
-                  ? FileImage(_profileImage!) // Use the selected image
-                  : AssetImage("assets/profile.jpg")
+              backgroundImage: picture != null
+                  ? NetworkImage(picture!)
+                  : const AssetImage("assets/profile.jpg")
                       as ImageProvider, // Default image
             ),
           ),
-          SizedBox(width: 16),
+          const SizedBox(width: 16),
           // Profile Name and Status
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  "John Doe", // Replace with user's name
-                  style: TextStyle(
+                  name!, // Replace with user's name
+                  style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
                   ),
@@ -101,7 +128,7 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           // Edit Profile Button
           IconButton(
-            icon: Icon(Icons.edit, color: primaryTwo),
+            icon: const Icon(Icons.edit, color: primaryTwo),
             onPressed: _pickImage, // Allow tapping on the edit icon to edit
           ),
         ],
@@ -131,7 +158,7 @@ class _SettingsPageState extends State<SettingsPage> {
           onTap: () {
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => RiskProfilerForm()),
+              MaterialPageRoute(builder: (context) => const RiskProfilerForm()),
             );
           },
         ),
@@ -182,7 +209,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }) {
     return ListTile(
       leading: Container(
-        padding: EdgeInsets.all(8), // Padding around the icon
+        padding: const EdgeInsets.all(8), // Padding around the icon
         decoration: BoxDecoration(
           color: primaryTwo.withOpacity(0.1), // Background color with opacity
           shape: BoxShape.circle, // Circular shape
@@ -191,19 +218,20 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
       title: Text(
         title,
-        style: TextStyle(
+        style: const TextStyle(
           fontSize: 16,
           fontWeight: FontWeight.w500,
         ),
       ),
       subtitle: Text(
         subtitle,
-        style: TextStyle(
+        style: const TextStyle(
           fontSize: 14,
           color: Colors.grey,
         ),
       ),
-      trailing: Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+      trailing:
+          const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
       onTap: onTap,
     );
   }

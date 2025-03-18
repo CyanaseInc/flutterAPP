@@ -1,3 +1,4 @@
+import 'package:cyanase/helpers/web_db.dart';
 import 'package:cyanase/screens/auth/verification.dart';
 import 'package:flutter/material.dart';
 import 'package:country_picker/country_picker.dart';
@@ -9,7 +10,6 @@ import 'password_slide.dart';
 import 'package:cyanase/helpers/api_helper.dart';
 import 'package:cyanase/helpers/database_helper.dart';
 import 'package:cyanase/helpers/loader.dart'; // Import the Loader
-import 'dart:convert'; // Add this import
 
 class SignupScreen extends StatefulWidget {
   @override
@@ -21,7 +21,8 @@ class _SignupScreenState extends State<SignupScreen> {
   int _currentPage = 0;
   bool _isCheckingUser = false;
   bool _isLoading = false; // Track loading state
-  Map<String, String> _errorMessages = {}; // Store specific validation errors
+  final Map<String, String> _errorMessages =
+      {}; // Store specific validation errors
 
   // Form fields
   final TextEditingController _firstNameController = TextEditingController();
@@ -107,8 +108,8 @@ class _SignupScreenState extends State<SignupScreen> {
       }
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Please fill out all required fields correctly.'),
+        const SnackBar(
+          content: Text('Please fill out all required fields correctly.'),
           backgroundColor: Colors.red,
         ),
       );
@@ -157,7 +158,7 @@ class _SignupScreenState extends State<SignupScreen> {
             birthDate, // Assuming birthDate is a variable with the user's birth date
         'country': _countryController.text.trim(),
         'phone_no':
-            '$_selectedCountryCode', // Combining country code and phone number
+            _selectedCountryCode, // Combining country code and phone number
       }
     };
 
@@ -291,17 +292,31 @@ class _SignupScreenState extends State<SignupScreen> {
     await dbHelper.insertUser(profileData);
   }
 
+  void setStorage(Map<String, dynamic> response) async {
+    //lets do same for web storage
+    await WebSharedStorage.init();
+
+    final webshare = WebSharedStorage();
+    webshare.setCommon('id', response['userId']);
+    webshare.setCommon(
+        'name', '${_firstNameController.text} ${_lastNameController.text}');
+    webshare.setCommon(('phone_number'),
+        '$_selectedCountryCode${_phoneNumberController.text}');
+    webshare.setCommon('email', _emailController.text);
+    webshare.setCommon('created_at', DateTime.now().toIso8601String());
+  }
+
   void _checkUserExistence() async {
     setState(() {
       _isCheckingUser = true;
     });
     String phoneno = '${_selectedCountryCode}';
-    print(phoneno);
     try {
       final response = await ApiService.checkup({
         'email': _emailController.text.trim(),
         'phone': phoneno,
       });
+      print(response);
 
       if (response['email_exists'] == false &&
           response['phone_exists'] == false) {
@@ -325,7 +340,7 @@ class _SignupScreenState extends State<SignupScreen> {
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text('Check your internet connection'),
           backgroundColor: Colors.red,
         ),

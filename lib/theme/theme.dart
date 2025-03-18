@@ -18,7 +18,8 @@ final ThemeData appTheme = ThemeData(
     secondary: secondaryColor,
     primary: primaryColor,
   ),
-  fontFamily: 'Montserrat', // Set the default font to Montserrat
+  // fontFamily: 'Montserrat', // Set the default font to Montserrat
+  fontFamily: 'Geist', // Set the default font to Montserrat
   useMaterial3: true, // Optional, for Material 3 design
 
   // Set white background for all screens by default

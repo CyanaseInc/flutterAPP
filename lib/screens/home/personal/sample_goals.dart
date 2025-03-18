@@ -1,3 +1,4 @@
+import 'package:cyanase/helpers/web_db.dart';
 import 'package:flutter/material.dart';
 import '../../../theme/theme.dart';
 import 'package:cyanase/helpers/database_helper.dart';
@@ -25,27 +26,29 @@ class _SampleGoalsState extends State<SampleGoals> {
 
   Future<void> fetchGoalData() async {
     try {
-      final dbHelper = DatabaseHelper();
-      final db = await dbHelper.database;
-      final userProfile = await db.query('profile', limit: 1);
+      // final dbHelper = DatabaseHelper();
+      // final db = await dbHelper.database;
+      // final userProfile = await db.query('profile', limit: 1);
 
-      if (userProfile.isEmpty) {
-        throw Exception('No user profile found');
-      }
+      // if (userProfile.isEmpty) {
+      //   throw Exception('No user profile found');
+      // }
 
-      final token = userProfile.first['token'] as String;
+      // final token = userProfile.first['token'] as String;
+
+      await WebSharedStorage.init();
+      var existingProfile = WebSharedStorage();
+
+      final token = existingProfile.getCommon('token');
 
       // Fetch goals from the API
-      final response = await ApiService.getAllUserGoals(token);
+      final Map<String, dynamic> response =
+          await ApiService.getAllUserGoals(token);
 
-      // Check if the response is successful
-      if (response.statusCode == 200) {
-        // Decode the response body into a Map<String, dynamic>
-        final Map<String, dynamic> responseBody = jsonDecode(response.body);
-
+      if (response['success'] = true) {
         // Extract the 'goal' list from the response
-        if (responseBody.containsKey('goal') && responseBody['goal'] is List) {
-          final List<dynamic> goalList = responseBody['goal'] as List<dynamic>;
+        if (response.containsKey('data') && response['data'] is List) {
+          final List<dynamic> goalList = response['data'][2] as List<dynamic>;
           final List<Map<String, dynamic>> fetchedGoals = goalList
               .map((item) => Map<String, dynamic>.from(item as Map))
               .toList();
@@ -59,8 +62,6 @@ class _SampleGoalsState extends State<SampleGoals> {
             isLoading = false;
           });
         }
-      } else {
-        throw Exception('Failed to fetch goals: ${response.statusCode}');
       }
     } catch (e) {
       setState(() {
@@ -87,7 +88,7 @@ class _SampleGoalsState extends State<SampleGoals> {
       );
     }
 
-    return Column(
+    return ListView(
       children: goals.map((goal) => _buildGoalCard(goal)).toList(),
     );
   }

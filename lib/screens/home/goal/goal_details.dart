@@ -1,3 +1,6 @@
+import 'package:cyanase/helpers/get_currency.dart';
+import 'package:cyanase/helpers/web_db.dart';
+import 'package:cyanase/screens/home/componets/goal_withdraw.dart';
 import 'package:flutter/material.dart';
 import 'package:cyanase/theme/theme.dart'; // Assuming your theme variables are here
 import 'package:image_picker/image_picker.dart'; // For image picking
@@ -49,15 +52,19 @@ class _GoalDetailsScreenState extends State<GoalDetailsScreen> {
     setState(() => _isSubmitting = true);
 
     try {
-      final dbHelper = DatabaseHelper();
-      final db = await dbHelper.database;
-      final userProfile = await db.query('profile', limit: 1);
+      // final dbHelper = DatabaseHelper();
+      // final db = await dbHelper.database;
+      // final userProfile = await db.query('profile', limit: 1);
 
-      if (userProfile.isEmpty) {
-        throw Exception('No user profile found');
-      }
+      // if (userProfile.isEmpty) {
+      //   throw Exception('No user profile found');
+      // }
 
-      final token = userProfile.first['token'] as String;
+      // final token = userProfile.first['token'] as String;
+      await WebSharedStorage.init();
+      var existingProfile = WebSharedStorage();
+
+      final token = existingProfile.getCommon('token');
 
       final data = {
         'goal_name': _nameController.text,
@@ -88,43 +95,37 @@ class _GoalDetailsScreenState extends State<GoalDetailsScreen> {
       setState(() => _isSubmitting = false);
     }
   }
-
-  Future<void> _Delete() async {
-    editableGoalData['goal_name'] = _nameController.text;
-    editableGoalData['goal_picture'] = _goalPicture;
-
-    setState(() => _isSubmitting = true);
-
+  Future<void> deleteGoal() async {
     try {
-      final dbHelper = DatabaseHelper();
-      final db = await dbHelper.database;
-      final userProfile = await db.query('profile', limit: 1);
+      // final dbHelper = DatabaseHelper();
+      // final db = await dbHelper.database;
+      // final userProfile = await db.query('profile', limit: 1);
 
-      if (userProfile.isEmpty) {
-        throw Exception('No user profile found');
-      }
+      // if (userProfile.isEmpty) {
+      //   throw Exception('No user profile found');
+      // }
 
-      final token = userProfile.first['token'] as String;
+      // final token = userProfile.first['token'] as String;
+      await WebSharedStorage.init();
+      var existingProfile = WebSharedStorage();
+
+      final token = existingProfile.getCommon('token');
 
       final data = {
-        'goal_name': _nameController.text,
-        'goal_id': editableGoalData['goal_id'],
+        'goalid': editableGoalData['goal_id'],
       };
-
       final response = await ApiService.DeleteGoal(token, data);
-
       if (response['success'] == true) {
+        Navigator.pop(context, {'deleted': true}); // Indicate deletion
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Goal deleted successfully!')),
+          const SnackBar(content: Text('Goal deleted')),
         );
-
         // Return the updated goal data
-        Navigator.pop(context, editableGoalData);
       }
     } catch (e) {
-      print('Error in _saveChanges: $e');
+      print('Error in deleting goal: $e');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to save changes: $e')),
+        SnackBar(content: Text('Failed to delete goal: $e')),
       );
     } finally {
       setState(() => _isSubmitting = false);
@@ -144,9 +145,8 @@ class _GoalDetailsScreenState extends State<GoalDetailsScreen> {
           ),
           TextButton(
             onPressed: () {
-              Navigator.pop(context); // Close dialog
-              Navigator.pop(context, {'deleted': true}); // Indicate deletion
-              _Delete();
+              deleteGoal();
+              Navigator.pop(context, editableGoalData);
             },
             style: TextButton.styleFrom(foregroundColor: Colors.red),
             child: const Text('Delete'),
@@ -154,6 +154,66 @@ class _GoalDetailsScreenState extends State<GoalDetailsScreen> {
         ],
       ),
     );
+  }
+
+  void _withdraw() async {
+    // if (withdrawAmount == null || withdrawAmount! <= 0 || phoneNumber == null) {
+    //   ScaffoldMessenger.of(context).showSnackBar(
+    //     const SnackBar(
+    //         content: Text('Please enter a valid amount and phone number')),
+    //   );
+    // }
+    try {
+      // final dbHelper = DatabaseHelper();
+      // final db = await dbHelper.database;
+      // final userProfile = await db.query('profile', limit: 1);
+      // final token = userProfile.first['token'] as String;
+
+      await WebSharedStorage.init();
+      var existingProfile = WebSharedStorage();
+
+      final token = existingProfile.getCommon('token');
+      final name = existingProfile.getCommon('name');
+      final userCountry = existingProfile.getCommon('country');
+
+      final currency = CurrencyHelper.getCurrencyCode(userCountry);
+
+      final requestData = {
+        "withdraw_channel":
+            editableGoalData['payment_means'] == 'Online' ? 'online' : 'online',
+        "currency": currency,
+        "withdraw_amount": editableGoalData['deposit'][0],
+        "investment_id": editableGoalData[''],
+        "account_type": "basic",
+        "phone_number": editableGoalData[''],
+        "account_bank": 'MPS',
+        "beneficiary_name": name,
+      };
+
+      // Fetch investment data from the API
+      final response = await ApiService.withdraw(token, requestData);
+      print(response);
+
+      if (response['success'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('your resquest has been initiated successfully')),
+        );
+      } else {
+        String message = response["message"];
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $message')),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Error making withdraw request, try agin')),
+      );
+      setState(() {
+        _isSubmitting = true;
+      });
+    }
   }
 
   // Withdraw all funds
@@ -178,15 +238,7 @@ class _GoalDetailsScreenState extends State<GoalDetailsScreen> {
               child: const Text('Cancel'),
             ),
             TextButton(
-              onPressed: () {
-                setState(() {
-                  editableGoalData['deposit'] = []; // Clear deposits
-                });
-                Navigator.pop(context); // Close dialog
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Funds withdrawn')),
-                );
-              },
+              onPressed: _isSubmitting ? null : _withdraw,
               child: const Text('Withdraw'),
             ),
           ],
@@ -208,6 +260,7 @@ class _GoalDetailsScreenState extends State<GoalDetailsScreen> {
       setState(() {
         _tempGoalPicture = pickedFile.path; // Store temp path for preview
       });
+      print(pickedFile);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Image selected - Save to confirm')),
       );
@@ -221,12 +274,7 @@ class _GoalDetailsScreenState extends State<GoalDetailsScreen> {
   @override
   Widget build(BuildContext context) {
     double totalDeposits = 0.0;
-    if (editableGoalData['deposit'] != null &&
-        (editableGoalData['deposit'] as List).isNotEmpty) {
-      totalDeposits = (editableGoalData['deposit'] as List)
-          .map((d) => double.tryParse(d.toString()) ?? 0.0)
-          .reduce((a, b) => a + b);
-    }
+    totalDeposits = editableGoalData['deposit'][0];
     final goalAmount =
         (editableGoalData['goal_amount'] as num? ?? 0).toDouble();
     final progress =
@@ -267,7 +315,8 @@ class _GoalDetailsScreenState extends State<GoalDetailsScreen> {
                                               : FileImage(
                                                   File(_tempGoalPicture!)))
                                           as ImageProvider
-                                      : AssetImage('assets/images/goal.png')
+                                      : const AssetImage(
+                                              'assets/images/goal.png')
                                           as ImageProvider,
                                   fit: BoxFit.cover,
                                 ),
@@ -286,7 +335,7 @@ class _GoalDetailsScreenState extends State<GoalDetailsScreen> {
                               onTap: _updatePicture,
                               child: Container(
                                 padding: const EdgeInsets.all(4),
-                                decoration: BoxDecoration(
+                                decoration: const BoxDecoration(
                                   color: primaryTwo,
                                   shape: BoxShape.circle,
                                 ),
@@ -367,7 +416,16 @@ class _GoalDetailsScreenState extends State<GoalDetailsScreen> {
                   ),
                   const SizedBox(height: 12),
                   ElevatedButton(
-                    onPressed: _withdrawFunds,
+                    onPressed: () {
+                      showModalBottomSheet(
+                        context: context,
+                        builder: (BuildContext context) {
+                          return Withdraw(
+                              goalData: widget
+                                  .goalData); // Show the Withdraw widget in the bottom sheet
+                        },
+                      );
+                    },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.orange,
                       minimumSize: const Size(double.infinity, 50),

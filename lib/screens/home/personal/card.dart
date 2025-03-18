@@ -1,3 +1,4 @@
+import 'package:cyanase/screens/home/personal/conversion.dart';
 import 'package:flutter/material.dart';
 import '../../../theme/theme.dart'; // Your custom theme file
 
@@ -20,6 +21,7 @@ class TotalDepositsCard extends StatefulWidget {
 class _TotalDepositsCardState extends State<TotalDepositsCard> {
   @override
   Widget build(BuildContext context) {
+    final depositForeign = widget.depositForeign;
     return Card(
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(15),
@@ -33,7 +35,7 @@ class _TotalDepositsCardState extends State<TotalDepositsCard> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
+                const Text(
                   'Total Deposits',
                   style: TextStyle(
                     fontSize: 16,
@@ -49,7 +51,7 @@ class _TotalDepositsCardState extends State<TotalDepositsCard> {
                           offset: const Offset(0, -6),
                           child: Text(
                             widget.currency,
-                            style: TextStyle(
+                            style: const TextStyle(
                               fontSize: 16,
                               color: white,
                             ),
@@ -58,7 +60,7 @@ class _TotalDepositsCardState extends State<TotalDepositsCard> {
                       ),
                       TextSpan(
                         text: widget.depositLocal,
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 32,
                           color: white,
                         ),
@@ -74,8 +76,8 @@ class _TotalDepositsCardState extends State<TotalDepositsCard> {
             bottom: 8,
             right: 16,
             child: Text(
-              '\$${widget.depositForeign}',
-              style: TextStyle(
+              '\$ ${widget.depositForeign}',
+              style: const TextStyle(
                 fontSize: 12,
                 color: white,
               ),
@@ -88,14 +90,14 @@ class _TotalDepositsCardState extends State<TotalDepositsCard> {
 }
 
 class NetworthCard extends StatefulWidget {
-  final String NetworthLocal;
-  final String NetworthForeign;
+  final String networthLocal;
+  final String networthForeign;
   final String currency;
 
   const NetworthCard({
     Key? key,
-    required this.NetworthLocal,
-    required this.NetworthForeign,
+    required this.networthLocal,
+    required this.networthForeign,
     required this.currency,
   }) : super(key: key);
 
@@ -104,8 +106,35 @@ class NetworthCard extends StatefulWidget {
 }
 
 class _NetworthCardState extends State<NetworthCard> {
+  String networth = '';
+  String currency = '';
+  String networthLocal = '';
+  String networthForeign = '';
+  String result = '';
+  @override
+  void initState() {
+    super.initState();
+    print(
+        "InitState: currency = ${widget.currency}, networthLocal = ${widget.networthLocal}");
+    currency = widget.currency;
+    networthLocal = widget.networthLocal;
+    networthForeign = widget.networthForeign;
+    convert();
+  }
+
+  convert() async {
+    print('$currency $networthForeign');
+    var conversion = Conversion(currency, double.parse(networthForeign), 'usd');
+    var result = await conversion.executeConversion();
+    setState(() {
+      networth = result;
+    });
+    print(result);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final netForeign = widget.networthForeign;
     return Card(
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(15),
@@ -119,7 +148,7 @@ class _NetworthCardState extends State<NetworthCard> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
+                const Text(
                   'Networth',
                   style: TextStyle(
                     fontSize: 16,
@@ -135,7 +164,7 @@ class _NetworthCardState extends State<NetworthCard> {
                           offset: const Offset(0, -6),
                           child: Text(
                             widget.currency,
-                            style: TextStyle(
+                            style: const TextStyle(
                               fontSize: 16,
                               color: primaryTwo,
                             ),
@@ -143,8 +172,8 @@ class _NetworthCardState extends State<NetworthCard> {
                         ),
                       ),
                       TextSpan(
-                        text: widget.NetworthLocal,
-                        style: TextStyle(
+                        text: widget.networthLocal,
+                        style: const TextStyle(
                           fontSize: 32,
                           color: primaryTwo,
                         ),
@@ -160,8 +189,9 @@ class _NetworthCardState extends State<NetworthCard> {
             bottom: 8,
             right: 16,
             child: Text(
-              '\$${widget.NetworthForeign}',
-              style: TextStyle(
+              // '\$${widget.networthForeign}',
+              '\$ $netForeign',
+              style: const TextStyle(
                 fontSize: 12,
               ),
             ),

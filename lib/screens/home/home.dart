@@ -1,4 +1,5 @@
 import 'package:cyanase/helpers/loader.dart';
+import 'package:cyanase/helpers/web_db.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../../theme/theme.dart';
@@ -17,12 +18,15 @@ import 'package:cyanase/helpers/get_currency.dart';
 class HomeScreen extends StatefulWidget {
   final bool? passcode;
   final String? email;
+  final String? name;
+  final String? picture; // Made email nullable since it wasn't required before
 
-  const HomeScreen({
-    super.key,
-    this.passcode,
-    this.email,
-  });
+  const HomeScreen(
+      {super.key, // Modern Flutter key convention
+      this.passcode,
+      this.email,
+      this.name,
+      this.picture});
 
   @override
   _HomeScreenState createState() => _HomeScreenState();
@@ -30,6 +34,9 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen>
     with SingleTickerProviderStateMixin {
+  final String? email1 = '';
+  final String? name1 = '';
+  String? picture1 = '';
   late TabController _tabController;
   String _currentTabTitle = 'Cyanase';
   bool _isSearching = false;
@@ -47,6 +54,7 @@ class _HomeScreenState extends State<HomeScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initApp();
     });
+    getLocalStorage();
   }
 
   Future<void> _initApp() async {
@@ -177,6 +185,22 @@ class _HomeScreenState extends State<HomeScreen>
     } catch (e) {
       print('Error during initialization: $e');
     }
+  }
+
+  void getLocalStorage() async {
+    try {
+      // final dbHelper = DatabaseHelper();
+      // final db = await dbHelper.database;
+      // final userProfile = await db.query('profile', limit: 1);
+
+      await WebSharedStorage.init();
+      var existingProfile = WebSharedStorage();
+
+      setState(() {
+        picture1 = existingProfile.getCommon('picture');
+      });
+    } catch (e) {}
+    ;
   }
 
   Future<void> _showSubscriptionReminder() {
@@ -403,14 +427,14 @@ class _HomeScreenState extends State<HomeScreen>
                   color: primaryTwo.withOpacity(0.1),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(
+                child: const Icon(
                   Icons.lock_outline,
                   size: 40,
                   color: primaryTwo,
                 ),
               ),
               const SizedBox(height: 20),
-              Text(
+              const Text(
                 'Secure Your Account!',
                 style: TextStyle(
                   fontSize: 20,
@@ -455,7 +479,7 @@ class _HomeScreenState extends State<HomeScreen>
                   ),
                   elevation: 5,
                 ),
-                child: Text(
+                child: const Text(
                   'Create Now',
                   style: TextStyle(
                     fontSize: 16,
@@ -493,46 +517,60 @@ class _HomeScreenState extends State<HomeScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        Scaffold(
-          appBar: AppBar(
-            backgroundColor: white,
-            title: _isSearching
-                ? TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      hintText: 'Search groups...',
-                      border: InputBorder.none,
-                      hintStyle: TextStyle(color: Colors.grey[400]),
-                    ),
-                    style: const TextStyle(color: Colors.black),
-                    onChanged: (value) {},
-                  )
-                : Text(
-                    _currentTabTitle,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: primaryTwo,
-                      fontSize: 25,
-                      decoration:
-                          TextDecoration.none, // Explicitly no underline
-                    ),
-                  ),
-            automaticallyImplyLeading: false,
-            actions: _buildAppBarActions(),
-          ),
-          body: Column(
-            children: [
-              Expanded(
-                child: TabBarView(
-                  controller: _tabController,
-                  children: [
-                    PersonalTab(tabController: _tabController),
-                    GroupsTab(),
-                    GoalsTab(),
-                  ],
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: white,
+        leading: _profile(),
+        title: _isSearching
+            ? TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  hintText: 'Search groups...',
+                  border: InputBorder.none,
+                  hintStyle: TextStyle(color: Colors.grey[400]),
                 ),
+                style: const TextStyle(color: Colors.black),
+                onChanged: (value) {},
+              )
+            : Text(
+                _currentTabTitle,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: primaryTwo,
+                  fontSize: 25,
+                ),
+              ),
+        automaticallyImplyLeading: false,
+        actions: _buildAppBarActions(),
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                PersonalTab(tabController: _tabController),
+                GroupsTab(),
+                const GoalsTab(),
+              ],
+            ),
+              ],
+            ),
+            child: TabBar(
+              controller: _tabController,
+              indicator: const UnderlineTabIndicator(
+                borderSide: BorderSide(width: 2.0, color: primaryTwo),
+                insets: EdgeInsets.symmetric(horizontal: 16.0),
+              ),
+              labelColor: primaryTwo,
+              unselectedLabelColor: primaryTwoLight.withOpacity(0.6),
+              labelStyle: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
+              unselectedLabelStyle: const TextStyle(
+                fontWeight: FontWeight.normal,
+                fontSize: 14,
               ),
               Container(
                 decoration: BoxDecoration(
@@ -701,6 +739,27 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
+  Widget _profile() {
+    final picture = widget.picture;
+    print(picture);
+    return IconButton(
+      onPressed: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => SettingsPage(),
+        ),
+      ),
+      padding: const EdgeInsets.all(8.0),
+      icon: CircleAvatar(
+        radius: 30,
+        backgroundImage: picture != null
+            ? NetworkImage(picture)
+            : const AssetImage("assets/images/avatar.png")
+                as ImageProvider, // Default image
+      ),
+    );
+  }
+
   List<Widget> _buildAppBarActions() {
     if (_tabController.index == 1) {
       return [
@@ -765,14 +824,14 @@ class _HomeScreenState extends State<HomeScreen>
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => NewGroupScreen(),
+            builder: (context) => const NewGroupScreen(),
           ),
         );
       } else if (value == 'logout') {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => NumericLoginScreen(),
+            builder: (context) => const NumericLoginScreen(),
           ),
         );
       }
