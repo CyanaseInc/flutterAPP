@@ -1173,14 +1173,6 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
-  smile_id:
-    dependency: "direct main"
-    description:
-      name: smile_id
-      sha256: "197b99288b9f3f560f12370ba1a15c98855d88eb94d0cf0ad831b24d483f89bb"
-      url: "https://pub.dev"
-    source: hosted
-    version: "10.3.4"
   sms_autofill:
     dependency: transitive
     description:
