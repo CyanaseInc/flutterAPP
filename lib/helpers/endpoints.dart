@@ -5,12 +5,14 @@ class ApiEndpoints {
   static const String checkuser = "$server/api/v1/en/checkUser/user/";
   static const String signup = "$server/api/v1/en/register/user/";
   static const String createGroup = "$server/api/v1/en/register/user/";
+  static const String newGroup = "$server/api/v1/en/newgroup/group/";
   static const String joinGroup = "$server/api/v1/en/register/user/";
   static const String sendMessage = "$server/api/v1/en/register/user/";
   static const String fetchGroups = "$server/api/v1/en/register/user/";
   static const String apiUrlDeposit = "$server/api/v1/en/make/deposit/";
   static const String updateProfile = "$server/api/v1/en/register/user/";
   static const String fetchMessages = "$server/api/v1/en/register/user/";
+  static const String getGroup = "$server/api/v1/en/getgroup/group/";
   static const String validatePhone = "$server/api/v1/en/validate/mm/number/";
   static const String requestPayment = "$server/api/v1/en/request/payment/";
   static const String requestPaymentWebhook =

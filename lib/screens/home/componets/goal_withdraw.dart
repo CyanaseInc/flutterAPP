@@ -1,4 +1,5 @@
 import 'package:cyanase/helpers/get_currency.dart';
+import 'package:cyanase/helpers/loader.dart';
 import 'package:cyanase/helpers/web_db.dart';
 import 'package:flutter/material.dart';
 import '../../../theme/theme.dart';
@@ -151,10 +152,7 @@ class _WithdrawState extends State<Withdraw> {
                   foregroundColor: white,
                 ),
                 child: isLoading
-                    ? const CircularProgressIndicator(
-                        color: white,
-                        padding: EdgeInsets.all(4),
-                      ) // Show loader while processing
+                    ? const Loader() // Show loader while processing
                     : Text(currentStep == 2 ? 'Confirm Withdraw' : 'Next'),
               ),
             ],
