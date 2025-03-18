@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:cyanase/helpers/database_helper.dart';
 import 'package:cyanase/theme/theme.dart';
 import 'package:http/http.dart' as http;
+import 'package:cyanase/helpers/api_helper.dart';
 
 class AddGroupMembersScreen extends StatefulWidget {
   final int groupId;
@@ -81,28 +82,52 @@ class _AddGroupMembersScreenState extends State<AddGroupMembersScreen> {
     });
 
     try {
-      for (final contact in _selectedContacts) {
-        // Insert the participant into the group
-        await _dbHelper.insertParticipant({
-          'group_id': widget.groupId,
-          'user_id': contact['id'],
-          'role': 'member',
-          'joined_at': DateTime.now().toIso8601String(),
-          'muted': 0,
-        });
+      // Get token from profile
+      final db = await _dbHelper.database;
+      final userProfile = await db.query('profile', limit: 1);
+      if (userProfile.isEmpty) throw Exception('No user profile found');
+      final token = userProfile.first['token'] as String;
 
-        // Insert a notification for the new member
-        await _dbHelper.insertNotification(
-          groupId: widget.groupId,
-          message: "${contact['name'] ?? 'A new member'} has joined the group",
-          senderId: 'system', // Could use current user ID if applicable
+      // Prepare data for POST request
+      final Map<String, dynamic> requestData = {
+        'groupid': widget.groupId.toString(),
+        'participants': _selectedContacts
+            .map((contact) => {
+                  'user_id': contact['id'].toString(),
+                  'role': 'member',
+                })
+            .toList(),
+      };
+
+      // Make POST request to add members
+      final response = await ApiService.addMembers(token, requestData);
+
+      // If server succeeds, update local storage
+      if (response['success'] == true) {
+        for (final contact in _selectedContacts) {
+          await _dbHelper.insertParticipant({
+            'group_id': widget.groupId,
+            'user_id': contact['id'],
+            'role': 'member',
+            'joined_at': DateTime.now().toIso8601String(),
+            'muted': 0,
+          });
+
+          await _dbHelper.insertNotification(
+            groupId: widget.groupId,
+            message:
+                "${contact['name'] ?? 'A new member'} has joined the group",
+            senderId: 'system',
+          );
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Members added successfully!')),
         );
+        Navigator.pop(context);
+      } else {
+        throw Exception('Server failed to add members: ${response['message']}');
       }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Members added successfully!')),
-      );
-      Navigator.pop(context);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to add members: $e')),

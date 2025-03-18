@@ -39,6 +39,7 @@ dependencies:
   url_launcher: ^6.3.1
   cached_network_image: ^3.2.3
   connectivity_plus: ^6.1.2
+  animate_do: ^3.0.2
   qr_flutter: ^4.1.0
   flutter_verification_code_field: ^1.0.0
   webdev: ^3.7.1

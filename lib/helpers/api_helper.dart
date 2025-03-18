@@ -501,6 +501,154 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, dynamic>> NewGroup(
+    String token,
+    Map<String, dynamic> data,
+  ) async {
+    try {
+      final uri = Uri.parse(
+          ApiEndpoints.newGroup); // e.g., 'https://your-api.com/groups/en/'
+      final request = http.MultipartRequest('POST', uri);
+
+      // Add headers
+      request.headers['Authorization'] =
+          'Token $token'; // Adjusted to 'Bearer' (common for JWT)
+
+      // Extract fields from data
+      final String name = data['name'] as String;
+      final String description = data['description'] as String? ?? '';
+      final String createdBy = data['created_by'] as String;
+      final List<Map<String, dynamic>> participants =
+          List<Map<String, dynamic>>.from(data['participants'] ?? []);
+      final String? profilePicPath = data['profile_pic'] as String?;
+
+      // Add text fields (excluding participants and profile_pic for now)
+      request.fields['name'] = name;
+      request.fields['description'] = description;
+      request.fields['created_by'] = createdBy;
+
+      // Add participants as a JSON-encoded string
+      request.fields['participants'] = jsonEncode(participants);
+
+      // Add profile picture file if provided
+      if (profilePicPath != null && profilePicPath.isNotEmpty) {
+        final file = File(profilePicPath);
+        if (await file.exists()) {
+          request.files.add(
+            await http.MultipartFile.fromPath('profile_pic', profilePicPath),
+          );
+        } else {
+          throw Exception('Profile picture file not found at: $profilePicPath');
+        }
+      }
+
+      // Send request
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      // Parse response
+      final responseData = jsonDecode(response.body) as Map<String, dynamic>;
+
+      // Handle response based on status code
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        if (responseData['success'] == true) {
+          return responseData; // Expected: { "message": ..., "success": true, "groupId": ... }
+        } else {
+          throw Exception(
+              'Group creation failed: ${responseData['message'] ?? 'Unknown error'}');
+        }
+      } else {
+        throw Exception(
+            'Group creation failed: ${response.statusCode} - ${responseData['message'] ?? response.body}');
+      }
+    } catch (e) {
+      print('Error in NewGroup: $e'); // Log error for debugging
+      rethrow; // Rethrow to allow caller to handle the exception
+    }
+  }
+
+  static Future<Map<String, dynamic>> EditGroup(
+    String token,
+    Map<String, dynamic> data,
+  ) async {
+    try {
+      final uri = Uri.parse(ApiEndpoints.editGroup);
+      final request = http.MultipartRequest('POST', uri);
+
+      // Add headers
+      request.headers['Authorization'] =
+          'Token $token'; // Adjusted to 'Bearer' (common for JWT)
+
+      // Extract fields from data
+      final String name = data['name'] as String;
+      final String description = data['description'] as String? ?? '';
+      final String groupId = data['groupid'] as String? ?? '';
+      // Add text fields (excluding participants and profile_pic for now)
+      request.fields['name'] = name;
+      request.fields['description'] = description;
+      request.fields['groupid'] = groupId;
+      // Send request
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      // Parse response
+      final responseData = jsonDecode(response.body) as Map<String, dynamic>;
+
+      // Handle response based on status code
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        if (responseData['success'] == true) {
+          return responseData; // Expected: { "message": ..., "success": true, "groupId": ... }
+        } else {
+          throw Exception(
+              'Group creation failed: ${responseData['message'] ?? 'Unknown error'}');
+        }
+      } else {
+        throw Exception(
+            'Group creation failed: ${response.statusCode} - ${responseData['message'] ?? response.body}');
+      }
+    } catch (e) {
+      rethrow; // Rethrow to allow caller to handle the exception
+    }
+  }
+
+  static Future<Map<String, dynamic>> addMembers(
+      String token, Map<String, dynamic> data) async {
+    try {
+      const String addMembersEndpoint =
+          ApiEndpoints.addMembers; // Adjust to your endpoint
+      final uri = Uri.parse(addMembersEndpoint);
+      final request = http.MultipartRequest('POST', uri);
+
+      // Add headers
+      request.headers['Authorization'] = 'Token $token';
+
+      // Add fields
+      request.fields['groupid'] = data['groupid'];
+      request.fields['participants'] = jsonEncode(data['participants']);
+
+      // Send request
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      // Parse response
+      final responseData = jsonDecode(response.body) as Map<String, dynamic>;
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        if (responseData['success'] == true) {
+          return responseData;
+        } else {
+          throw Exception(
+              'Failed to add members: ${responseData['message'] ?? 'Unknown error'}');
+        }
+      } else {
+        throw Exception(
+            'Failed to add members: ${response.statusCode} - ${response.body}');
+      }
+    } catch (e) {
+      rethrow;
+    }
+  }
+
   static Future<Map<String, dynamic>> submitRiskProfile(
       String token, Map<String, dynamic> data) async {
     final response = await http.post(
@@ -533,6 +681,33 @@ class ApiService {
     } else {
       throw Exception(
           'Failed to fetch investment classes: ${response.statusCode}');
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> getGroup(String token) async {
+    final response = await http.post(
+      Uri.parse(ApiEndpoints.getGroup),
+      headers: {
+        'Authorization': 'Token $token',
+        'Content-Type': 'application/json',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      // Decode the JSON response into a Map<String, dynamic>
+      final Map<String, dynamic> responseBody = jsonDecode(response.body);
+
+      // Check if the response contains a list of groups under a specific key (e.g., 'groups')
+      if (responseBody.containsKey('groups') &&
+          responseBody['groups'] is List) {
+        // Return the list of groups
+        return List<Map<String, dynamic>>.from(responseBody['groups']);
+      } else {
+        // If the response is a single group, wrap it in a list
+        return [responseBody];
+      }
+    } else {
+      throw Exception('Failed to fetch groups ${response.statusCode}');
     }
   }
 
@@ -635,17 +810,6 @@ class ApiService {
       return response;
     } catch (e) {
       throw Exception('OTP verification failed: $e');
-    }
-  }
-
-  // Create group request
-  static Future<Map<String, dynamic>> createGroup(
-      Map<String, dynamic> groupData) async {
-    try {
-      final response = await post(ApiEndpoints.createGroup, groupData);
-      return response;
-    } catch (e) {
-      throw Exception('Failed to create group: $e');
     }
   }
 

@@ -5,15 +5,16 @@ import 'group_members.dart';
 import 'danger_zone.dart';
 import 'group_stat.dart';
 import 'invite.dart';
-import 'group_saving_goal.dart'; // Import the file
+import 'group_saving_goal.dart';
 import 'package:cyanase/theme/theme.dart';
 
 class GroupInfoPage extends StatelessWidget {
   final String groupName;
   final String profilePic;
   final int groupId;
+  final String description;
 
-  // Example list of goals
+  // Example list of goals (static for now; replace with real data later)
   final List<GroupSavingGoal> groupGoals = [
     GroupSavingGoal(goalName: 'Build a New School', goalAmount: 5000000),
     GroupSavingGoal(goalName: 'Community Health Fund', goalAmount: 3000000),
@@ -24,6 +25,7 @@ class GroupInfoPage extends StatelessWidget {
     required this.groupName,
     required this.profilePic,
     required this.groupId,
+    required this.description,
   }) : super(key: key);
 
   @override
@@ -36,6 +38,7 @@ class GroupInfoPage extends StatelessWidget {
             groupName: groupName,
             profilePic: profilePic,
             groupId: groupId,
+            description: description,
           ),
           Container(
             color: white,
@@ -87,7 +90,7 @@ class GroupInfoPage extends StatelessWidget {
               },
             ),
           ),
-          SizedBox(height: 10),
+          const SizedBox(height: 10),
           GroupSavingGoalsSection(groupGoals: groupGoals),
           const GroupSettings(),
           GroupMembers(groupId: groupId, isGroup: true, name: groupName),

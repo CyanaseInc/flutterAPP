@@ -19,6 +19,7 @@ class MessageChatScreen extends StatefulWidget {
   final String profilePic;
   final bool isGroup;
   final int? groupId;
+  final String description;
   final VoidCallback? onMessageSent;
 
   const MessageChatScreen({
@@ -28,6 +29,7 @@ class MessageChatScreen extends StatefulWidget {
     this.isGroup = true,
     this.groupId,
     this.onMessageSent,
+    required this.description,
   });
 
   @override
@@ -109,6 +111,7 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
     if (widget.isGroup && widget.groupId != null) {
       try {
         final members = await _dbHelper.getGroupMemberNames(widget.groupId!);
+        print(widget.groupId);
         setState(() {
           _memberNames = members.map((e) => e["name"] ?? "").toList();
         });
@@ -415,6 +418,7 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
         profilePic: widget.profilePic,
         memberNames: _memberNames,
         groupId: widget.groupId,
+        description: widget.description,
         onDepositPressed: () {
           Navigator.push(
             context,

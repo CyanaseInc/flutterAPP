@@ -6,6 +6,9 @@ import 'package:cyanase/theme/theme.dart';
 import 'dart:io';
 import 'package:cyanase/helpers/database_helper.dart';
 import 'package:cyanase/helpers/api_helper.dart';
+import 'package:cyanase/helpers/get_currency.dart';
+import 'package:intl/intl.dart'; // For number formatting
+import 'package:awesome_notifications/awesome_notifications.dart'; // For notifications
 
 class AddGoalScreen extends StatefulWidget {
   const AddGoalScreen({Key? key}) : super(key: key);
@@ -27,6 +30,7 @@ class _AddGoalScreenState extends State<AddGoalScreen> {
   final TextEditingController _amountController = TextEditingController();
   final TextEditingController _goalPeriodController = TextEditingController();
   bool _isSubmitting = false;
+  String? currency; // Dynamic currency
 
   final List<String> _defaultGoals = [
     'Retirement',
@@ -42,6 +46,8 @@ class _AddGoalScreenState extends State<AddGoalScreen> {
     _customGoalController.addListener(() => setState(() {}));
     _amountController.addListener(() => setState(() {}));
     _goalPeriodController.addListener(() => setState(() {}));
+    _fetchCurrency(); // Fetch currency dynamically
+    _initializeNotifications(); // Initialize notifications
   }
 
   @override
@@ -51,6 +57,97 @@ class _AddGoalScreenState extends State<AddGoalScreen> {
     _goalPeriodController.dispose();
     _pageController.dispose();
     super.dispose();
+  }
+
+  // Fetch currency from the user's profile
+  Future<void> _fetchCurrency() async {
+    try {
+      final dbHelper = DatabaseHelper();
+      final db = await dbHelper.database;
+      final userProfile = await db.query('profile', limit: 1);
+
+      if (userProfile.isNotEmpty) {
+        final userCountry = userProfile.first['country'] as String;
+        setState(() {
+          currency = CurrencyHelper.getCurrencyCode(userCountry);
+        });
+      }
+    } catch (e) {
+      print('Error fetching currency: $e');
+    }
+  }
+
+  // Initialize notifications
+  Future<void> _initializeNotifications() async {
+    await AwesomeNotifications().initialize(
+      null, // Use default app icon
+      [
+        NotificationChannel(
+          channelKey: 'scheduled_notifications',
+          channelName: 'Scheduled Notifications',
+          channelDescription: 'Notifications for saving goal reminders',
+          defaultColor: const Color(0xFF9D50DD),
+          ledColor: white,
+          importance: NotificationImportance.High,
+          soundSource:
+              'resource://raw/notification_sound', // Optional: Add a custom sound
+        ),
+      ],
+    );
+
+    await AwesomeNotifications().requestPermissionToSendNotifications();
+
+    // Set up notification listeners
+    AwesomeNotifications().setListeners(
+      onActionReceivedMethod: (ReceivedAction receivedAction) async {
+        // Handle when the user taps the notification
+        print('Notification tapped: ${receivedAction.payload}');
+      },
+      onNotificationDisplayedMethod:
+          (ReceivedNotification receivedNotification) async {
+        // Handle when the notification is displayed
+        print('Notification displayed: ${receivedNotification.id}');
+      },
+    );
+  }
+
+  // Schedule a notification
+  Future<void> _scheduleNotification() async {
+    final now = DateTime.now();
+    final scheduledTime = DateTime(
+      now.year,
+      now.month,
+      now.day,
+      reminderTime.hour,
+      reminderTime.minute,
+    );
+
+    // If the scheduled time is in the past, add a day
+    if (scheduledTime.isBefore(now)) {
+      scheduledTime.add(const Duration(days: 1));
+    }
+
+    final goalName = this.goalName ?? _customGoalController.text;
+    final goalAmount = double.tryParse(_amountController.text) ?? 0;
+    final savedAmount =
+        0.0; // Replace with actual saved amount from the database
+    final balanceLeft = goalAmount - savedAmount;
+
+    await AwesomeNotifications().createNotification(
+      content: NotificationContent(
+        id: _getUniqueID(),
+        channelKey: 'scheduled_notifications',
+        title: 'Savings Goal Reminder',
+        body:
+            'Hey Vianney, it\'s time to save for $goalName! You have ${NumberFormat.currency(symbol: currency ?? '\$').format(balanceLeft)} left. Let\'s gooo! 🚀',
+      ),
+      schedule: NotificationCalendar.fromDate(date: scheduledTime),
+    );
+  }
+
+  // Generate a unique ID for notifications
+  int _getUniqueID() {
+    return DateTime.now().microsecondsSinceEpoch.remainder(100000);
   }
 
   @override
@@ -407,6 +504,12 @@ class _AddGoalScreenState extends State<AddGoalScreen> {
         ? amount / (period * 4.33)
         : amount / period;
 
+    // Format the amount with commas and dynamic currency
+    final NumberFormat currencyFormat = NumberFormat.currency(
+      symbol: currency ?? '\$', // Use dynamic currency or fallback to '$'
+      decimalDigits: 2,
+    );
+
     return _buildBubbleCard(
       title: 'Review Your Goal',
       content: Column(
@@ -427,7 +530,7 @@ class _AddGoalScreenState extends State<AddGoalScreen> {
               ),
             ),
           _buildReviewItem('Goal', goalName ?? _customGoalController.text),
-          _buildReviewItem('Amount', '\$${amount.toStringAsFixed(2)}'),
+          _buildReviewItem('Amount', currencyFormat.format(amount)),
           _buildReviewItem('Frequency', savingFrequency!),
           _buildReviewItem('Period', '$period months'),
           _buildReviewItem(
@@ -435,8 +538,8 @@ class _AddGoalScreenState extends State<AddGoalScreen> {
           const SizedBox(height: 16),
           Text(
             savingFrequency == 'Weekly'
-                ? 'Save ${savingsPerPeriod.toStringAsFixed(2)} weekly'
-                : 'Save ${savingsPerPeriod.toStringAsFixed(2)} monthly',
+                ? 'Save ${currencyFormat.format(savingsPerPeriod)} weekly'
+                : 'Save ${currencyFormat.format(savingsPerPeriod)} monthly',
             style: const TextStyle(color: Colors.green, fontSize: 16),
           ),
         ],
@@ -559,17 +662,22 @@ class _AddGoalScreenState extends State<AddGoalScreen> {
 
       // final token = userProfile.first['token'] as String;
 
+      // Save reminder data
       final data = {
         'goal_name': finalGoalName,
         'goal_period': goalPeriodText,
         'goal_amount': goalAmountText,
         'deposit_type': depositType,
-        if (reminderDay != null) 'deposit_reminder_day': reminderDay,
+        'reminder_day': reminderDay,
+        'reminder_time': '${reminderTime.hour}:${reminderTime.minute}',
       };
 
       final response = await ApiService.CreateGoal(token, data, goalImage);
 
       if (response['success'] == true) {
+        // Schedule the notification
+        await _scheduleNotification();
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Goal saved successfully!')),
         );

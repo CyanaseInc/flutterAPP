@@ -339,9 +339,10 @@ class _DepositScreenState extends State<DepositHelper> {
                     const Text(
                       'Deposit via Mobile Money',
                       style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: primaryTwo),
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: primaryTwo,
+                      ),
                     ),
                     const SizedBox(height: 10),
                     const Text(
@@ -351,7 +352,7 @@ class _DepositScreenState extends State<DepositHelper> {
                     ),
                     const SizedBox(height: 20),
                     SizedBox(
-                      width: 320,
+                      width: 320, // Phone number card width
                       child: Card(
                         elevation: 5,
                         shape: RoundedRectangleBorder(

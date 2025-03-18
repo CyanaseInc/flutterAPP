@@ -75,9 +75,9 @@ class _GoalDetailsScreenState extends State<GoalDetailsScreen> {
       if (_goalPicture != null && !_goalPicture!.startsWith('http')) {
         goalImage = File(_goalPicture!);
       }
-      print('data : $data');
+
       final response = await ApiService.EditGoal(token, data, goalImage);
-      print('response : $response');
+
       if (response['success'] == true) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Goal saved successfully!')),
@@ -95,7 +95,6 @@ class _GoalDetailsScreenState extends State<GoalDetailsScreen> {
       setState(() => _isSubmitting = false);
     }
   }
-
   Future<void> deleteGoal() async {
     try {
       // final dbHelper = DatabaseHelper();
