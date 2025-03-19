@@ -43,6 +43,7 @@ class _HomeScreenState extends State<HomeScreen>
   String Phonenumber = '';
   final TextEditingController _searchController = TextEditingController();
   bool _isSyncingContacts = false;
+  bool processing = false;
   double _syncProgress = 0.0;
 
   @override
@@ -58,21 +59,21 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Future<void> _initApp() async {
-    final dbHelper = DatabaseHelper();
-    final existingContacts = await dbHelper.getContacts();
+    // final dbHelper = DatabaseHelper();
+    // final existingContacts = await dbHelper.getContacts();
 
-    if (existingContacts.isEmpty) {
-      setState(() {
-        _isSyncingContacts = true;
-        _syncProgress = 0.0;
-      });
-      await _syncContactsForNewUser();
-      setState(() {
-        _isSyncingContacts = false;
-      });
-    }
+    // if (existingContacts.isEmpty) {
+    //   setState(() {
+    //     _isSyncingContacts = true;
+    //     _syncProgress = 0.0;
+    //   });
+    //   await _syncContactsForNewUser();
+    //   setState(() {
+    //     _isSyncingContacts = false;
+    //   });
+    // }
 
-    _fetchAndHashContacts();
+    // _fetchAndHashContacts();
     _initSubscriptionCheck();
     _getNumber();
   }
@@ -94,10 +95,10 @@ class _HomeScreenState extends State<HomeScreen>
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Text('Welcome aboard! Contacts synced successfully.'),
             backgroundColor: primaryTwo,
-            duration: const Duration(seconds: 2),
+            duration: Duration(seconds: 2),
           ),
         );
       }
@@ -130,10 +131,13 @@ class _HomeScreenState extends State<HomeScreen>
 
   Future<void> _getNumber() async {
     try {
-      final dbHelper = DatabaseHelper();
-      final db = await dbHelper.database;
-      final userProfile = await db.query('profile', limit: 1);
-      final userPhone = userProfile.first['phone_number'] as String;
+      // final dbHelper = DatabaseHelper();
+      // final db = await dbHelper.database;
+      // final userProfile = await db.query('profile', limit: 1);
+      // final userPhone = userProfile.first['phone_number'] as String;
+      await WebSharedStorage.init();
+      var existingProfile = WebSharedStorage();
+      final userPhone = existingProfile.getCommon('phone_number');
       setState(() {
         Phonenumber = userPhone;
       });
@@ -166,14 +170,19 @@ class _HomeScreenState extends State<HomeScreen>
 
   Future<void> _initSubscriptionCheck() async {
     try {
-      final dbHelper = DatabaseHelper();
-      final db = await dbHelper.database;
-      final userProfile = await db.query('profile', limit: 1);
+      // final dbHelper = DatabaseHelper();
+      // final db = await dbHelper.database;
+      // final userProfile = await db.query('profile', limit: 1);
+      await WebSharedStorage.init();
+      var existingProfile = WebSharedStorage();
 
-      if (userProfile.isNotEmpty) {
-        final token = userProfile.first['token'] as String;
+      // if (userProfile.isNotEmpty) {
+      if (existingProfile.getCommon('token') != '') {
+        // final token = userProfile.first['token'] as String;
+        final token = existingProfile.getCommon('token');
 
         final subscriptionResponse = await ApiService.subscriptionStatus(token);
+        print(subscriptionResponse);
         if (subscriptionResponse['status'] == 'pending') {
           await _showSubscriptionReminder();
         }
@@ -269,7 +278,8 @@ class _HomeScreenState extends State<HomeScreen>
       ),
       isScrollControlled: true,
       builder: (context) {
-        return Padding(
+        return Scaffold(
+            body: Padding(
           padding: EdgeInsets.only(
             left: 16.0,
             right: 16.0,
@@ -292,13 +302,14 @@ class _HomeScreenState extends State<HomeScreen>
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.grey[800],
+                  color: primaryLight,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.phone_android, size: 35, color: primaryTwo),
+                    const Icon(Icons.phone_android,
+                        size: 35, color: primaryTwo),
                     const SizedBox(width: 15),
                     Expanded(
                       child: Column(
@@ -315,11 +326,11 @@ class _HomeScreenState extends State<HomeScreen>
                             ),
                           ),
                           const SizedBox(height: 4),
-                          Text(
+                          const Text(
                             'This number will be used for deposits.',
                             style: TextStyle(
                               fontSize: 12,
-                              color: Colors.grey[600],
+                              color: Color.fromARGB(255, 30, 30, 30),
                               decoration: TextDecoration
                                   .none, // Explicitly no underline
                             ),
@@ -333,9 +344,7 @@ class _HomeScreenState extends State<HomeScreen>
               ),
               const SizedBox(height: 20),
               ElevatedButton(
-                onPressed: () {
-                  _processPayment(Phonenumber);
-                },
+                onPressed: processing ? null : _processPayment,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: primaryTwo,
                   shape: RoundedRectangleBorder(
@@ -344,14 +353,9 @@ class _HomeScreenState extends State<HomeScreen>
                   padding: const EdgeInsets.symmetric(vertical: 15),
                   minimumSize: const Size(double.infinity, 50),
                 ),
-                child: const Text(
-                  'Proceed to Pay',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: primaryColor,
-                    decoration: TextDecoration.none, // Explicitly no underline
-                  ),
-                ),
+                child: processing
+                    ? const SizedBox(height: 20, width: 20, child: Loader())
+                    : const Text('Proceed to Pay'),
               ),
               const SizedBox(height: 10),
               TextButton(
@@ -367,34 +371,108 @@ class _HomeScreenState extends State<HomeScreen>
               ),
             ],
           ),
-        );
+        ));
       },
     );
   }
 
-  void _processPayment(String phoneNumber) async {
+  void _processPayment() async {
+    setState(() {
+      processing = true;
+    });
     try {
-      final dbHelper = DatabaseHelper();
-      final db = await dbHelper.database;
-      final userProfile = await db.query('profile', limit: 1);
+      // final dbHelper = DatabaseHelper();
+      // final db = await dbHelper.database;
+      // final userProfile = await db.query('profile', limit: 1);
+      await WebSharedStorage.init();
+      var existingProfile = WebSharedStorage();
 
-      if (userProfile.isNotEmpty) {
-        final token = userProfile.first['token'] as String;
-        final userCountry = userProfile.first['country'] as String;
+      // if (userProfile.isNotEmpty) {
+      if (existingProfile.getCommon('token') != '') {
+        // final token = userProfile.first['token'] as String;
+        // final userCountry = userProfile.first['country'] as String;
+        final token = existingProfile.getCommon('token');
+        final userCountry = existingProfile.getCommon('country');
+        final phoneNumber = existingProfile.getCommon('phone_number');
 
         final currencyCode = CurrencyHelper.getCurrencyCode(userCountry);
-        final response =
-            await ApiService.subscriptionPay(token, phoneNumber, currencyCode);
 
-        if (response['status'] == 'pending') {
-          _showSubscriptionReminder();
+        // Generate a unique reference and reference_id
+        final reference = 'REF-${DateTime.now().millisecondsSinceEpoch}';
+
+        final referenceId = '${DateTime.now().millisecondsSinceEpoch}';
+
+        // Prepare requestData
+        final requestData = {
+          "deposit_amount": '20500',
+          "currency": 'UGX',
+          "reference": reference,
+          "reference_id": referenceId,
+          "phone_number": phoneNumber,
+          'tx_ref': "CYANASESUB01-v1"
+        };
+        var phone = {
+          "msisdn": requestData['phone_number'],
+        };
+        var data = {
+          "account_no": "REL6AEDF95B5A",
+          "reference": requestData['reference'],
+          "msisdn": requestData['phone_number'],
+          "currency": requestData['currency'],
+          "amount": '20500',
+          "description": "Payment Request."
+        };
+        // validate phone number
+        final validatePhone = await ApiService.validatePhone(token, phone);
+        if (validatePhone['success'] == true) {
+          // proceed to request payment
+          final requestPayment = await ApiService.requestPayment(token, data);
+          if (requestPayment['success'] == true) {
+            // get transaction
+            final authPayment = await ApiService.getTransaction(token, data);
+            if (authPayment['success'] == true) {
+              //deposit
+              final response =
+                  await ApiService.subscriptionPay(token, requestData);
+              if (response['success'] == true) {
+                String message = response['message'];
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(message)),
+                );
+              } else {
+                String message = response['message'];
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(message)),
+                );
+              }
+            } else {
+              String message = authPayment['message'];
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(message)),
+              );
+            }
+          } else {
+            String message = requestPayment['message'];
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(message)),
+            );
+          }
+        } else {
+          String message = validatePhone['message'];
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(message)),
+          );
         }
       }
     } catch (e) {
-      print('Error: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to subscribe. Please try again.')),
+      );
+    } finally {
+      setState(() {
+        processing = false;
+      });
     }
-
-    Navigator.pop(context);
   }
 
   void _showPasscodeCreationModal() {
@@ -409,7 +487,7 @@ class _HomeScreenState extends State<HomeScreen>
           borderRadius: const BorderRadius.vertical(top: Radius.circular(25)),
           boxShadow: [
             BoxShadow(
-              color: Colors.grey.withOpacity(0.3),
+              color: Colors.grey.withValues(alpha: 0.3),
               spreadRadius: 2,
               blurRadius: 10,
               offset: const Offset(0, -2),
@@ -424,7 +502,7 @@ class _HomeScreenState extends State<HomeScreen>
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: primaryTwo.withOpacity(0.1),
+                  color: primaryTwo.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
@@ -563,7 +641,7 @@ class _HomeScreenState extends State<HomeScreen>
                   color: white,
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.grey.withOpacity(0.2),
+                      color: Colors.grey.withValues(alpha: 0.2),
                       spreadRadius: 1,
                       blurRadius: 5,
                       offset: const Offset(0, -2),
@@ -572,12 +650,12 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
                 child: TabBar(
                   controller: _tabController,
-                  indicator: UnderlineTabIndicator(
+                  indicator: const UnderlineTabIndicator(
                     borderSide: BorderSide(width: 2.0, color: primaryTwo),
-                    insets: const EdgeInsets.symmetric(horizontal: 16.0),
+                    insets: EdgeInsets.symmetric(horizontal: 16.0),
                   ),
                   labelColor: primaryTwo,
-                  unselectedLabelColor: primaryTwoLight.withOpacity(0.6),
+                  unselectedLabelColor: primaryTwoLight.withValues(alpha: 0.6),
                   labelStyle: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 14,
@@ -618,8 +696,8 @@ class _HomeScreenState extends State<HomeScreen>
           // Add the syncing contacts overlay here
           if (_isSyncingContacts)
             Container(
-              color:
-                  Colors.black.withOpacity(0.5), // Matches bottom sheet overlay
+              color: Colors.black
+                  .withValues(alpha: 0.5), // Matches bottom sheet overlay
               child: Center(
                 child: Container(
                   width: 300,
@@ -629,7 +707,7 @@ class _HomeScreenState extends State<HomeScreen>
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.grey.withOpacity(0.3),
+                        color: Colors.grey.withValues(alpha: 0.3),
                         spreadRadius: 2,
                         blurRadius: 10,
                         offset: const Offset(0, 2),
@@ -643,17 +721,18 @@ class _HomeScreenState extends State<HomeScreen>
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: primaryTwo.withOpacity(0.1),
+                          color: primaryTwo.withValues(alpha: 0.1),
                         ),
                         child: SvgPicture.asset(
                           'assets/icons/groups.svg', // Replace with your app logo
                           width: 60,
                           height: 60,
-                          color: primaryTwo,
+                          colorFilter: const ColorFilter.mode(
+                              Colors.blue, BlendMode.clear),
                         ),
                       ),
                       const SizedBox(height: 20),
-                      Text(
+                      const Text(
                         'Setting Up Your Cyanase',
                         style: TextStyle(
                           fontSize: 20,
@@ -681,7 +760,8 @@ class _HomeScreenState extends State<HomeScreen>
                         child: LinearProgressIndicator(
                           value: _syncProgress,
                           backgroundColor: Colors.grey[300],
-                          valueColor: AlwaysStoppedAnimation<Color>(primaryTwo),
+                          valueColor:
+                              const AlwaysStoppedAnimation<Color>(primaryTwo),
                           minHeight: 6,
                           borderRadius: BorderRadius.circular(4),
                         ),
@@ -714,12 +794,14 @@ class _HomeScreenState extends State<HomeScreen>
     return Container(
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: isActive ? primaryTwoLight.withOpacity(0.2) : Colors.transparent,
+        color: isActive
+            ? primaryTwoLight.withValues(alpha: 0.2)
+            : Colors.transparent,
         shape: BoxShape.circle,
       ),
       child: SvgPicture.asset(
         iconPath,
-        color: isActive ? primaryTwo : primaryTwoLight.withOpacity(0.6),
+        color: isActive ? primaryTwo : primaryTwoLight.withValues(alpha: 0.6),
         width: 24,
         height: 24,
       ),
