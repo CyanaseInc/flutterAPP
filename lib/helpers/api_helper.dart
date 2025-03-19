@@ -255,11 +255,10 @@ class ApiService {
       if (response.statusCode == 200) {
         return jsonDecode(response.body); // Convert response to Map
       } else {
-        throw Exception(
-            'Failed to fetch subscription status: ${response.reasonPhrase}');
+        throw Exception('Failed to fetch deposit: ${response.reasonPhrase}');
       }
     } catch (e) {
-      throw Exception('Error fetching subscription status: $e');
+      throw Exception('Error fetching deposit: $e');
     }
   }
 
@@ -276,11 +275,10 @@ class ApiService {
       if (response.statusCode == 200) {
         return jsonDecode(response.body); // Convert response to Map
       } else {
-        throw Exception(
-            'Failed to fetch subscription status: ${response.reasonPhrase}');
+        throw Exception('Failed to fetch user track: ${response.reasonPhrase}');
       }
     } catch (e) {
-      throw Exception('Error fetching subscription status: $e');
+      throw Exception('Error fetching user track: $e');
     }
   }
 
@@ -298,11 +296,10 @@ class ApiService {
       if (response.statusCode == 200) {
         return jsonDecode(response.body); // Convert response to Map
       } else {
-        throw Exception(
-            'Failed to fetch subscription status: ${response.reasonPhrase}');
+        throw Exception('Failed to fetch withdraws: ${response.reasonPhrase}');
       }
     } catch (e) {
-      throw Exception('Error fetching subscription status: $e');
+      throw Exception('Error fetching withdraws: $e');
     }
   }
 
@@ -362,35 +359,24 @@ class ApiService {
   }
 
   static Future<Map<String, dynamic>> subscriptionPay(
-      String token, String phone, String Currency) async {
+      String token, data) async {
     try {
-      // Define the URL
-      final Uri url = Uri.parse(ApiEndpoints.paySubscription);
-
-      // Set the headers correctly
-      final Map<String, String> headers = {
-        'Authorization': 'Token $token',
-        'Content-Type': 'application/json',
-      };
-
-      // Define the request body
-      final Map<String, String> body = {'phone': phone, 'currency': Currency};
-
-      // Make a POST request
-      final http.Response response = await http.post(
-        url,
-        headers: headers,
-        body: jsonEncode(body), // Convert body to JSON format
+      final response = await http.post(
+        Uri.parse(ApiEndpoints.paySubscription),
+        headers: {
+          'Authorization': 'Token $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(data), // Convert requestData to JSON
       );
-
       // Check the response status
       if (response.statusCode == 200) {
         return jsonDecode(response.body); // Convert response to Map
       } else {
-        throw Exception('Failed to process payment: ${response.reasonPhrase}');
+        throw Exception('Failed to subscribe: ${response.reasonPhrase}');
       }
     } catch (e) {
-      throw Exception('Error processing payment: $e');
+      throw Exception('Error with subscription: $e');
     }
   }
 
