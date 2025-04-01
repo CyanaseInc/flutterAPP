@@ -1,25 +1,34 @@
+import 'package:cyanase/helpers/loader.dart';
 import 'package:flutter/material.dart';
 import 'get_group_loan.dart';
 import 'group_deposit_info_button.dart';
 import 'group_withdraw.dart';
-import 'package:cyanase/theme/theme.dart'; // Assuming this is where your colors are defined
+import 'package:cyanase/theme/theme.dart';
 import 'dart:io';
 import 'change_group_name.dart';
-import 'package:image_picker/image_picker.dart'; // For image picking functionality
-import 'add_member.dart'; // Import the AddGroupMembersScreen file
+import 'package:image_picker/image_picker.dart';
+import 'add_member.dart';
+import 'package:cyanase/helpers/api_helper.dart';
+import 'package:cyanase/helpers/database_helper.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class GroupHeader extends StatefulWidget {
   final String groupName;
   final String profilePic;
   final int groupId;
   final String description;
-  const GroupHeader(
-      {Key? key,
-      required this.groupName,
-      required this.description,
-      required this.profilePic,
-      required this.groupId})
-      : super(key: key);
+  final String totalBalance;
+  final String myContributions;
+
+  const GroupHeader({
+    Key? key,
+    required this.groupName,
+    required this.description,
+    required this.profilePic,
+    required this.groupId,
+    required this.totalBalance,
+    required this.myContributions,
+  }) : super(key: key);
 
   @override
   _GroupHeaderState createState() => _GroupHeaderState();
@@ -27,6 +36,14 @@ class GroupHeader extends StatefulWidget {
 
 class _GroupHeaderState extends State<GroupHeader> {
   File? _profilePicFile;
+  bool _isLoading = false;
+  String? _currentProfilePicUrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentProfilePicUrl = widget.profilePic;
+  }
 
   void _updateProfilePic(File image) {
     setState(() {
@@ -70,29 +87,157 @@ class _GroupHeaderState extends State<GroupHeader> {
     final XFile? image = await picker.pickImage(source: ImageSource.gallery);
 
     if (image != null) {
-      _updateProfilePic(File(image.path));
+      setState(() {
+        _isLoading = true;
+      });
+
+      try {
+        final dbHelper = DatabaseHelper();
+        final db = await dbHelper.database;
+        final userProfile = await db.query('profile', limit: 1);
+
+        if (userProfile.isEmpty) {
+          throw Exception('User profile not found');
+        }
+
+        final token = userProfile.first['token'] as String;
+
+        final response = await ApiService.updateGroupProfilePic(
+          token: token,
+          groupId: widget.groupId,
+          imageFile: File(image.path),
+        );
+
+        if (response['success'] == true) {
+          setState(() {
+            _currentProfilePicUrl = response['newProfilePicUrl'];
+            _profilePicFile = null;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+                content: Text('Profile picture updated successfully')),
+          );
+        } else {
+          throw Exception(
+              response['message'] ?? 'Failed to update profile picture');
+        }
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to update profile picture: $e')),
+        );
+      } finally {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
-  void _removeProfilePic() {
+  Future<void> _removeProfilePic() async {
     setState(() {
-      _profilePicFile = null;
+      _isLoading = true;
+    });
+
+    try {
+      final dbHelper = DatabaseHelper();
+      final db = await dbHelper.database;
+      final userProfile = await db.query('profile', limit: 1);
+
+      if (userProfile.isEmpty) {
+        throw Exception('User profile not found');
+      }
+
+      final token = userProfile.first['token'] as String;
+
+      final response = await ApiService.deleteGroupProfilePic(
+        token: token,
+        groupId: widget.groupId,
+      );
+
+      if (response['success'] == true) {
+        setState(() {
+          _currentProfilePicUrl = null;
+          _profilePicFile = null;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Profile picture removed successfully')),
+        );
+      } else {
+        throw Exception(
+            response['message'] ?? 'Failed to remove profile picture');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to remove profile picture: $e')),
+      );
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  void _showBalanceOptionsMenu(BuildContext context) {
+    showMenu(
+      context: context,
+      position: const RelativeRect.fromLTRB(100, 100, 0, 0),
+      items: [
+        const PopupMenuItem(
+          value: 'Withdraw',
+          child: Text('Withdraw'),
+        ),
+        const PopupMenuItem(
+          value: 'Add Interest',
+          child: Text('Add Interest'),
+        ),
+      ],
+    ).then((value) {
+      if (value != null) {
+        if (value == 'Withdraw') {
+          showDialog(
+            context: context,
+            builder: (BuildContext context) {
+              return AlertDialog(
+                title: const Text('Withdraw Funds'),
+                content: SingleChildScrollView(
+                  child: WithdrawButton(),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                    },
+                    child: const Text('Close'),
+                  ),
+                ],
+              );
+            },
+          );
+        } else if (value == 'Add Interest') {
+          // Handle add interest action here
+          // You might want to add similar modal dialog or navigation
+        }
+      }
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Center(
+        child: Loader(),
+      );
+    }
+
     return Container(
       width: double.infinity,
       color: white,
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 6.0),
       child: Column(
         children: [
-          // Top Row with Group Name, Profile Pic, and Menu Icon
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // Group Name on the left
               Text(
                 widget.groupName,
                 style: const TextStyle(
@@ -100,23 +245,27 @@ class _GroupHeaderState extends State<GroupHeader> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              // Profile Picture and Menu Icon on the right
               Row(
                 children: [
-                  // Profile Picture
                   GestureDetector(
                     onTap: _showProfilePicOptions,
                     child: CircleAvatar(
+                      radius: 20,
                       backgroundImage: _profilePicFile != null
                           ? FileImage(_profilePicFile!)
-                          : widget.profilePic.isNotEmpty
-                              ? FileImage(File(widget.profilePic))
-                              : AssetImage('assets/avat.png') as ImageProvider,
-                      radius: 20,
+                          : (_currentProfilePicUrl != null &&
+                                  _currentProfilePicUrl!.isNotEmpty
+                              ? CachedNetworkImageProvider(
+                                  _currentProfilePicUrl!)
+                              : const AssetImage('assets/avatar.png')
+                                  as ImageProvider),
+                      onBackgroundImageError: (exception, stackTrace) {
+                        debugPrint(
+                            "Failed to load profile picture: $exception");
+                      },
                     ),
                   ),
                   const SizedBox(width: 10),
-                  // Vertical Bars (Menu)
                   PopupMenuButton<String>(
                     onSelected: (value) {
                       if (value == 'Add Members') {
@@ -127,7 +276,7 @@ class _GroupHeaderState extends State<GroupHeader> {
                               groupId: widget.groupId,
                             ),
                           ),
-                        ); // Handle "Add Members" action
+                        );
                       } else if (value == 'Change Group Name') {
                         Navigator.push(
                           context,
@@ -155,18 +304,13 @@ class _GroupHeaderState extends State<GroupHeader> {
               ),
             ],
           ),
-
           const SizedBox(height: 10),
-
-          // Total Savings and Contributions
           Container(
             padding: const EdgeInsets.all(16.0),
             child: Column(
               children: [
-                // Use a Row with Expanded to center the text and push the menu icon to the right
                 Row(
                   children: [
-                    // Expanded widget to center the text
                     Expanded(
                       child: Center(
                         child: Text(
@@ -178,12 +322,8 @@ class _GroupHeaderState extends State<GroupHeader> {
                         ),
                       ),
                     ),
-                    // Menu icon on the right
                     GestureDetector(
-                      onTap: () {
-                        // Show dropdown menu
-                        _showBalanceOptionsMenu(context);
-                      },
+                      onTap: () => _showBalanceOptionsMenu(context),
                       child: Container(
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
@@ -200,11 +340,11 @@ class _GroupHeaderState extends State<GroupHeader> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  '\$12,900,345.67',
+                  widget.totalBalance,
                   style: TextStyle(
                     fontSize: 35,
                     fontWeight: FontWeight.bold,
-                    color: primaryColor, // Using your primaryColor
+                    color: primaryColor,
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -216,21 +356,18 @@ class _GroupHeaderState extends State<GroupHeader> {
                   ),
                 ),
                 Text(
-                  '\$1,234.56',
+                  widget.myContributions,
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
-                    color: primaryTwo, // Using your primaryTwo
+                    color: primaryTwo,
                   ),
                 ),
                 const SizedBox(width: 8),
               ],
             ),
           ),
-
           const SizedBox(height: 10),
-
-          // Group Description
           Text(
             widget.description,
             style: TextStyle(
@@ -240,8 +377,6 @@ class _GroupHeaderState extends State<GroupHeader> {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 10),
-
-          // Action Buttons
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
@@ -257,31 +392,5 @@ class _GroupHeaderState extends State<GroupHeader> {
         ],
       ),
     );
-  }
-
-  void _showBalanceOptionsMenu(BuildContext context) {
-    showMenu(
-      context: context,
-      position: const RelativeRect.fromLTRB(
-          100, 100, 0, 0), // Adjust position as needed
-      items: [
-        const PopupMenuItem(
-          value: 'Withdraw',
-          child: Text('Withdraw'),
-        ),
-        const PopupMenuItem(
-          value: 'Add Interest',
-          child: Text('Add Interest'),
-        ),
-      ],
-    ).then((value) {
-      if (value != null) {
-        if (value == 'Withdraw') {
-          // Handle "Withdraw" action
-        } else if (value == 'Add Interest') {
-          // Handle "Add Interest" action
-        }
-      }
-    });
   }
 }

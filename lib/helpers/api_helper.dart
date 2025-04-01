@@ -262,6 +262,41 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, dynamic>> getGroupDetails({
+    required String token,
+    required int groupId,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse(ApiEndpoints.apiUrlGetGroupDetails),
+        headers: {
+          'Authorization': 'Token $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'groupid': groupId,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final responseData = jsonDecode(response.body);
+
+        final data = responseData['data'] as Map<String, dynamic>;
+
+        return data; // Return the 'data' portion of the response
+      } else {
+        throw Exception(
+            'Failed to fetch group details: ${response.statusCode} - ${response.body}');
+      }
+    } on http.ClientException catch (e) {
+      throw Exception('Network error: $e');
+    } on FormatException catch (e) {
+      throw Exception('Invalid JSON format: $e');
+    } catch (e) {
+      throw Exception('Unexpected error: $e');
+    }
+  }
+
   static Future<Map<String, dynamic>> userTrack(String token) async {
     try {
       final response = await http.get(
@@ -418,6 +453,44 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, dynamic>> CreateGroupGoal(
+      String token, Map<String, dynamic> data, image) async {
+    try {
+      final uri = Uri.parse(ApiEndpoints.apiUrlGroupGoal);
+      final request = http.MultipartRequest('POST', uri);
+
+      // Add headers
+      request.headers['Authorization'] = 'Token $token';
+      request.headers['Content-Type'] = 'multipart/form-data';
+
+      // Add form fields
+      request.fields
+          .addAll(data.map((key, value) => MapEntry(key, value.toString())));
+
+      // Add image if provided
+      if (image != null) {
+        request.files.add(
+          await http.MultipartFile.fromPath('goal_picture', image.path),
+        );
+      }
+
+      // Send request
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      // Parse response
+      final responseData = jsonDecode(response.body);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return responseData; // { "message": ..., "success": ... }
+      } else {
+        throw Exception('Goal creation failed: ${responseData['message']}');
+      }
+    } catch (e) {
+      throw Exception('Goal creation failed: $e');
+    }
+  }
+
   static Future<Map<String, dynamic>> EditGoal(
       String token, Map<String, dynamic> data, image) async {
     try {
@@ -438,6 +511,37 @@ class ApiService {
           await http.MultipartFile.fromPath('goal_picture', image.path),
         );
       }
+
+      // Send request
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      // Parse response
+      final responseData = jsonDecode(response.body);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return responseData; // { "message": ..., "success": ... }
+      } else {
+        throw Exception('Goal creation failed: ${responseData['message']}');
+      }
+    } catch (e) {
+      throw Exception('Goal creation failed: $e');
+    }
+  }
+
+  static Future<Map<String, dynamic>> EditGroupGoal(
+      String token, Map<String, dynamic> data) async {
+    try {
+      final uri = Uri.parse(ApiEndpoints.editGroupGoal);
+      final request = http.MultipartRequest('POST', uri);
+
+      // Add headers
+      request.headers['Authorization'] = 'Token $token';
+      request.headers['Content-Type'] = 'multipart/form-data';
+
+      // Add form fields
+      request.fields
+          .addAll(data.map((key, value) => MapEntry(key, value.toString())));
 
       // Send request
       final streamedResponse = await request.send();
@@ -487,13 +591,43 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, dynamic>> DeleteGroupGoal(
+      String token, Map<String, dynamic> data) async {
+    try {
+      final uri = Uri.parse(ApiEndpoints.deleteGroupGoal);
+      final request = http.MultipartRequest('POST', uri);
+
+      // Add headers
+      request.headers['Authorization'] = 'Token $token';
+      request.headers['Content-Type'] = 'multipart/form-data';
+
+      // Add form fields
+      request.fields
+          .addAll(data.map((key, value) => MapEntry(key, value.toString())));
+
+      // Send request
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      // Parse response
+      final responseData = jsonDecode(response.body);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return responseData; // { "message": ..., "success": ... }
+      } else {
+        throw Exception('Goal creation failed: ${responseData['message']}');
+      }
+    } catch (e) {
+      throw Exception('Goal creation failed: $e');
+    }
+  }
+
   static Future<Map<String, dynamic>> NewGroup(
     String token,
     Map<String, dynamic> data,
   ) async {
     try {
-      final uri = Uri.parse(
-          ApiEndpoints.newGroup); // e.g., 'https://your-api.com/groups/en/'
+      final uri = Uri.parse(ApiEndpoints.newGroup);
       final request = http.MultipartRequest('POST', uri);
 
       // Add headers
@@ -632,6 +766,82 @@ class ApiService {
       }
     } catch (e) {
       rethrow;
+    }
+  }
+
+  static Future<Map<String, dynamic>> updateGroupProfilePic({
+    required String token,
+    required int groupId,
+    required File imageFile,
+  }) async {
+    try {
+      final uri = Uri.parse(ApiEndpoints.changeGroupPic); // Adjust endpoint
+      final request = http.MultipartRequest('POST', uri);
+
+      // Add headers
+      request.headers['Authorization'] = 'Token $token';
+
+      // Add groupId to the request body as a field
+      request.fields['group_id'] = groupId.toString();
+
+      // Add the profile picture file
+      if (await imageFile.exists()) {
+        request.files.add(
+          await http.MultipartFile.fromPath('profile_pic', imageFile.path),
+        );
+      } else {
+        throw Exception('Profile picture file not found at: ${imageFile.path}');
+      }
+
+      // Send request
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      // Parse response
+      final responseData = jsonDecode(response.body) as Map<String, dynamic>;
+
+      // Handle response based on status code
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        if (responseData['success'] == true) {
+          return responseData;
+        } else {
+          throw Exception(
+              'Profile picture update failed: ${responseData['message'] ?? 'Unknown error'}');
+        }
+      } else {
+        throw Exception(
+            'Profile picture update failed: ${response.statusCode} - ${responseData['message'] ?? response.body}');
+      }
+    } catch (e) {
+      print('Error in updateGroupProfilePic: $e');
+      rethrow;
+    }
+  }
+
+  // Delete group profile picture
+  static Future<Map<String, dynamic>> deleteGroupProfilePic({
+    required String token,
+    required int groupId,
+  }) async {
+    final response = await http.post(
+      Uri.parse(ApiEndpoints.deleteGroupPic),
+      headers: {
+        'Authorization': 'Token $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({'group_id': groupId}),
+    );
+
+    final responseData = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      return {
+        'success': true,
+        'message': responseData['message'] ?? 'Picture deleted successfully',
+      };
+    } else {
+      throw Exception(
+          responseData['message'] ?? 'Failed to delete profile picture');
     }
   }
 

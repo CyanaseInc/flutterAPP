@@ -61,6 +61,9 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _showPasscodeOption = false;
   final TextEditingController _phoneController =
       TextEditingController(text: '+256');
+  bool _obscurePassword = true; // Controls password visibility
+  final List<TextEditingController> _controllers =
+      List.generate(6, (_) => TextEditingController());
 
   @override
   void initState() {
@@ -104,6 +107,7 @@ class _LoginScreenState extends State<LoginScreen> {
       });
       return;
     }
+
     try {
       final loginResponse = await ApiService.login({
         'username': username,
@@ -137,52 +141,81 @@ class _LoginScreenState extends State<LoginScreen> {
         });
 
         if (isVerified) {
-          // final dbHelper = DatabaseHelper();
-          // final db = await dbHelper.database;
-          // final existingProfile = await db.query('profile');
+          final dbHelper = DatabaseHelper();
+          final db = await dbHelper.database;
 
-          // initialise shared storage
-          await WebSharedStorage.init();
-          var existingProfile = WebSharedStorage();
-          final readExistingProfile =
-              existingProfile.getCommon(userId.toString());
-          if (readExistingProfile == null) {
-            // we have some id already reated to this login user
-            //lets set some items to localstorage
-            existingProfile.setCommon('token', token);
-            existingProfile.setCommon('username', userName);
-            existingProfile.setCommon('country', userCountry);
-            existingProfile.setCommon('phone_number', phoneNumber);
-            existingProfile.setCommon('name', '$name $lastName');
-            existingProfile.setCommon('picture', picture);
+          // Check if profile exists
+          final existingProfile = await db.query(
+            'profile',
+            where: 'id = ?',
+            whereArgs: [userId],
+          );
 
-            // await db.update(
-            //   'profile',
-            //   {
-            //     'email': email,
-            //     'country': userCountry,
-            //     'phone_number': phoneNumber,
-            //     'token': token,
-            //     'name': userName,
-            //     'created_at': DateTime.now().toIso8601String(),
-            //   },
-            // );
+          bool dbOperationSuccess = false;
+
+          if (existingProfile.isNotEmpty) {
+            // Update existing profile
+            final int updatedRows = await db.update(
+              'profile',
+              {
+                'email': email,
+                'country': userCountry,
+                'phone_number': phoneNumber,
+                'token': token,
+                'name': userName,
+                'created_at': DateTime.now().toIso8601String(),
+              },
+              where: 'id = ?',
+              whereArgs: [userId],
+            );
+
+            dbOperationSuccess = updatedRows > 0;
+
+            if (!dbOperationSuccess) {
+              throw Exception('Failed to update profile in database');
+            }
+
+            print('Profile updated successfully. Rows affected: $updatedRows');
+          } else {
+            // Insert new profile
+            final int insertedId = await db.insert(
+              'profile',
+              {
+                'id': userId,
+                'email': email,
+                'country': userCountry,
+                'token': token,
+                'phone_number': phoneNumber,
+                'name': userName,
+                'created_at': DateTime.now().toIso8601String(),
+              },
+            );
+
+            dbOperationSuccess = insertedId != 0;
+
+            if (!dbOperationSuccess) {
+              throw Exception('Failed to insert profile into database');
+            }
+
+            print('Profile inserted successfully with ID: $insertedId');
           }
-          // will work for mobile device
-          // else {
-          //   await db.insert(
-          //     'profile',
-          //     {
-          //       'id': userId,
-          //       'email': email,
-          //       'country': userCountry,
-          //       'token': token,
-          //       'phone_number': phoneNumber,
-          //       'name': userName,
-          //       'created_at': DateTime.now().toIso8601String(),
-          //     },
-          //   );
-          // }
+
+          // Verify the operation was successful by querying the database
+          if (dbOperationSuccess) {
+            final verifiedProfile = await db.query(
+              'profile',
+              where: 'id = ?',
+              whereArgs: [userId],
+            );
+
+            if (verifiedProfile.isEmpty) {
+              throw Exception(
+                  'Profile verification failed - no profile found after operation');
+            } else {
+              print(
+                  'Profile verification successful: ${verifiedProfile.first}');
+            }
+          }
 
           Navigator.push(
             context,
@@ -204,6 +237,7 @@ class _LoginScreenState extends State<LoginScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: $e')),
       );
+      print('Error during login process: $e');
     } finally {
       setState(() {
         _isLoading = false;
@@ -312,9 +346,6 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  final List<TextEditingController> _controllers =
-      List.generate(6, (_) => TextEditingController());
-
   Future<void> _submitOTP(String phoneNumber) async {
     setState(() {
       _isLoading = true;
@@ -405,14 +436,29 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 20),
                 TextFormField(
-                  obscureText: true,
+                  obscureText: _obscurePassword,
                   onChanged: (value) {
-                    password = value;
+                    setState(() {
+                      password = value;
+                    });
                   },
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Password',
-                    prefixIcon: Icon(Icons.lock, color: primaryColor),
-                    border: UnderlineInputBorder(),
+                    prefixIcon: const Icon(Icons.lock, color: primaryColor),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscurePassword
+                            ? Icons.visibility_off
+                            : Icons.visibility,
+                        color: primaryColor,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _obscurePassword = !_obscurePassword;
+                        });
+                      },
+                    ),
+                    border: const UnderlineInputBorder(),
                   ),
                 ),
                 const SizedBox(height: 40),
@@ -428,10 +474,12 @@ class _LoginScreenState extends State<LoginScreen> {
                             );
                             return;
                           }
-                          username = _phoneController.text;
-                          if (!username.startsWith('+')) {
-                            username = '+$username';
-                          }
+                          setState(() {
+                            username = _phoneController.text;
+                            if (!username.startsWith('+')) {
+                              username = '+$username';
+                            }
+                          });
                           _handleLogin(username, password);
                         },
                   style: ElevatedButton.styleFrom(
@@ -492,7 +540,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    const Text('Don’t have an account? '),
+                    const Text('Don\'t have an account? '),
                     GestureDetector(
                       onTap: () {
                         Navigator.push(

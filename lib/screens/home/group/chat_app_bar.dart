@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cyanase/screens/home/group/group_info.dart';
 import 'package:cyanase/theme/theme.dart';
-import 'package:cyanase/screens/home/group/group_deposit.dart';
-import 'dart:io';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class MessageAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String name; // Group name
@@ -69,7 +68,7 @@ class MessageAppBar extends StatelessWidget implements PreferredSizeWidget {
     return AppBar(
       titleSpacing: 0, // Remove default spacing around the title
       leading: IconButton(
-        icon: Icon(Icons.arrow_back, color: Colors.black),
+        icon: Icon(Icons.arrow_back_ios, color: Colors.black),
         onPressed: onBackPressed, // Handle back button press
       ),
       title: GestureDetector(
@@ -89,11 +88,19 @@ class MessageAppBar extends StatelessWidget implements PreferredSizeWidget {
         child: Row(
           children: [
             // Group profile picture
+
             CircleAvatar(
-              backgroundImage: profilePic.isNotEmpty
-                  ? FileImage(File(profilePic)) // Load from file
-                  : AssetImage('assets/avat.png') as ImageProvider, // Fallback
               radius: 20,
+              backgroundImage: profilePic != null && profilePic.isNotEmpty
+                  ? CachedNetworkImageProvider(profilePic)
+                  : const AssetImage('assets/avat.png') as ImageProvider,
+              onBackgroundImageError:
+                  profilePic != null && profilePic.isNotEmpty
+                      ? (exception, stackTrace) {
+                          print(
+                              "Failed to load profilePic: $profilePic, error: $exception");
+                        }
+                      : null,
             ),
             SizedBox(width: 10), // Spacing between avatar and text
             Column(

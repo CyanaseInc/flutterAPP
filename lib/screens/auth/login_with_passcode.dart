@@ -63,7 +63,7 @@ class _NumericLoginScreenState extends State<NumericLoginScreen> {
       // Retrieve the user's email from the profile table
       final userProfile = await db.query('profile', limit: 1);
       final email = userProfile.first['email'] as String;
-      final name = userProfile.first['first_name'] as String;
+      final name = userProfile.first['name'] as String;
 
       // Perform login API request using the retrieved email and passcode
       final loginResponse = await ApiService.passcodeLogin({

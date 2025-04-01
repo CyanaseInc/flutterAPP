@@ -648,9 +648,9 @@ class _AddGoalScreenState extends State<AddGoalScreen> {
     setState(() => _isSubmitting = true);
 
     try {
-      // final dbHelper = DatabaseHelper();
-      // final db = await dbHelper.database;
-      // final userProfile = await db.query('profile', limit: 1);
+      final dbHelper = DatabaseHelper();
+      final db = await dbHelper.database;
+      final userProfile = await db.query('profile', limit: 1);
       await WebSharedStorage.init();
       var existingProfile = WebSharedStorage();
 

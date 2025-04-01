@@ -95,6 +95,7 @@ class _GoalDetailsScreenState extends State<GoalDetailsScreen> {
       setState(() => _isSubmitting = false);
     }
   }
+
   Future<void> deleteGoal() async {
     try {
       // final dbHelper = DatabaseHelper();
@@ -104,8 +105,8 @@ class _GoalDetailsScreenState extends State<GoalDetailsScreen> {
       // if (userProfile.isEmpty) {
       //   throw Exception('No user profile found');
       // }
+// final token = userProfile.first['token'] as String;
 
-      // final token = userProfile.first['token'] as String;
       await WebSharedStorage.init();
       var existingProfile = WebSharedStorage();
 

@@ -2,7 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:cyanase/theme/theme.dart';
 
 class DangerZone extends StatelessWidget {
-  const DangerZone({Key? key}) : super(key: key);
+  final int groupId;
+  final String groupName;
+  const DangerZone({
+    Key? key,
+    required this.groupId,
+    required this.groupName,
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {

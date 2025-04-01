@@ -19,14 +19,15 @@ class HomeScreen extends StatefulWidget {
   final bool? passcode;
   final String? email;
   final String? name;
-  final String? picture; // Made email nullable since it wasn't required before
+  final String? picture;
 
-  const HomeScreen(
-      {super.key, // Modern Flutter key convention
-      this.passcode,
-      this.email,
-      this.name,
-      this.picture});
+  const HomeScreen({
+    super.key,
+    this.passcode,
+    this.email,
+    this.name,
+    this.picture,
+  });
 
   @override
   _HomeScreenState createState() => _HomeScreenState();
@@ -59,82 +60,12 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Future<void> _initApp() async {
-    // final dbHelper = DatabaseHelper();
-    // final existingContacts = await dbHelper.getContacts();
-
-    // if (existingContacts.isEmpty) {
-    //   setState(() {
-    //     _isSyncingContacts = true;
-    //     _syncProgress = 0.0;
-    //   });
-    //   await _syncContactsForNewUser();
-    //   setState(() {
-    //     _isSyncingContacts = false;
-    //   });
-    // }
-
-    // _fetchAndHashContacts();
     _initSubscriptionCheck();
     _getNumber();
   }
 
-  Future<void> _syncContactsForNewUser() async {
-    try {
-      setState(() => _syncProgress = 0.2);
-      final fetchedContacts = await fetchAndHashContacts();
-
-      setState(() => _syncProgress = 0.5);
-      final registeredContacts = await getRegisteredContacts(fetchedContacts);
-
-      setState(() => _syncProgress = 0.8);
-      final dbHelper = DatabaseHelper();
-      await dbHelper.insertContacts(registeredContacts);
-
-      setState(() => _syncProgress = 1.0);
-      await Future.delayed(const Duration(milliseconds: 500));
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Welcome aboard! Contacts synced successfully.'),
-            backgroundColor: primaryTwo,
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
-    } catch (e) {
-      setState(() => _syncProgress = 0.0);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Oops! Failed to sync contacts: $e'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 3),
-            action: SnackBarAction(
-              label: 'Retry',
-              textColor: white,
-              onPressed: () => _initApp(),
-            ),
-          ),
-        );
-      }
-    }
-  }
-
-  void _fetchAndHashContacts() async {
-    try {
-      await fetchAndHashContacts();
-    } catch (e) {
-      // Handle silently
-    }
-  }
-
   Future<void> _getNumber() async {
     try {
-      // final dbHelper = DatabaseHelper();
-      // final db = await dbHelper.database;
-      // final userProfile = await db.query('profile', limit: 1);
-      // final userPhone = userProfile.first['phone_number'] as String;
       await WebSharedStorage.init();
       var existingProfile = WebSharedStorage();
       final userPhone = existingProfile.getCommon('phone_number');
@@ -170,17 +101,11 @@ class _HomeScreenState extends State<HomeScreen>
 
   Future<void> _initSubscriptionCheck() async {
     try {
-      // final dbHelper = DatabaseHelper();
-      // final db = await dbHelper.database;
-      // final userProfile = await db.query('profile', limit: 1);
       await WebSharedStorage.init();
       var existingProfile = WebSharedStorage();
 
-      // if (userProfile.isNotEmpty) {
       if (existingProfile.getCommon('token') != '') {
-        // final token = userProfile.first['token'] as String;
         final token = existingProfile.getCommon('token');
-
         final subscriptionResponse = await ApiService.subscriptionStatus(token);
         print(subscriptionResponse);
         if (subscriptionResponse['status'] == 'pending') {
@@ -198,18 +123,12 @@ class _HomeScreenState extends State<HomeScreen>
 
   void getLocalStorage() async {
     try {
-      // final dbHelper = DatabaseHelper();
-      // final db = await dbHelper.database;
-      // final userProfile = await db.query('profile', limit: 1);
-
       await WebSharedStorage.init();
       var existingProfile = WebSharedStorage();
-
       setState(() {
         picture1 = existingProfile.getCommon('picture');
       });
     } catch (e) {}
-    ;
   }
 
   Future<void> _showSubscriptionReminder() {
@@ -231,14 +150,14 @@ class _HomeScreenState extends State<HomeScreen>
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
                   color: primaryTwo,
-                  decoration: TextDecoration.none, // Explicitly no underline
+                  decoration: TextDecoration.none,
                 ),
               ),
               const SizedBox(height: 8),
               const Text(
                 'Your subscription fees are due. Please ensure payment of UGX 20,500 per year to continue enjoying our services.',
                 style: TextStyle(
-                  decoration: TextDecoration.none, // Explicitly no underline
+                  decoration: TextDecoration.none,
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -259,7 +178,7 @@ class _HomeScreenState extends State<HomeScreen>
                   style: TextStyle(
                     fontSize: 16,
                     color: primaryColor,
-                    decoration: TextDecoration.none, // Explicitly no underline
+                    decoration: TextDecoration.none,
                   ),
                 ),
               ),
@@ -279,99 +198,98 @@ class _HomeScreenState extends State<HomeScreen>
       isScrollControlled: true,
       builder: (context) {
         return Scaffold(
-            body: Padding(
-          padding: EdgeInsets.only(
-            left: 16.0,
-            right: 16.0,
-            bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-            top: 16.0,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Confirm Your Phone Number',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: primaryTwo,
-                  decoration: TextDecoration.none, // Explicitly no underline
-                ),
-              ),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: primaryLight,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(Icons.phone_android,
-                        size: 35, color: primaryTwo),
-                    const SizedBox(width: 15),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            Phonenumber,
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black87,
-                              decoration: TextDecoration
-                                  .none, // Explicitly no underline
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          const Text(
-                            'This number will be used for deposits.',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Color.fromARGB(255, 30, 30, 30),
-                              decoration: TextDecoration
-                                  .none, // Explicitly no underline
-                            ),
-                            softWrap: true,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: processing ? null : _processPayment,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: primaryTwo,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  padding: const EdgeInsets.symmetric(vertical: 15),
-                  minimumSize: const Size(double.infinity, 50),
-                ),
-                child: processing
-                    ? const SizedBox(height: 20, width: 20, child: Loader())
-                    : const Text('Proceed to Pay'),
-              ),
-              const SizedBox(height: 10),
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text(
-                  'Cancel',
+          body: Padding(
+            padding: EdgeInsets.only(
+              left: 16.0,
+              right: 16.0,
+              bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+              top: 16.0,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Confirm Your Phone Number',
                   style: TextStyle(
-                    color: Colors.grey,
-                    fontSize: 14,
-                    decoration: TextDecoration.none, // Explicitly no underline
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: primaryTwo,
+                    decoration: TextDecoration.none,
                   ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: primaryLight,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.phone_android,
+                          size: 35, color: primaryTwo),
+                      const SizedBox(width: 15),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              Phonenumber,
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black87,
+                                decoration: TextDecoration.none,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            const Text(
+                              'This number will be used for deposits.',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Color.fromARGB(255, 30, 30, 30),
+                                decoration: TextDecoration.none,
+                              ),
+                              softWrap: true,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                ElevatedButton(
+                  onPressed: processing ? null : _processPayment,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryTwo,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 15),
+                    minimumSize: const Size(double.infinity, 50),
+                  ),
+                  child: processing
+                      ? const SizedBox(height: 20, width: 20, child: Loader())
+                      : const Text('Proceed to Pay'),
+                ),
+                const SizedBox(height: 10),
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(
+                      color: Colors.grey,
+                      fontSize: 14,
+                      decoration: TextDecoration.none,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ));
+        );
       },
     );
   }
@@ -381,57 +299,42 @@ class _HomeScreenState extends State<HomeScreen>
       processing = true;
     });
     try {
-      // final dbHelper = DatabaseHelper();
-      // final db = await dbHelper.database;
-      // final userProfile = await db.query('profile', limit: 1);
       await WebSharedStorage.init();
       var existingProfile = WebSharedStorage();
 
-      // if (userProfile.isNotEmpty) {
       if (existingProfile.getCommon('token') != '') {
-        // final token = userProfile.first['token'] as String;
-        // final userCountry = userProfile.first['country'] as String;
         final token = existingProfile.getCommon('token');
         final userCountry = existingProfile.getCommon('country');
         final phoneNumber = existingProfile.getCommon('phone_number');
 
         final currencyCode = CurrencyHelper.getCurrencyCode(userCountry);
-
-        // Generate a unique reference and reference_id
         final reference = 'REF-${DateTime.now().millisecondsSinceEpoch}';
-
         final referenceId = '${DateTime.now().millisecondsSinceEpoch}';
 
-        // Prepare requestData
         final requestData = {
           "deposit_amount": '20500',
           "currency": 'UGX',
           "reference": reference,
           "reference_id": referenceId,
           "phone_number": phoneNumber,
-          'tx_ref': "CYANASESUB01-v1"
+          'tx_ref': "CYANASESUB01-v1",
         };
-        var phone = {
-          "msisdn": requestData['phone_number'],
-        };
+        var phone = {"msisdn": requestData['phone_number']};
         var data = {
           "account_no": "REL6AEDF95B5A",
           "reference": requestData['reference'],
           "msisdn": requestData['phone_number'],
           "currency": requestData['currency'],
           "amount": '20500',
-          "description": "Payment Request."
+          "description": "Payment Request.",
         };
-        // validate phone number
+
         final validatePhone = await ApiService.validatePhone(token, phone);
         if (validatePhone['success'] == true) {
-          // proceed to request payment
           final requestPayment = await ApiService.requestPayment(token, data);
           if (requestPayment['success'] == true) {
-            // get transaction
             final authPayment = await ApiService.getTransaction(token, data);
             if (authPayment['success'] == true) {
-              //deposit
               final response =
                   await ApiService.subscriptionPay(token, requestData);
               if (response['success'] == true) {
@@ -518,7 +421,7 @@ class _HomeScreenState extends State<HomeScreen>
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
                   color: primaryTwo,
-                  decoration: TextDecoration.none, // Explicitly no underline
+                  decoration: TextDecoration.none,
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -529,7 +432,7 @@ class _HomeScreenState extends State<HomeScreen>
                   fontSize: 14,
                   color: Colors.grey[800],
                   height: 1.5,
-                  decoration: TextDecoration.none, // Explicitly no underline
+                  decoration: TextDecoration.none,
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -563,7 +466,7 @@ class _HomeScreenState extends State<HomeScreen>
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
                     color: white,
-                    decoration: TextDecoration.none, // Explicitly no underline
+                    decoration: TextDecoration.none,
                   ),
                 ),
               ),
@@ -574,7 +477,7 @@ class _HomeScreenState extends State<HomeScreen>
                   style: TextStyle(
                     color: Colors.grey[600],
                     fontSize: 14,
-                    decoration: TextDecoration.none, // Explicitly no underline
+                    decoration: TextDecoration.none,
                   ),
                 ),
               ),
@@ -593,7 +496,6 @@ class _HomeScreenState extends State<HomeScreen>
     super.dispose();
   }
 
-  @override
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -636,68 +538,11 @@ class _HomeScreenState extends State<HomeScreen>
                   ],
                 ),
               ),
-              Container(
-                decoration: BoxDecoration(
-                  color: white,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.grey.withValues(alpha: 0.2),
-                      spreadRadius: 1,
-                      blurRadius: 5,
-                      offset: const Offset(0, -2),
-                    ),
-                  ],
-                ),
-                child: TabBar(
-                  controller: _tabController,
-                  indicator: const UnderlineTabIndicator(
-                    borderSide: BorderSide(width: 2.0, color: primaryTwo),
-                    insets: EdgeInsets.symmetric(horizontal: 16.0),
-                  ),
-                  labelColor: primaryTwo,
-                  unselectedLabelColor: primaryTwoLight.withValues(alpha: 0.6),
-                  labelStyle: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                    decoration: TextDecoration.none, // Explicitly no underline
-                  ),
-                  unselectedLabelStyle: const TextStyle(
-                    fontWeight: FontWeight.normal,
-                    fontSize: 14,
-                    decoration: TextDecoration.none, // Explicitly no underline
-                  ),
-                  tabs: [
-                    Tab(
-                      icon: _buildTabIcon(
-                        iconPath: 'assets/icons/person.svg',
-                        isActive: _tabController.index == 0,
-                      ),
-                      text: 'Personal',
-                    ),
-                    Tab(
-                      icon: _buildTabIcon(
-                        iconPath: 'assets/icons/groups.svg',
-                        isActive: _tabController.index == 1,
-                      ),
-                      text: 'Groups',
-                    ),
-                    Tab(
-                      icon: _buildTabIcon(
-                        iconPath: 'assets/icons/goal-icon.svg',
-                        isActive: _tabController.index == 2,
-                      ),
-                      text: 'Goals',
-                    ),
-                  ],
-                ),
-              ),
             ],
           ),
-          // Add the syncing contacts overlay here
           if (_isSyncingContacts)
             Container(
-              color: Colors.black
-                  .withValues(alpha: 0.5), // Matches bottom sheet overlay
+              color: Colors.black.withValues(alpha: 0.5),
               child: Center(
                 child: Container(
                   width: 300,
@@ -724,7 +569,7 @@ class _HomeScreenState extends State<HomeScreen>
                           color: primaryTwo.withValues(alpha: 0.1),
                         ),
                         child: SvgPicture.asset(
-                          'assets/icons/groups.svg', // Replace with your app logo
+                          'assets/icons/groups.svg',
                           width: 60,
                           height: 60,
                           colorFilter: const ColorFilter.mode(
@@ -738,8 +583,7 @@ class _HomeScreenState extends State<HomeScreen>
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
                           color: primaryTwo,
-                          decoration:
-                              TextDecoration.none, // Explicitly no underline
+                          decoration: TextDecoration.none,
                         ),
                         textAlign: TextAlign.center,
                       ),
@@ -749,8 +593,7 @@ class _HomeScreenState extends State<HomeScreen>
                         style: TextStyle(
                           fontSize: 14,
                           color: Colors.grey[800],
-                          decoration:
-                              TextDecoration.none, // Explicitly no underline
+                          decoration: TextDecoration.none,
                         ),
                         textAlign: TextAlign.center,
                       ),
@@ -772,8 +615,7 @@ class _HomeScreenState extends State<HomeScreen>
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.grey[700],
-                          decoration:
-                              TextDecoration.none, // Explicitly no underline
+                          decoration: TextDecoration.none,
                         ),
                         textAlign: TextAlign.center,
                       ),
@@ -784,26 +626,85 @@ class _HomeScreenState extends State<HomeScreen>
             ),
         ],
       ),
-    );
-  }
-
-  Widget _buildTabIcon({
-    required String iconPath,
-    required bool isActive,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: isActive
-            ? primaryTwoLight.withValues(alpha: 0.2)
-            : Colors.transparent,
-        shape: BoxShape.circle,
-      ),
-      child: SvgPicture.asset(
-        iconPath,
-        color: isActive ? primaryTwo : primaryTwoLight.withValues(alpha: 0.6),
-        width: 24,
-        height: 24,
+      bottomNavigationBar: Container(
+        color: primaryTwo, // Dark background color
+        width: double.infinity, // Ensure it spans the full width
+        height: 70, // Adjust height as needed
+        child: TabBar(
+          controller: _tabController,
+          indicator: const BoxDecoration(), // Remove the underline indicator
+          labelColor: primaryLight, // Active tab color
+          unselectedLabelColor: Colors.white, // Inactive tab color
+          labelStyle: const TextStyle(
+            fontWeight: FontWeight.normal,
+            fontSize: 12,
+            decoration: TextDecoration.none,
+          ),
+          unselectedLabelStyle: const TextStyle(
+            fontWeight: FontWeight.normal,
+            fontSize: 12,
+            decoration: TextDecoration.none,
+          ),
+          tabs: [
+            Tab(
+              child: Stack(
+                alignment: Alignment.topRight,
+                children: [
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const SizedBox(height: 4),
+                      SvgPicture.asset(
+                        'assets/icons/person.svg',
+                        color: _tabController.index == 0
+                            ? primaryLight
+                            : Colors.white,
+                        width: 24,
+                        height: 24,
+                      ),
+                      const SizedBox(height: 2),
+                      const Text('Personal'),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            Tab(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(height: 4),
+                  SvgPicture.asset(
+                    'assets/icons/groups.svg',
+                    color:
+                        _tabController.index == 1 ? primaryColor : Colors.white,
+                    width: 24,
+                    height: 24,
+                  ),
+                  const SizedBox(height: 2),
+                  const Text('Groups'),
+                ],
+              ),
+            ),
+            Tab(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(height: 4),
+                  SvgPicture.asset(
+                    'assets/icons/goal-icon.svg',
+                    color:
+                        _tabController.index == 2 ? primaryColor : Colors.white,
+                    width: 24,
+                    height: 24,
+                  ),
+                  const SizedBox(height: 2),
+                  const Text('Goals'),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -823,32 +724,20 @@ class _HomeScreenState extends State<HomeScreen>
         radius: 30,
         backgroundImage: picture != null
             ? NetworkImage(picture)
-            : const AssetImage("assets/images/avatar.png")
-                as ImageProvider, // Default image
+            : const AssetImage("assets/images/avatar.png") as ImageProvider,
       ),
     );
   }
 
   List<Widget> _buildAppBarActions() {
-    if (_tabController.index == 1) {
-      return [
-        IconButton(
-          icon: const Icon(Icons.more_vert, color: primaryTwo),
-          onPressed: () {
-            _showMenu(context);
-          },
-        ),
-      ];
-    } else {
-      return [
-        IconButton(
-          icon: const Icon(Icons.more_vert, color: primaryTwo),
-          onPressed: () {
-            _showMenu(context);
-          },
-        ),
-      ];
-    }
+    return [
+      IconButton(
+        icon: const Icon(Icons.more_vert, color: primaryTwo),
+        onPressed: () {
+          _showMenu(context);
+        },
+      ),
+    ];
   }
 
   void _showMenu(BuildContext context) {
@@ -860,24 +749,21 @@ class _HomeScreenState extends State<HomeScreen>
           value: 'settings',
           child: Text(
             'Settings',
-            style: TextStyle(
-                decoration: TextDecoration.none), // Explicitly no underline
+            style: TextStyle(decoration: TextDecoration.none),
           ),
         ),
         const PopupMenuItem(
           value: 'new_group_investment',
           child: Text(
             'New Group',
-            style: TextStyle(
-                decoration: TextDecoration.none), // Explicitly no underline
+            style: TextStyle(decoration: TextDecoration.none),
           ),
         ),
         const PopupMenuItem(
           value: 'logout',
           child: Text(
             'Logout',
-            style: TextStyle(
-                decoration: TextDecoration.none), // Explicitly no underline
+            style: TextStyle(decoration: TextDecoration.none),
           ),
         ),
       ],

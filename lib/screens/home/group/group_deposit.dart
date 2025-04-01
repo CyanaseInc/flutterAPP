@@ -2,6 +2,7 @@ import 'package:cyanase/theme/theme.dart';
 import 'package:flutter/material.dart';
 import 'dart:io'; // Make sure you import this for File usage
 import 'package:cyanase/helpers/deposit.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class DepositScreen extends StatefulWidget {
   final String groupName;
@@ -20,7 +21,6 @@ class DepositScreen extends StatefulWidget {
 
 class _DepositScreenState extends State<DepositScreen> {
   final PageController _pageController = PageController();
-
   int _currentStep = 0;
   String? _selectedMethod;
 
@@ -52,7 +52,19 @@ class _DepositScreenState extends State<DepositScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.groupName),
+        backgroundColor: primaryTwo,
+        title: Text(
+          widget.groupName,
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
+        ),
       ),
       body: SingleChildScrollView(
         child: Column(
@@ -61,10 +73,13 @@ class _DepositScreenState extends State<DepositScreen> {
             Padding(
               padding: const EdgeInsets.only(top: 40),
               child: CircleAvatar(
+                radius: 50,
                 backgroundImage: widget.profilePic.isNotEmpty
-                    ? FileImage(File(widget.profilePic))
-                    : AssetImage('assets/avat.png') as ImageProvider,
-                radius: 60,
+                    ? CachedNetworkImageProvider(widget.profilePic)
+                    : const AssetImage('assets/avat.png') as ImageProvider,
+                onBackgroundImageError: widget.profilePic.isNotEmpty
+                    ? (exception, stackTrace) {}
+                    : null,
               ),
             ),
 
@@ -73,12 +88,13 @@ class _DepositScreenState extends State<DepositScreen> {
               height: 300, // Adjust height as needed
               child: PageView(
                 controller: _pageController,
-                physics: NeverScrollableScrollPhysics(),
+                physics: const NeverScrollableScrollPhysics(),
                 children: [
                   DepositHelper(
-                      depositCategory: 'group_general',
-                      detailText:
-                          'Contribute to the  saving group by depositing here'),
+                    depositCategory: 'group_general',
+                    detailText:
+                        'Contribute to the saving group by depositing here',
+                  ),
                 ],
               ),
             ),

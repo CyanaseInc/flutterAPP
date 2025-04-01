@@ -43,7 +43,6 @@ class _PortfolioState extends State<Portfolio> {
         final token = existingProfile.getCommon('token');
         final response = await ApiService.depositNetworth(token);
         final data = response['data'] ?? {};
-        print(data);
 
         final investmentPerformance =
             data['investment_performance'] as List? ?? [];
@@ -71,8 +70,6 @@ class _PortfolioState extends State<Portfolio> {
 
               return FlSpot(xValue.toDouble(), yValue);
             }).toList();
-
-            print('Portfolio ${item['name']}: performance $performance');
 
             return {
               'name': item['name'] ?? 'Unknown',

@@ -4,12 +4,11 @@ import 'chat_screen.dart';
 import 'package:cyanase/theme/theme.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'new_group.dart';
-import 'dart:io';
 import 'dart:async';
 import 'package:cyanase/helpers/loader.dart';
 import 'package:cyanase/helpers/api_helper.dart';
-import 'package:cyanase/helpers/cache_image.dart';
-import 'package:path/path.dart';
+import 'package:cyanase/helpers/endpoints.dart';
+import 'package:cached_network_image/cached_network_image.dart'; // Add this import
 
 class ChatList extends StatefulWidget {
   const ChatList({Key? key}) : super(key: key);
@@ -90,24 +89,21 @@ class ChatListState extends State<ChatList> {
         throw Exception('Invalid API response format: $response');
       }
 
-      print("Extracted groups: $groups");
-
       for (final groupData in groups) {
         final groupId = groupData['groupId'] as int?;
         final groupName = groupData['name'] as String?;
         final groupDescription = groupData['description'] as String?;
-        final profilePic = groupData['profile_pic'] as String?;
+        final profilePic = groupData['profile_pic'] != null
+            ? '${ApiEndpoints.server}${groupData['profile_pic']}'
+            : null;
         final createdAt = groupData['created_at'] as String?;
         final createdBy = groupData['created_by'] as String?;
         final lastActivity = groupData['last_activity'] as String?;
         final participants = groupData['participants'] as List<dynamic>?;
 
         if (groupId == null || groupName == null) {
-          print("Skipping group with missing ID or name: $groupData");
           continue;
         }
-
-        print("Processing group: $groupName (ID: $groupId)");
 
         final existingGroup = await db.query(
           'groups',
@@ -117,42 +113,34 @@ class ChatListState extends State<ChatList> {
         );
 
         if (existingGroup.isEmpty) {
-          String? localImagePath;
-          if (profilePic != null && profilePic.isNotEmpty) {
-            final String fileName = 'group_$groupId${extension(profilePic)}';
-            localImagePath =
-                await ImageHelper.downloadAndSaveImage(profilePic, fileName);
-          }
-
           await dbHelper.insertGroup({
             'id': groupId,
             'name': groupName,
             'description': groupDescription ?? '',
-            'profile_pic': localImagePath ?? '',
+            'profile_pic': profilePic ?? '', // Store the URL directly
             'type': 'group',
             'created_at': createdAt ?? DateTime.now().toIso8601String(),
             'created_by': createdBy ?? 'unknown',
             'last_activity': lastActivity ?? DateTime.now().toIso8601String(),
             'settings': '',
           });
-          print("Inserted group: $groupName (ID: $groupId)");
-        } else {
-          print(
-              "Group $groupName (ID: $groupId) already exists, skipping insert");
-        }
+        } else if (existingGroup.first['profile_pic'] != profilePic) {
+          await db.update(
+            'groups',
+            {'profile_pic': profilePic ?? ''},
+            where: 'id = ?',
+            whereArgs: [groupId],
+          );
+        } else {}
 
+        // Participant logic remains unchanged
         if (participants != null && participants.isNotEmpty) {
-          print("Participants to process: $participants");
           for (final participantData in participants) {
-            print("Raw participant data: $participantData");
-
-            // Safe type extraction
             final userIdDynamic = participantData['user_id'];
             final roleDynamic = participantData['role'];
             final joinedAtDynamic = participantData['joined_at'];
             final mutedDynamic = participantData['muted'];
 
-            // Convert types safely
             final String? userId = userIdDynamic is String
                 ? userIdDynamic
                 : userIdDynamic?.toString();
@@ -167,7 +155,7 @@ class ChatListState extends State<ChatList> {
             } else {
               print(
                   "Unexpected muted type: ${mutedDynamic?.runtimeType}, value: $mutedDynamic");
-              muted = 0; // Default to 0 for unknown types
+              muted = 0;
             }
 
             if (userId == null) {
@@ -183,7 +171,6 @@ class ChatListState extends State<ChatList> {
               whereArgs: [groupId, userId],
               limit: 1,
             );
-            print("Existing participant check: $existingParticipant");
 
             if (existingParticipant.isEmpty) {
               await dbHelper.insertParticipant({
@@ -198,14 +185,6 @@ class ChatListState extends State<ChatList> {
               print("Participant $userId already in group $groupId, skipping");
             }
           }
-
-          // Verify participants in DB after insertion
-          final participantCheck = await db.query(
-            'participants',
-            where: 'group_id = ?',
-            whereArgs: [groupId],
-          );
-          print("Participants in DB for group $groupId: $participantCheck");
         } else {
           print("No participants found for group $groupId");
         }
@@ -214,7 +193,7 @@ class ChatListState extends State<ChatList> {
       _reloadChats();
     } catch (e) {
       print("Error retrieving groups: $e");
-      rethrow; // Temporarily keep for stack trace
+      rethrow;
     }
   }
 
@@ -538,34 +517,21 @@ class ChatListState extends State<ChatList> {
   }
 
   Widget _getAvatar(String name, String? profilePic, bool isGroup) {
+    print("Rendering avatar for $name with profilePic: $profilePic");
+
     if (profilePic != null && profilePic.isNotEmpty) {
-      if (profilePic.startsWith('http')) {
-        final String fileName =
-            'group_${name.hashCode}${extension(basename(profilePic))}';
-        return FutureBuilder<String?>(
-          future: ImageHelper.downloadAndSaveImage(profilePic, fileName),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.done &&
-                snapshot.hasData) {
-              return CircleAvatar(
-                backgroundImage: FileImage(File(snapshot.data!)),
-                radius: 30,
-              );
-            }
-            return CircleAvatar(
-              radius: 30,
-              backgroundColor: primaryColor,
-              child: const Icon(Icons.image, color: white),
-            );
-          },
-        );
-      } else {
-        return CircleAvatar(
-          backgroundImage: FileImage(File(profilePic)),
-          radius: 30,
-        );
-      }
-    } else if (isGroup) {
+      return CircleAvatar(
+        radius: 30,
+        backgroundImage: CachedNetworkImageProvider(profilePic),
+        child: null, // No child needed if image loads
+        onBackgroundImageError: (exception, stackTrace) {
+          print("Failed to load image $profilePic: $exception");
+        },
+      );
+    }
+
+    // Fallback for no profile picture or failed loading
+    if (isGroup) {
       final initials = name.isNotEmpty ? name[0].toUpperCase() : "G";
       return CircleAvatar(
         radius: 30,

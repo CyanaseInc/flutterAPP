@@ -23,6 +23,7 @@ class ApiEndpoints {
   static const String fetchUserDetails = "$server/api/v1/en/register/user/";
   static const String apiUrlGetInvestmentClasses =
       "$server/api/v1/en/auth/get/investment/classes/";
+  static const apiUrlGetGroupDetails = "$server/api/v1/en/details/group/";
   static const String apiUrlGetInvestmentOptions =
       "$server/api/v1/en/auth/get/investment/options/";
   static const String apiUrlGetInvestmentClassOptions =
@@ -53,10 +54,15 @@ class ApiEndpoints {
   static const String apiUrlGetGoalWithdraw =
       "$server/api/v1/en/get/goal/withdraw/";
   static const String apiUrlGoal = "$server/api/v1/en/create/goal/";
+  static const String apiUrlGroupGoal = "$server/api/v1/en/creategroup/goal/";
   static const String editGroup = "$server/api/v1/en/editgroup/group/";
+  static const String editGroupGoal = "$server/api/v1/en/editgroupgoal/group/";
   static const String addMembers = "$server/api/v1/en/addmembers/group/";
   static const String editGoal = "$server/api/v1/en/edit/goal/";
   static const String deleteGoal = "$server/api/v1/en/delete/goal/by/id/";
+  static const String deleteGroupGoal = "$server/api/v1/en/delete/group/goal/";
+  static const String deleteGroupPic = "$server/api/v1/en/delete/group/pic/";
+  static const String changeGroupPic = "$server/api/v1/en/change/group/pic/";
   static const String uploadGoalPhoto =
       "$server/api/v1/en/auth/upload/goal/photo/";
   static const String apiUrlGetAllFundManagers =
@@ -75,8 +81,8 @@ class ApiEndpoints {
   static const String apiUrlUserGetProfilePhoto = "$server/static/photo.png";
   static const String apiUrlUserNetWorth =
       "$server/api/v1/en/auth/user/networth/";
-  static const String login = "$server/api/v1/en/app/user/login/";
-  // static const String login = "$server/api/v1/en/auth/user/login/";
+  //static const String login = "$server/api/v1/en/app/user/login/";
+  static const String login = "$server/api/v1/en/auth/user/login/";
   static const String passcodeLogin = "$server/api/v1/en/auth/user/passcode/";
   static const String apiUrlUserNextOfKin = "$server/api/v1/en/user/nextOfKin/";
   static const String apiUrlGetNextOfKin = "$server/api/v1/en/get/nextOfKin/";

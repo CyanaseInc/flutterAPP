@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:cyanase/theme/theme.dart';
 
 class GroupSettings extends StatefulWidget {
-  const GroupSettings({Key? key}) : super(key: key);
+  final int groupId;
+  GroupSettings({Key? key, required this.groupId}) : super(key: key);
 
   @override
   _GroupSettingsState createState() => _GroupSettingsState();
