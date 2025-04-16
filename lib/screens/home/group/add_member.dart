@@ -91,12 +91,14 @@ class _AddGroupMembersScreenState extends State<AddGroupMembersScreen> {
       // Prepare data for POST request
       final Map<String, dynamic> requestData = {
         'groupid': widget.groupId.toString(),
-        'participants': _selectedContacts
-            .map((contact) => {
-                  'user_id': contact['id'].toString(),
-                  'role': 'member',
-                })
-            .toList(),
+        'participants': _selectedContacts.map((contact) {
+          return {
+            'user_id': contact['id'].toString(),
+            'role': 'member',
+            'is_approved': true, // default value
+            'is_denied': false // default value
+          };
+        }).toList(),
       };
 
       // Make POST request to add members

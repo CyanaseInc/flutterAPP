@@ -2,13 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:cyanase/helpers/database_helper.dart';
 import 'chat_screen.dart';
 import 'package:cyanase/theme/theme.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'new_group.dart';
 import 'dart:async';
 import 'package:cyanase/helpers/loader.dart';
 import 'package:cyanase/helpers/api_helper.dart';
 import 'package:cyanase/helpers/endpoints.dart';
-import 'package:cached_network_image/cached_network_image.dart'; // Add this import
+import 'package:cached_network_image/cached_network_image.dart';
+import 'pending_groups_screen.dart';
+import 'package:lottie/lottie.dart';
 
 class ChatList extends StatefulWidget {
   const ChatList({Key? key}) : super(key: key);
@@ -17,22 +18,35 @@ class ChatList extends StatefulWidget {
   ChatListState createState() => ChatListState();
 }
 
-class ChatListState extends State<ChatList> {
+class ChatListState extends State<ChatList>
+    with SingleTickerProviderStateMixin {
   final DatabaseHelper _dbHelper = DatabaseHelper();
   final StreamController<void> _refreshController =
       StreamController<void>.broadcast();
   final TextEditingController _searchController = TextEditingController();
   List<Map<String, dynamic>> _allChats = [];
   List<Map<String, dynamic>> _filteredChats = [];
+  int _pendingRequestCount = 0;
+  List<Map<String, dynamic>> _adminGroups = [];
+  AnimationController? _animationController;
+  Animation<double>? _fadeAnimation;
 
   @override
   void initState() {
     super.initState();
-    _getGroup(); // Fetch groups on initialization
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 1),
+    );
+    _fadeAnimation =
+        Tween<double>(begin: 0.0, end: 1.0).animate(_animationController!);
+    _getGroup();
+    _animationController!.forward();
   }
 
   @override
   void dispose() {
+    _animationController?.dispose();
     _refreshController.close();
     _searchController.dispose();
     super.dispose();
@@ -63,11 +77,26 @@ class ChatListState extends State<ChatList> {
       final userProfile = await db.query('profile', limit: 1);
 
       if (userProfile.isEmpty) {
-        throw Exception('No user profile found');
+        print('No profile found, inserting default user_id: 145');
+        await db.insert('profile', {
+          'user_id': '145',
+          'token': 'mock_token',
+          'name': 'Default User',
+          'created_at': DateTime.now().toIso8601String(),
+        });
+        setState(() {
+          _pendingRequestCount = 0;
+          _adminGroups = [];
+        });
+        return;
       }
 
       final token = userProfile.first['token'] as String;
+      final userId = userProfile.first['user_id'] as String? ?? '145';
+      print('Current user ID: $userId');
+
       final dynamic response = await ApiService.getGroup(token);
+      print('API response: $response');
 
       List<Map<String, dynamic>> groups;
       if (response is List && response.isNotEmpty) {
@@ -89,6 +118,10 @@ class ChatListState extends State<ChatList> {
         throw Exception('Invalid API response format: $response');
       }
 
+      print('Groups received: ${groups.length}');
+      List<Map<String, dynamic>> adminGroups = [];
+      int totalPending = 0;
+
       for (final groupData in groups) {
         final groupId = groupData['groupId'] as int?;
         final groupName = groupData['name'] as String?;
@@ -100,10 +133,14 @@ class ChatListState extends State<ChatList> {
         final createdBy = groupData['created_by'] as String?;
         final lastActivity = groupData['last_activity'] as String?;
         final participants = groupData['participants'] as List<dynamic>?;
+        print('Participants for group $groupId: $participants');
 
         if (groupId == null || groupName == null) {
+          print('Skipping group: ID or name missing - $groupData');
           continue;
         }
+
+        print('Processing group $groupId: $groupName');
 
         final existingGroup = await db.query(
           'groups',
@@ -117,7 +154,7 @@ class ChatListState extends State<ChatList> {
             'id': groupId,
             'name': groupName,
             'description': groupDescription ?? '',
-            'profile_pic': profilePic ?? '', // Store the URL directly
+            'profile_pic': profilePic ?? '',
             'type': 'group',
             'created_at': createdAt ?? DateTime.now().toIso8601String(),
             'created_by': createdBy ?? 'unknown',
@@ -131,19 +168,25 @@ class ChatListState extends State<ChatList> {
             where: 'id = ?',
             whereArgs: [groupId],
           );
-        } else {}
+        }
 
-        // Participant logic remains unchanged
+        int pendingCount = 0;
+        bool isAdmin = false;
+
         if (participants != null && participants.isNotEmpty) {
           for (final participantData in participants) {
-            final userIdDynamic = participantData['user_id'];
+            final participantUserIdDynamic = participantData['user_id'];
+            final userName = participantData['user_name'] as String?;
             final roleDynamic = participantData['role'];
             final joinedAtDynamic = participantData['joined_at'];
             final mutedDynamic = participantData['muted'];
+            final isAdminDynamic = participantData['is_admin'] ?? false;
+            final isApprovedDynamic = participantData['is_approved'] ?? false;
+            final isDeniedDynamic = participantData['is_denied'] ?? false;
 
-            final String? userId = userIdDynamic is String
-                ? userIdDynamic
-                : userIdDynamic?.toString();
+            final String? participantUserId = participantUserIdDynamic is String
+                ? participantUserIdDynamic
+                : participantUserIdDynamic?.toString();
             final String? role = roleDynamic is String ? roleDynamic : null;
             final String? joinedAt =
                 joinedAtDynamic is String ? joinedAtDynamic : null;
@@ -153,48 +196,151 @@ class ChatListState extends State<ChatList> {
             } else if (mutedDynamic is int) {
               muted = mutedDynamic;
             } else {
-              print(
-                  "Unexpected muted type: ${mutedDynamic?.runtimeType}, value: $mutedDynamic");
+              print("Unexpected muted type: ${mutedDynamic?.runtimeType}");
               muted = 0;
             }
+            final bool isParticipantAdmin = (isAdminDynamic == true ||
+                isAdminDynamic == 1 ||
+                role == 'admin');
+            final bool isApproved = isApprovedDynamic is bool
+                ? isApprovedDynamic
+                : (isApprovedDynamic == 1 || isApprovedDynamic == 'true');
+            final bool isDenied = isDeniedDynamic is bool
+                ? isDeniedDynamic
+                : (isDeniedDynamic == 1 || isDeniedDynamic == 'true');
 
-            if (userId == null) {
-              print("Skipping participant with null user_id in group $groupId");
+            if (participantUserId == null) {
               continue;
             }
 
-            print("Attempting to add participant: $userId to group $groupId");
+            if (participantUserId == userId && isParticipantAdmin) {
+              isAdmin = true;
+            }
+
+            if (!isApproved && !isDenied && !isParticipantAdmin) {
+              pendingCount++;
+            }
 
             final existingParticipant = await db.query(
               'participants',
               where: 'group_id = ? AND user_id = ?',
-              whereArgs: [groupId, userId],
+              whereArgs: [groupId, participantUserId],
               limit: 1,
             );
 
             if (existingParticipant.isEmpty) {
               await dbHelper.insertParticipant({
                 'group_id': groupId,
-                'user_id': userId,
+                'user_id': participantUserId,
                 'role': role ?? 'member',
                 'joined_at': joinedAt ?? DateTime.now().toIso8601String(),
-                'muted': muted ?? 0,
+                'is_admin': isParticipantAdmin ? 1 : 0,
+                'is_approved': isApproved ? 1 : 0,
+                'is_denied': isDenied ? 1 : 0,
+                'user_name': userName ?? '',
               });
-              print("Inserted participant $userId into group $groupId");
             } else {
-              print("Participant $userId already in group $groupId, skipping");
+              await db.update(
+                'participants',
+                {
+                  'role': role ?? 'member',
+                  'joined_at': joinedAt ?? DateTime.now().toIso8601String(),
+                  'is_admin': isParticipantAdmin ? 1 : 0,
+                  'is_approved': isApproved ? 1 : 0,
+                  'is_denied': isDenied ? 1 : 0,
+                  'user_name': userName ?? '',
+                },
+                where: 'group_id = ? AND user_id = ?',
+                whereArgs: [groupId, participantUserId],
+              );
             }
           }
-        } else {
-          print("No participants found for group $groupId");
+        } else {}
+
+        if (isAdmin && pendingCount > 0) {
+          totalPending += pendingCount;
+          adminGroups.add({
+            'group_id': groupId,
+            'group_name': groupName,
+            'pending_count': pendingCount,
+          });
         }
       }
 
+      setState(() {
+        _pendingRequestCount = totalPending;
+        _adminGroups = adminGroups;
+        print(
+            'State updated: pending=$_pendingRequestCount, adminGroups=$_adminGroups');
+      });
+
       _reloadChats();
     } catch (e) {
-      print("Error retrieving groups: $e");
-      rethrow;
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load groups: $e')),
+        );
+      }
+      setState(() {
+        _pendingRequestCount = 0;
+        _adminGroups = [];
+      });
     }
+  }
+
+  Widget _buildPendingBanner() {
+    print('Building banner with count: $_pendingRequestCount');
+    return AnimatedOpacity(
+      opacity: _fadeAnimation!.value,
+      duration: const Duration(seconds: 1),
+      child: InkWell(
+        onTap: () {
+          if (_adminGroups.isNotEmpty) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => PendingGroupsScreen(
+                  adminGroups: _adminGroups,
+                  onRequestProcessed: _getGroup,
+                ),
+              ),
+            );
+          }
+        },
+        child: Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: primaryTwo,
+            borderRadius: BorderRadius.circular(8),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.15),
+                blurRadius: 6,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.person_add, color: white, size: 28),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  '$_pendingRequestCount pending group request${_pendingRequestCount == 1 ? '' : 's'}',
+                  style: const TextStyle(
+                    color: white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              Icon(Icons.chevron_right, color: white, size: 28),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -203,6 +349,7 @@ class ChatListState extends State<ChatList> {
       body: Column(
         children: [
           const SizedBox(height: 20),
+          if (_pendingRequestCount > 0) _buildPendingBanner(),
           Padding(
             padding: const EdgeInsets.all(8.0),
             child: TextField(
@@ -251,11 +398,10 @@ class ChatListState extends State<ChatList> {
                                 shape: BoxShape.circle,
                               ),
                               child: Center(
-                                child: SvgPicture.asset(
-                                  'assets/images/group.png',
-                                  width: 100,
-                                  height: 100,
-                                  color: primaryColor,
+                                child: Lottie.asset(
+                                  'assets/animations/group.json',
+                                  width: 200,
+                                  height: 200,
                                 ),
                               ),
                             ),
@@ -397,7 +543,6 @@ class ChatListState extends State<ChatList> {
 
   Future<List<Map<String, dynamic>>> _loadChats() async {
     final groups = await _dbHelper.getGroups();
-
     List<Map<String, dynamic>> chats = [];
 
     for (var group in groups) {
@@ -462,36 +607,36 @@ class ChatListState extends State<ChatList> {
           : group['created_at'] ?? DateTime.now().toIso8601String();
 
       chats.add({
-        "id": group['id'],
-        "name": _toSentenceCase(group['name'] ?? ''),
-        "description": group['description'],
-        "profilePic": group['profile_pic'],
-        "lastMessage": lastMessagePreview,
-        "time": lastMessage != null
+        'id': group['id'],
+        'name': _toSentenceCase(group['name'] ?? ''),
+        'description': group['description'],
+        'profilePic': group['profile_pic'],
+        'lastMessage': lastMessagePreview,
+        'time': lastMessage != null
             ? _formatTime(lastMessage['timestamp'])
-            : "Just now",
-        "timestamp": timestamp,
-        "unreadCount": unreadCount,
-        "isGroup": true,
-        "hasMessages": lastMessage != null,
+            : 'Just now',
+        'timestamp': timestamp,
+        'unreadCount': unreadCount,
+        'isGroup': true,
+        'hasMessages': lastMessage != null,
       });
     }
 
     chats.sort((a, b) {
-      final bool aHasMessages = a["hasMessages"];
-      final bool bHasMessages = b["hasMessages"];
+      final bool aHasMessages = a['hasMessages'];
+      final bool bHasMessages = b['hasMessages'];
 
       if (aHasMessages && bHasMessages) {
-        final DateTime timeA = DateTime.parse(a["timestamp"]);
-        final DateTime timeB = DateTime.parse(b["timestamp"]);
+        final DateTime timeA = DateTime.parse(a['timestamp']);
+        final DateTime timeB = DateTime.parse(b['timestamp']);
         return timeB.compareTo(timeA);
       } else if (aHasMessages) {
         return -1;
       } else if (bHasMessages) {
         return 1;
       } else {
-        final DateTime timeA = DateTime.parse(a["timestamp"]);
-        final DateTime timeB = DateTime.parse(b["timestamp"]);
+        final DateTime timeA = DateTime.parse(a['timestamp']);
+        final DateTime timeB = DateTime.parse(b['timestamp']);
         return timeB.compareTo(timeA);
       }
     });
@@ -506,33 +651,27 @@ class ChatListState extends State<ChatList> {
 
   String _formatTime(String timestamp) {
     DateTime dateTime = DateTime.parse(timestamp);
-    return "${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}";
+    return '${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
   }
 
   String _truncateMessage(String message, {int maxLength = 20}) {
     if (message.length > maxLength) {
-      return "${message.substring(0, maxLength)}...";
+      return '${message.substring(0, maxLength)}...';
     }
     return message;
   }
 
   Widget _getAvatar(String name, String? profilePic, bool isGroup) {
-    print("Rendering avatar for $name with profilePic: $profilePic");
-
     if (profilePic != null && profilePic.isNotEmpty) {
       return CircleAvatar(
         radius: 30,
         backgroundImage: CachedNetworkImageProvider(profilePic),
-        child: null, // No child needed if image loads
-        onBackgroundImageError: (exception, stackTrace) {
-          print("Failed to load image $profilePic: $exception");
-        },
+        onBackgroundImageError: (exception, stackTrace) {},
       );
     }
 
-    // Fallback for no profile picture or failed loading
     if (isGroup) {
-      final initials = name.isNotEmpty ? name[0].toUpperCase() : "G";
+      final initials = name.isNotEmpty ? name[0].toUpperCase() : 'G';
       return CircleAvatar(
         radius: 30,
         backgroundColor: primaryColor,

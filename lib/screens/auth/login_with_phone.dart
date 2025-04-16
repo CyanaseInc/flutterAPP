@@ -141,109 +141,109 @@ class _LoginScreenState extends State<LoginScreen> {
         });
 
         if (isVerified) {
-          // final dbHelper = DatabaseHelper();
-          // final db = await dbHelper.database;
-
-          await WebSharedStorage.init();
-          var existingProfile = WebSharedStorage();
-          final readExistingProfile =
-              existingProfile.getCommon(userId.toString());
-          if (readExistingProfile == null) {
+          final dbHelper = DatabaseHelper();
+          final db = await dbHelper.database;
+          final readExistingProfile = await db.query('profile');
+          // await WebSharedStorage.init();
+          // var existingProfile = WebSharedStorage();
+          // final readExistingProfile =
+          //     existingProfile.getCommon(userId.toString());
+          if (readExistingProfile.isNotEmpty) {
             // we have some id already reated to this login user
             //lets set some items to localstorage
-            existingProfile.setCommon('token', token);
-            existingProfile.setCommon('user_id', userId.toString());
-            existingProfile.setCommon('username', userName);
-            existingProfile.setCommon('country', userCountry);
-            existingProfile.setCommon('phone_number', phoneNumber);
-            existingProfile.setCommon('name', '$name $lastName');
-            existingProfile.setCommon('picture', picture);
+            // existingProfile.setCommon('token', token);
+            // existingProfile.setCommon('user_id', userId.toString());
+            // existingProfile.setCommon('username', userName);
+            // existingProfile.setCommon('country', userCountry);
+            // existingProfile.setCommon('phone_number', phoneNumber);
+            // existingProfile.setCommon('name', '$name $lastName');
+            // existingProfile.setCommon('picture', picture);
 
-            // await db.update(
-            //   'profile',
-            //   {
-            //     'email': email,
-            //     'country': userCountry,
-            //     'phone_number': phoneNumber,
-            //     'token': token,
-            //     'name': userName,
-            //     'created_at': DateTime.now().toIso8601String(),
-            //   },
-            // );
+            await db.update(
+              'profile',
+              {
+                'email': email,
+                'country': userCountry,
+                'phone_number': phoneNumber,
+                'token': token,
+                'name': userName,
+                'created_at': DateTime.now().toIso8601String(),
+              },
+            );
           }
 
-          // Check if profile exists
-          // final existingProfile = await db.query(
-          //   'profile',
-          //   where: 'id = ?',
-          //   whereArgs: [userId],
-          // );
+          //Check if profile exists
+          final existingProfile = await db.query(
+            'profile',
+            where: 'id = ?',
+            whereArgs: [userId],
+          );
 
-          // bool dbOperationSuccess = false;
+          bool dbOperationSuccess = false;
 
-          // if (existingProfile.isNotEmpty) {
-          //   // Update existing profile
-          //   final int updatedRows = await db.update(
-          //     'profile',
-          //     {
-          //       'email': email,
-          //       'country': userCountry,
-          //       'phone_number': phoneNumber,
-          //       'token': token,
-          //       'name': userName,
-          //       'created_at': DateTime.now().toIso8601String(),
-          //     },
-          //     where: 'id = ?',
-          //     whereArgs: [userId],
-          //   );
+          if (existingProfile.isNotEmpty) {
+            // Update existing profile
+            final int updatedRows = await db.update(
+              'profile',
+              {
+                'email': email,
+                'country': userCountry,
+                'phone_number': phoneNumber,
+                'token': token,
+                'name': userName,
+                'created_at': DateTime.now().toIso8601String(),
+              },
+              where: 'id = ?',
+              whereArgs: [userId],
+            );
 
-          //   dbOperationSuccess = updatedRows > 0;
+            dbOperationSuccess = updatedRows > 0;
 
-          //   if (!dbOperationSuccess) {
-          //     throw Exception('Failed to update profile in database');
-          //   }
+            if (!dbOperationSuccess) {
+              throw Exception('Failed to update profile in database');
+            }
 
-          //   print('Profile updated successfully. Rows affected: $updatedRows');
-          // } else {
-          //   // Insert new profile
-          //   final int insertedId = await db.insert(
-          //     'profile',
-          //     {
-          //       'id': userId,
-          //       'email': email,
-          //       'country': userCountry,
-          //       'token': token,
-          //       'phone_number': phoneNumber,
-          //       'name': userName,
-          //       'created_at': DateTime.now().toIso8601String(),
-          //     },
-          //   );
+            print('Profile updated successfully. Rows affected: $updatedRows');
+          } else {
+            // Insert new profile
+            final int insertedId = await db.insert(
+              'profile',
+              {
+                'id': userId,
+                'email': email,
+                'country': userCountry,
+                'token': token,
+                'phone_number': phoneNumber,
+                'name': userName,
+                'created_at': DateTime.now().toIso8601String(),
+              },
+            );
 
-          //   dbOperationSuccess = insertedId != 0;
+            dbOperationSuccess = insertedId != 0;
 
-          //   if (!dbOperationSuccess) {
-          //     throw Exception('Failed to insert profile into database');
-          //   }
+            if (!dbOperationSuccess) {
+              throw Exception('Failed to insert profile into database');
+            }
 
-          //   print('Profile inserted successfully with ID: $insertedId');
-          // }
+            print('Profile inserted successfully with ID: $insertedId');
+          }
 
-          // // Verify the operation was successful by querying the database
-          // if (dbOperationSuccess) {
-          //   final verifiedProfile = await db.query(
-          //     'profile',
-          //     where: 'id = ?',
-          //     whereArgs: [userId],
-          //   );
+          // Verify the operation was successful by querying the database
+          if (dbOperationSuccess) {
+            final verifiedProfile = await db.query(
+              'profile',
+              where: 'id = ?',
+              whereArgs: [userId],
+            );
 
-          //   if (verifiedProfile.isEmpty) {
-          //     throw Exception(
-          //         'Profile verification failed - no profile found after operation');
-          //   } else {
-          //     print(
-          //         'Profile verification successful: ${verifiedProfile.first}');
-          //   }
-          // }
+            if (verifiedProfile.isEmpty) {
+              throw Exception(
+                  'Profile verification failed - no profile found after operation');
+            } else {
+              print(
+                  'Profile verification successful: ${verifiedProfile.first}');
+            }
+          }
 
           Navigator.push(
             context,

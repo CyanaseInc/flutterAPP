@@ -1,10 +1,14 @@
 class ApiEndpoints {
   //static const String server = "https/://server.cyanase.app";
-  static const String server = "http://127.0.0.1:8000";
+  static const String server = "http://192.168.83.220:8000";
 
   static const String checkuser = "$server/api/v1/en/checkUser/user/";
   static const String signup = "$server/api/v1/en/register/user/";
   static const String createGroup = "$server/api/v1/en/register/user/";
+  static const String approveRequest =
+      "$server/api/v1/en/approve/request/group/";
+  static const String denyRequest = "$server/api/v1/en/deny/request/group/";
+  static const String payTojoin = "$server/api/v1/en/pay/to/join/group/";
   static const String newGroup = "$server/api/v1/en/newgroup/group/";
   static const String joinGroup = "$server/api/v1/en/register/user/";
   static const String sendMessage = "$server/api/v1/en/register/user/";
@@ -81,8 +85,8 @@ class ApiEndpoints {
   static const String apiUrlUserGetProfilePhoto = "$server/static/photo.png";
   static const String apiUrlUserNetWorth =
       "$server/api/v1/en/auth/user/networth/";
-  static const String login = "$server/api/v1/en/app/user/login/";
-  // static const String login = "$server/api/v1/en/auth/user/login/";
+  //static const String login = "$server/api/v1/en/app/user/login/";
+  static const String login = "$server/api/v1/en/auth/user/login/";
   static const String passcodeLogin = "$server/api/v1/en/auth/user/passcode/";
   static const String apiUrlUserNextOfKin = "$server/api/v1/en/user/nextOfKin/";
   static const String apiUrlGetNextOfKin = "$server/api/v1/en/get/nextOfKin/";

@@ -68,6 +68,13 @@ class DatabaseHelper {
     }
   }
 
+  Future<void> clearDatabase() async {
+    final dbPath = join(await getDatabasesPath(), 'app_database.db');
+    await deleteDatabase(dbPath);
+
+    _database = null;
+  }
+
   // Create tables
   Future<void> _onCreate(Database db, int version) async {
     await db.execute('''
@@ -103,6 +110,10 @@ class DatabaseHelper {
     await db.execute('''
       CREATE TABLE participants (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        is_admin BOOLEAN NOT NULL DEFAULT TRUE,
+        is_approved BOOLEAN NOT NULL DEFAULT TRUE,
+        is_denied BOOLEAN NOT NULL DEFAULT FALSE,
+        user_name TEXT NOT NULL,
         group_id INTEGER NOT NULL,
         user_id TEXT NOT NULL,
         role TEXT NOT NULL,
@@ -341,17 +352,15 @@ class DatabaseHelper {
   Future<List<Map<String, String>>> getGroupMemberNames(int groupId) async {
     final db = await database;
     final result = await db.rawQuery('''
-    SELECT contacts.name, participants.role, contacts.phone_number
-    FROM participants
-    INNER JOIN contacts ON participants.user_id = contacts.user_id
-    WHERE participants.group_id = ?
+    SELECT *
+    FROM participants   
+    WHERE  participants.group_id = ?
   ''', [groupId]);
 
     return result
         .map((row) => {
-              'name': row['name'] as String,
+              'name': row['user_name'] as String,
               'role': row['role'] as String? ?? 'Member',
-              'phone_number': row['phone_number'] as String? ?? 'Unknown',
             })
         .toList();
   }

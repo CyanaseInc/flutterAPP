@@ -17,7 +17,7 @@ class GroupInfoPage extends StatefulWidget {
   final int groupId;
   final String description;
 
-  GroupInfoPage({
+  const GroupInfoPage({
     Key? key,
     required this.groupName,
     required this.profilePic,
@@ -32,10 +32,10 @@ class GroupInfoPage extends StatefulWidget {
 class _GroupInfoPageState extends State<GroupInfoPage> {
   bool _isLoading = false;
   Map<String, dynamic> _groupDetails = {};
-  String _totalBalance = '0.00'; // Default without symbol
-  String _myContributions = '0.00'; // Default without symbol
+  String _totalBalance = '0.00';
+  String _myContributions = '0.00';
   List<GroupSavingGoal> groupGoals = [];
-  String _currencySymbol = '\$'; // Default symbol, updated dynamically
+  String _currencySymbol = '\$';
 
   @override
   void initState() {
@@ -63,58 +63,44 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
       final userCountry = userProfile.first['country'] as String;
       final currency = CurrencyHelper.getCurrencyCode(userCountry);
 
-      // Set the dynamic currency symbol
-      setState(() {
-        _currencySymbol = currency;
-      });
-
       final response = await ApiService.getGroupDetails(
         token: token,
         groupId: widget.groupId,
       );
-      print('response $response');
-      // Initialize default values
-      double totalDeposits = 0.0;
-      double myTotal = 0.0;
-      List<Map<String, dynamic>> goals = [];
-      Map<String, dynamic> data = {};
 
       if (response['success'] == true) {
-        data = response['data'] ?? {};
-        final contributions = data['my_contributions'] ?? {};
+        final data = response['data'] ?? {};
+        final contributions = data['contributions'] ?? {};
 
-        // Safely parse numeric values with null checks
-        totalDeposits =
-            (data['total_group_deposits'] as num?)?.toDouble() ?? 0.0;
-        myTotal = (contributions['total'] as num?)?.toDouble() ?? 0.0;
-        goals = List<Map<String, dynamic>>.from(data['group_goals'] ?? []);
+        setState(() {
+          _currencySymbol = currency;
+          _groupDetails = data;
+          _totalBalance = _formatCurrency(
+              (contributions['group_total'] as num?)?.toDouble() ?? 0.0);
+          _myContributions = _formatCurrency(
+              (contributions['my_total'] as num?)?.toDouble() ?? 0.0);
+
+          groupGoals = (data['goals'] as List? ?? []).map((goal) {
+            return GroupSavingGoal(
+              goalId: goal['goal_id'] as int?,
+              goalName: goal['goal_name'] as String? ?? 'Unnamed Goal',
+              goalAmount: (goal['target_amount'] as num?)?.toDouble() ?? 0.0,
+              currentAmount:
+                  (goal['current_amount'] as num?)?.toDouble() ?? 0.0,
+              startDate: goal['start_date'] as String?,
+              endDate: goal['end_date'] as String?,
+              status: goal['status'] as String? ?? 'inactive',
+            );
+          }).toList();
+        });
       } else {
         throw Exception(response['message'] ?? 'Failed to load group details');
       }
-
-      setState(() {
-        _groupDetails = data;
-        _totalBalance = _formatCurrency(totalDeposits);
-        _myContributions = _formatCurrency(myTotal);
-        groupGoals = goals
-            .map((goal) => GroupSavingGoal(
-                  goalId: goal['goal_id'] as int?,
-                  goalName: goal['goal_name'] as String? ?? 'Unnamed Goal',
-                  goalAmount:
-                      (goal['target_amount'] as num?)?.toDouble() ?? 0.0,
-                  currentAmount:
-                      (goal['current_amount'] as num?)?.toDouble() ?? 0.0,
-                  startDate: goal['start_date'] as String?,
-                  endDate: goal['end_date'] as String?,
-                  status: goal['status'] as String? ?? 'inactive',
-                ))
-            .toList();
-      });
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Failed to load group details: ${e.toString()}'),
-          duration: Duration(seconds: 3),
+          duration: const Duration(seconds: 3),
         ),
       );
       setState(() {
@@ -125,7 +111,6 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
     }
   }
 
-  // Helper function to format currency with dynamic symbol
   String _formatCurrency(double amount) {
     return '$_currencySymbol ${amount.toStringAsFixed(2)}';
   }
@@ -134,85 +119,94 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF0F2F5),
-      body: ListView(
-        children: [
-          GroupHeader(
-            groupName: _groupDetails['group_name'] ?? widget.groupName,
-            profilePic: widget.profilePic,
-            groupId: widget.groupId,
-            description: widget.description,
-            totalBalance: _totalBalance,
-            myContributions: _myContributions,
-          ),
-          Container(
-            color: white,
-            margin: const EdgeInsets.only(top: 8.0),
-            child: ListTile(
-              title: const Text(
-                'Invite to group',
-                style: TextStyle(
-                  color: Colors.black87,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
+              children: [
+                GroupHeader(
+                  groupName: _groupDetails['group_name'] ?? widget.groupName,
+                  profilePic: widget.profilePic,
+                  groupId: widget.groupId,
+                  description:
+                      _groupDetails['group_description'] ?? widget.description,
+                  totalBalance: _totalBalance,
+                  myContributions: _myContributions,
                 ),
-              ),
-              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => InviteScreen(
-                      groupName:
-                          _groupDetails['group_name'] ?? widget.groupName,
-                      profilePic: widget.profilePic,
-                      groupId: widget.groupId.toString(),
+                Container(
+                  color: white,
+                  margin: const EdgeInsets.only(top: 8.0),
+                  child: ListTile(
+                    title: const Text(
+                      'Invite to group',
+                      style: TextStyle(
+                        color: Colors.black87,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
+                    trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => InviteScreen(
+                            groupName:
+                                _groupDetails['group_name'] ?? widget.groupName,
+                            profilePic: widget.profilePic,
+                            inviteCode: _groupDetails['invite_info']
+                                    ?['invite_code'] ??
+                                '',
+                            groupId: widget.groupId.toString(),
+                          ),
+                        ),
+                      );
+                    },
                   ),
-                );
-              },
-            ),
-          ),
-          Container(
-            color: white,
-            margin: const EdgeInsets.only(top: 8.0),
-            child: ListTile(
-              title: const Text(
-                'Group finance info',
-                style: TextStyle(
-                  color: Colors.black87,
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
                 ),
-              ),
-              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => GroupFinancePage(
-                      groupId: widget.groupId,
+                Container(
+                  color: white,
+                  margin: const EdgeInsets.only(top: 8.0),
+                  child: ListTile(
+                    title: const Text(
+                      'Group finance info',
+                      style: TextStyle(
+                        color: Colors.black87,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
+                    trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => GroupFinancePage(
+                            groupId: widget.groupId,
+                          ),
+                        ),
+                      );
+                    },
                   ),
-                );
-              },
+                ),
+                const SizedBox(height: 10),
+                GroupSavingGoalsSection(
+                  groupGoals: groupGoals,
+                  groupId: widget.groupId,
+                  totalBalance: _totalBalance,
+                  myContributions: _myContributions,
+                ),
+                GroupSettings(groupId: widget.groupId),
+                GroupMembers(
+                  groupId: widget.groupId,
+                  isGroup: true,
+                  name: _groupDetails['group_name'] ?? widget.groupName,
+                ),
+                DangerZone(
+                  groupId: widget.groupId,
+                  groupName: _groupDetails['group_name'] ?? widget.groupName,
+                ),
+              ],
             ),
-          ),
-          const SizedBox(height: 10),
-          GroupSavingGoalsSection(
-            groupGoals: groupGoals,
-            groupId: widget.groupId,
-            totalBalance: '', // Empty since it's already in GroupHeader
-            myContributions: '', // Empty since it's already in GroupHeader
-          ),
-          GroupSettings(groupId: widget.groupId),
-          GroupMembers(
-              groupId: widget.groupId, isGroup: true, name: widget.groupName),
-          DangerZone(
-            groupId: widget.groupId,
-            groupName: _groupDetails['group_name'] ?? widget.groupName,
-          ),
-        ],
-      ),
     );
   }
 }

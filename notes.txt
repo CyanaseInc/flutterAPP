@@ -2,3 +2,8 @@ Road Map
 -- Add hashing of contacts
 -- Add hashing based on country
 --- Fix withwdarw in the activity- portifolio
+
+PS C:\Users\User\Downloads\Cyanase\code\api> adb tcpip 5555  # Restart ADB in TCP/IP mode
+restarting in TCP mode port: 5555
+PS C:\Users\User\Downloads\Cyanase\code\api> adb connect 10.156.124.53
+connected to 10.156.124.53:5555

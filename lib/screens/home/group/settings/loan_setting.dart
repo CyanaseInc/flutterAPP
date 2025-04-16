@@ -1,49 +1,37 @@
 import 'package:flutter/material.dart';
 import 'package:cyanase/theme/theme.dart';
 
-class GroupSettings extends StatefulWidget {
+class LoanSettings extends StatefulWidget {
   final int groupId;
-  GroupSettings({Key? key, required this.groupId}) : super(key: key);
+
+  const LoanSettings({Key? key, required this.groupId}) : super(key: key);
 
   @override
-  _GroupSettingsState createState() => _GroupSettingsState();
+  _LoanSettingsState createState() => _LoanSettingsState();
 }
 
-class _GroupSettingsState extends State<GroupSettings> {
-  bool _allowMessageSending = true;
-  bool _letMembersSeeSavings = true;
-  bool _requirePaymentToJoin = false;
+class _LoanSettingsState extends State<LoanSettings> {
   bool _onlyMembersWithSavingsCanRequest = true;
-
-  // Loan settings
-  double _maxLoanMultiplier = 3.0; // Default to 3X
+  double _maxLoanMultiplier = 3.0;
   List<Map<String, dynamic>> loanPeriods = [
     {'days': 30, 'interestRate': 10.0},
     {'days': 60, 'interestRate': 15.0},
     {'days': 180, 'interestRate': 20.0},
   ];
 
-  // Dropdown options for loan multiplier
-  final List<double> _loanMultiplierOptions = [2.0, 3.0, 4.0, 5.0];
-
-  // Payment to enter group
-  double _paymentAmount = 0.0;
-
-  Widget _buildSettingItem(
-      String title, String description, IconData icon, Widget? trailing) {
+  @override
+  Widget build(BuildContext context) {
     return ListTile(
-      leading: Icon(icon, color: Colors.blue),
-      title: Text(title, style: const TextStyle(color: Colors.black87)),
-      subtitle: Text(
-        description,
-        style: const TextStyle(color: Colors.grey, fontSize: 12),
+      leading: Icon(Icons.money, color: Colors.blue),
+      title: const Text(
+        'Loan Settings',
+        style: TextStyle(color: Colors.black87),
       ),
-      trailing: trailing,
-      onTap: () {
-        if (title == 'Loan Settings') {
-          _showLoanSettingsDialog();
-        }
-      },
+      subtitle: const Text(
+        'Configure loan request and approval rules',
+        style: TextStyle(color: Colors.grey, fontSize: 12),
+      ),
+      onTap: _showLoanSettingsDialog,
     );
   }
 
@@ -419,19 +407,24 @@ class _GroupSettingsState extends State<GroupSettings> {
           ),
           actions: [
             TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
+              onPressed: () => Navigator.pop(context),
               child: const Text('Cancel'),
             ),
             TextButton(
               onPressed: () {
-                setState(() {
-                  period['days'] = int.tryParse(daysController.text) ?? 0;
-                  period['interestRate'] =
-                      double.tryParse(interestController.text) ?? 0.0;
-                });
-                Navigator.pop(context);
+                final days = int.tryParse(daysController.text);
+                final interest = double.tryParse(interestController.text);
+                if (days != null && days > 0 && interest != null) {
+                  setState(() {
+                    period['days'] = days;
+                    period['interestRate'] = interest;
+                  });
+                  Navigator.pop(context);
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Please enter valid values')),
+                  );
+                }
               },
               child: const Text('Save'),
             ),
@@ -474,142 +467,32 @@ class _GroupSettingsState extends State<GroupSettings> {
           ),
           actions: [
             TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
+              onPressed: () => Navigator.pop(context),
               child: const Text('Cancel'),
             ),
             TextButton(
               onPressed: () {
-                setState(() {
-                  loanPeriods.add({
-                    'days': int.tryParse(daysController.text) ?? 0,
-                    'interestRate':
-                        double.tryParse(interestController.text) ?? 0.0,
+                final days = int.tryParse(daysController.text);
+                final interest = double.tryParse(interestController.text);
+                if (days != null && days > 0 && interest != null) {
+                  setState(() {
+                    loanPeriods.add({
+                      'days': days,
+                      'interestRate': interest,
+                    });
                   });
-                });
-                Navigator.pop(context);
+                  Navigator.pop(context);
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Please enter valid values')),
+                  );
+                }
               },
               child: const Text('Add'),
             ),
           ],
         );
       },
-    );
-  }
-
-  void _showPaymentAmountDialog() {
-    TextEditingController amountController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Set Payment Amount',
-              style: TextStyle(color: Colors.black, fontSize: 18)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: amountController,
-                decoration: const InputDecoration(
-                  labelText: 'Amount',
-                  hintText: 'Enter the payment amount',
-                ),
-                keyboardType: TextInputType.number,
-              ),
-              const SizedBox(height: 10),
-              const Text(
-                'Cyanase takes 30% of this amount',
-                style: TextStyle(color: Colors.grey, fontSize: 15),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () {
-                setState(() {
-                  _paymentAmount =
-                      double.tryParse(amountController.text) ?? 0.0;
-                });
-                Navigator.pop(context);
-              },
-              child: const Text('Save'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: white,
-      margin: const EdgeInsets.only(top: 8.0),
-      child: ExpansionTile(
-        title: const Text(
-          'Group Settings',
-          style: TextStyle(
-              color: Colors.black87, fontSize: 16, fontWeight: FontWeight.bold),
-        ),
-        children: [
-          _buildSettingItem(
-            'Send Messages',
-            'Allow or restrict members from sending messages',
-            Icons.message,
-            Switch(
-              value: _allowMessageSending,
-              onChanged: (value) {
-                setState(() {
-                  _allowMessageSending = value;
-                });
-              },
-            ),
-          ),
-          _buildSettingItem(
-            'Let Members See Each Other\'s Savings',
-            'Enable or disable visibility of savings among members',
-            Icons.visibility,
-            Switch(
-              value: _letMembersSeeSavings,
-              onChanged: (value) {
-                setState(() {
-                  _letMembersSeeSavings = value;
-                });
-              },
-            ),
-          ),
-          _buildSettingItem(
-            'Loan Settings',
-            'Configure loan request and approval rules',
-            Icons.money,
-            null,
-          ),
-          _buildSettingItem(
-            'Pay on Requesting to Enter Group',
-            'Require payment before joining the group',
-            Icons.payment,
-            Switch(
-              value: _requirePaymentToJoin,
-              onChanged: (value) {
-                setState(() {
-                  _requirePaymentToJoin = value;
-                  if (value) {
-                    _showPaymentAmountDialog();
-                  }
-                });
-              },
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

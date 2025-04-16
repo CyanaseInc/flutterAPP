@@ -67,18 +67,24 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
         'profile_pic': _groupImage?.path ?? '',
         'type': 'group',
         'created_by': userId,
-        'participants': widget.selectedContacts
-            .map((contact) => {
-                  'user_id': contact['id'],
-                  'role': contact['id'] == userId
-                      ? 'admin'
-                      : 'member', // Creator as admin
-                })
-            .toList()
-          ..add({
+        'participants': [
+          ...widget.selectedContacts
+              .map((contact) => {
+                    'user_id': contact['id'],
+                    'role': contact['id'] == userId ? 'admin' : 'member',
+                    'is_approved': true, // auto-approve creator
+                    'is_denied': false,
+                  })
+              .toList(),
+          {
             'user_id': userId,
-            'role': 'admin'
-          }), // Ensure creator is included
+            'role': 'admin',
+            'is_approved': true,
+            'is_denied': false,
+            'invited_by': userId.toString(),
+            'nickname': 'You'
+          }
+        ]
       };
 
       // Make the POST request to create the group

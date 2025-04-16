@@ -171,11 +171,11 @@ class _NumericLoginScreenState extends State<NumericLoginScreen> {
     } catch (e) {
       // Dismiss the loading indicator
       Navigator.pop(context);
-
+      print('Error: ${e.toString()}');
       // Show a red SnackBar for errors
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error: Check internet connection and try again'),
+          content: Text('Error: ${e.toString()}'),
           backgroundColor: Colors.red, // Red SnackBar for errors
         ),
       );

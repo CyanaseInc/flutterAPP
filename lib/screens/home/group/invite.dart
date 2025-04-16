@@ -1,98 +1,82 @@
-import 'dart:io';
-import 'dart:math';
-
-import 'package:cyanase/helpers/endpoints.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:cyanase/theme/theme.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:qr_flutter/qr_flutter.dart'; // Add this dependency for QR code
+import 'package:qr_flutter/qr_flutter.dart';
+import 'package:cyanase/helpers/endpoints.dart';
+import 'package:cyanase/theme/theme.dart';
 
 class InviteScreen extends StatefulWidget {
   final String groupName;
   final String profilePic;
   final String groupId;
+  final String inviteCode;
+  final Future<void> Function()? onResetLink;
 
   const InviteScreen({
     Key? key,
     required this.groupName,
     required this.profilePic,
     required this.groupId,
+    required this.inviteCode,
+    this.onResetLink,
   }) : super(key: key);
 
   @override
-  _InviteScreenState createState() => _InviteScreenState();
+  State<InviteScreen> createState() => _InviteScreenState();
 }
 
 class _InviteScreenState extends State<InviteScreen> {
   late String _groupLink;
+  bool _isResetting = false;
 
   @override
   void initState() {
     super.initState();
-    _groupLink = _generateGroupLink(widget.groupId);
+    _groupLink = _generateServerLink();
   }
 
-  String _generateGroupLink(String groupId) {
-    const chars = 'abcdefghijSHDGqweCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    final random = Random();
-    final randomString = String.fromCharCodes(
-      Iterable.generate(
-        8,
-        (_) => chars.codeUnitAt(random.nextInt(chars.length)),
-      ),
-    );
-    return "${ApiEndpoints.server}/$groupId-$randomString";
+  String _generateServerLink() {
+    return "${ApiEndpoints.server}/invite/${widget.inviteCode}";
   }
 
-  void _resetLink() {
-    setState(() {
-      _groupLink = _generateGroupLink(widget.groupId);
+  void _handleResetLink() {
+    if (_isResetting || widget.onResetLink == null) return;
+
+    setState(() => _isResetting = true);
+    widget.onResetLink!().then((_) {
+      setState(() => _groupLink = _generateServerLink());
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("New invite link generated")),
+      );
+    }).catchError((e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Failed to reset link: ${e.toString()}")),
+      );
+    }).whenComplete(() {
+      setState(() => _isResetting = false);
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("Link has been reset"),
-        duration: Duration(seconds: 2),
-      ),
-    );
   }
 
   Future<void> _launchUrl(String url) async {
     final uri = Uri.parse(url);
-    try {
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } else {
-        throw 'Could not launch $url';
-      }
-    } catch (e) {
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
+        const SnackBar(content: Text("Could not launch URL")),
       );
     }
   }
 
   Future<void> _shareViaWhatsApp(String link) async {
     final url = Uri.parse("https://wa.me/?text=${Uri.encodeComponent(link)}");
-    try {
-      if (await canLaunchUrl(url)) {
-        await launchUrl(url, mode: LaunchMode.externalApplication);
-      } else {
-        final storeUrl = Platform.isAndroid
-            ? Uri.parse(
-                "https://play.google.com/store/apps/details?id=com.whatsapp")
-            : Uri.parse("https://apps.apple.com/app/id310633997");
-        if (await canLaunchUrl(storeUrl)) {
-          await launchUrl(storeUrl, mode: LaunchMode.externalApplication);
-        } else {
-          throw 'Could not launch WhatsApp or store';
-        }
-      }
-    } catch (e) {
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
+        const SnackBar(content: Text("WhatsApp not installed")),
       );
     }
   }
@@ -100,40 +84,47 @@ class _InviteScreenState extends State<InviteScreen> {
   void _showQRCodeDialog() {
     showDialog(
       context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Group QR Code'),
-          content: SizedBox(
-            width: 200,
-            height: 200,
-            child: QrImageView(
+      builder: (context) => AlertDialog(
+        title: const Text('Group QR Code'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            QrImageView(
               data: _groupLink,
               version: QrVersions.auto,
               size: 200.0,
               backgroundColor: Colors.white,
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Close'),
+            const SizedBox(height: 16),
+            Text(
+              _groupLink,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 12),
             ),
           ],
-        );
-      },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget buildOption({
+  Widget _buildActionButton({
     required IconData icon,
-    required String text,
-    Color? color,
+    required String label,
     required VoidCallback onTap,
+    Color? color,
+    bool enabled = true,
   }) {
     return ListTile(
       leading: Icon(icon, color: color ?? primaryTwo),
-      title: Text(text, style: TextStyle(color: color ?? primaryTwo)),
-      onTap: onTap,
+      title: Text(label, style: TextStyle(color: color ?? primaryTwo)),
+      onTap: enabled ? onTap : null,
+      enabled: enabled,
     );
   }
 
@@ -151,47 +142,43 @@ class _InviteScreenState extends State<InviteScreen> {
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              "People with this link do not need admin approval to join this group. Edit in group permissions.",
-              style: TextStyle(color: Colors.grey),
+              "Share this link to invite others to the group",
+              style: TextStyle(color: Colors.grey[600]),
             ),
             const SizedBox(height: 16),
             Row(
               children: [
                 CircleAvatar(
-                  radius: 20,
+                  radius: 24,
                   backgroundImage: widget.profilePic.isNotEmpty
                       ? CachedNetworkImageProvider(widget.profilePic)
-                      : const AssetImage('assets/avatar.png') as ImageProvider,
-                  onBackgroundImageError: widget.profilePic.isNotEmpty
-                      ? (exception, stackTrace) {
-                          print(
-                              "Failed to load profilePic: ${widget.profilePic}, error: $exception");
-                        }
-                      : null,
+                      : const AssetImage('assets/default_group.png')
+                          as ImageProvider,
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         widget.groupName,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 18,
-                        ),
+                        style: Theme.of(context).textTheme.titleMedium,
                       ),
+                      const SizedBox(height: 4),
                       GestureDetector(
                         onTap: () => _launchUrl(_groupLink),
-                        child: SelectableText(
+                        child: Text(
                           _groupLink,
-                          style: const TextStyle(color: Colors.green),
+                          style: TextStyle(
+                            color: Theme.of(context).primaryColor,
+                            decoration: TextDecoration.underline,
+                          ),
                         ),
                       ),
                     ],
@@ -199,41 +186,35 @@ class _InviteScreenState extends State<InviteScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 20),
-            buildOption(
+            const SizedBox(height: 24),
+            _buildActionButton(
               icon: Icons.share,
-              text: "Send link via WhatsApp",
+              label: 'Share via WhatsApp',
               onTap: () => _shareViaWhatsApp(_groupLink),
             ),
-            buildOption(
+            _buildActionButton(
               icon: Icons.content_copy,
-              text: "Copy link",
+              label: 'Copy link',
               onTap: () {
                 Clipboard.setData(ClipboardData(text: _groupLink));
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text("Link copied to clipboard"),
-                    duration: Duration(seconds: 2),
-                  ),
+                  const SnackBar(content: Text('Link copied to clipboard')),
                 );
               },
             ),
-            buildOption(
-              icon: Icons.share,
-              text: "Share link",
-              onTap: () => Share.share(_groupLink),
-            ),
-            buildOption(
+            _buildActionButton(
               icon: Icons.qr_code,
-              text: "QR code",
+              label: 'Show QR code',
               onTap: _showQRCodeDialog,
             ),
-            buildOption(
-              icon: Icons.remove_circle,
-              text: "Reset link",
-              color: Colors.red,
-              onTap: _resetLink,
+            _buildActionButton(
+              icon: Icons.refresh,
+              label: 'Generate new link',
+              onTap: _handleResetLink,
+              color: _isResetting ? Colors.grey : Colors.red,
+              enabled: !_isResetting && widget.onResetLink != null,
             ),
+            if (_isResetting) const LinearProgressIndicator(),
           ],
         ),
       ),

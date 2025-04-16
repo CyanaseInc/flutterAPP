@@ -25,7 +25,7 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/> 
 	<key>UILaunchStoryboardName</key>
-<string></string>
+	<string></string>
 	<key>UIMainStoryboardFile</key>
 	<string>Main</string>
 	<key>UISupportedInterfaceOrientations</key>
@@ -45,5 +45,24 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+
+	<!-- Add deep linking support below -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.example.app</string> <!-- Replace with your app's identifier -->
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>myapp</string> <!-- Replace with your custom URL scheme -->
+			</array>
+		</dict>
+	</array>
+
+	<key>NSUserActivityTypes</key>
+	<array>
+		<string>NSUserActivityTypeBrowsingWeb</string>
+	</array>
+
 </dict>
 </plist>

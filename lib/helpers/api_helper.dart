@@ -281,7 +281,7 @@ class ApiService {
       if (response.statusCode == 200) {
         final responseData = jsonDecode(response.body);
 
-        final data = responseData['data'] as Map<String, dynamic>;
+        final data = responseData as Map<String, dynamic>;
 
         return data; // Return the 'data' portion of the response
       } else {
@@ -752,18 +752,60 @@ class ApiService {
 
       // Parse response
       final responseData = jsonDecode(response.body) as Map<String, dynamic>;
+      return responseData;
+    } catch (e) {
+      rethrow;
+    }
+  }
 
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        if (responseData['success'] == true) {
-          return responseData;
-        } else {
-          throw Exception(
-              'Failed to add members: ${responseData['message'] ?? 'Unknown error'}');
-        }
-      } else {
-        throw Exception(
-            'Failed to add members: ${response.statusCode} - ${response.body}');
-      }
+  static Future<Map<String, dynamic>> approveRequest(
+      String token, Map<String, dynamic> data) async {
+    try {
+      const String approve =
+          ApiEndpoints.approveRequest; // Adjust to your endpoint
+      final uri = Uri.parse(approve);
+      final request = http.MultipartRequest('POST', uri);
+
+      // Add headers
+      request.headers['Authorization'] = 'Token $token';
+
+      // Add fields
+      request.fields['groupid'] = data['groupid'];
+      request.fields['participants'] = jsonEncode(data);
+
+      // Send request
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      // Parse response
+      final responseData = jsonDecode(response.body) as Map<String, dynamic>;
+      return responseData;
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  static Future<Map<String, dynamic>> denyRequest(
+      String token, Map<String, dynamic> data) async {
+    try {
+      const String deny = ApiEndpoints.denyRequest; // Adjust to your endpoint
+      final uri = Uri.parse(deny);
+      final request = http.MultipartRequest('POST', uri);
+
+      // Add headers
+      request.headers['Authorization'] = 'Token $token';
+      print('data: $data');
+      // Add fields
+      request.fields['groupid'] = data['groupid'];
+      request.fields['participants'] = jsonEncode(data);
+
+      // Send request
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      // Parse response
+      final responseData = jsonDecode(response.body) as Map<String, dynamic>;
+      return responseData;
     } catch (e) {
       rethrow;
     }
@@ -946,6 +988,25 @@ class ApiService {
       String token, Map<String, dynamic> data) async {
     final response = await http.post(
       Uri.parse(ApiEndpoints.requestPayment), // Replace with your API endpoint
+      headers: {
+        'Authorization': 'Token $token',
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode(data), // Convert requestData to JSON
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to submit deposit: ${response.statusCode}');
+    } else {
+      return jsonDecode(response.body);
+    }
+  }
+
+  static Future<Map<String, dynamic>> PayToJoinGroup(
+      String token, Map<String, dynamic> data) async {
+    final response = await http.post(
+      Uri.parse(ApiEndpoints.payTojoin), // Replace with your API endpoint
       headers: {
         'Authorization': 'Token $token',
         'Accept': 'application/json',

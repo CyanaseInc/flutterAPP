@@ -1,5 +1,4 @@
 import 'package:cyanase/helpers/web_db.dart';
-import 'package:cyanase/helpers/websocket.dart';
 import 'package:flutter/material.dart';
 import 'chat_list.dart';
 import 'package:cyanase/theme/theme.dart';
@@ -12,15 +11,17 @@ class GroupsTab extends StatefulWidget {
 class _GroupsTabState extends State<GroupsTab> {
   dynamic userToken = '';
   // Key to refresh the ChatList
-  final GlobalKey<ChatListState> _chatListKey = GlobalKey();
+  final GlobalKey<ChatListState> _chatListKey = GlobalKey<ChatListState>();
 
-  getToken() async {
+  Future<void> getToken() async {
     await WebSharedStorage.init();
     var existingProfile = WebSharedStorage();
-    var token = existingProfile.getCommon('token');
-    setState(() {
-      userToken = token;
-    });
+    var token = await existingProfile.getCommon('token');
+    if (mounted) {
+      setState(() {
+        userToken = token;
+      });
+    }
   }
 
   @override
@@ -31,13 +32,12 @@ class _GroupsTabState extends State<GroupsTab> {
 
   @override
   Widget build(BuildContext context) {
-    print('USERTOKEN: $userToken');
-    return const Scaffold(
+    return Scaffold(
       backgroundColor: white, // Set the background color to white
-      // body: ChatList(
-      //   key: _chatListKey, // Pass the key to ChatList
-      // ),
-      body: ChatScreen(),
+      body: ChatList(
+        key: _chatListKey, // Pass the key to ChatList
+      ),
+      // body: ChatScreen(),
     );
   }
 }
