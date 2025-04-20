@@ -1,3 +1,4 @@
+import 'package:cyanase/helpers/loader.dart';
 import 'package:flutter/material.dart';
 import 'group_header.dart';
 import 'group_settings.dart';
@@ -31,6 +32,8 @@ class GroupInfoPage extends StatefulWidget {
 
 class _GroupInfoPageState extends State<GroupInfoPage> {
   bool _isLoading = false;
+  bool _requirePaymentToJoin = false;
+  double _paymentAmount = 0.0;
   Map<String, dynamic> _groupDetails = {};
   String _totalBalance = '0.00';
   String _myContributions = '0.00';
@@ -56,7 +59,8 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
       final userProfile = await db.query('profile', limit: 1);
 
       if (userProfile.isEmpty) {
-        throw Exception('User profile not found');
+        Navigator.pushReplacementNamed(context, '/login');
+        return;
       }
 
       final token = userProfile.first['token'] as String;
@@ -75,6 +79,8 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
         setState(() {
           _currencySymbol = currency;
           _groupDetails = data;
+          _requirePaymentToJoin = data['requirePaymentToJoin'] ?? false;
+          _paymentAmount = (data['pay_amount'] as num?)?.toDouble() ?? 0.0;
           _totalBalance = _formatCurrency(
               (contributions['group_total'] as num?)?.toDouble() ?? 0.0);
           _myContributions = _formatCurrency(
@@ -101,6 +107,10 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
         SnackBar(
           content: Text('Failed to load group details: ${e.toString()}'),
           duration: const Duration(seconds: 3),
+          action: SnackBarAction(
+            label: 'Retry',
+            onPressed: _loadGroupDetails,
+          ),
         ),
       );
       setState(() {
@@ -120,7 +130,7 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF0F2F5),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: Loader())
           : ListView(
               children: [
                 GroupHeader(
@@ -131,6 +141,38 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
                       _groupDetails['group_description'] ?? widget.description,
                   totalBalance: _totalBalance,
                   myContributions: _myContributions,
+                ),
+                const SizedBox(height: 10),
+                GroupSavingGoalsSection(
+                  groupGoals: groupGoals,
+                  groupId: widget.groupId,
+                  totalBalance: _totalBalance,
+                  myContributions: _myContributions,
+                ),
+                Container(
+                  color: white,
+                  margin: const EdgeInsets.only(top: 8.0),
+                  child: ListTile(
+                    title: const Text(
+                      'Group finance info',
+                      style: TextStyle(
+                        color: Colors.black87,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => GroupFinancePage(
+                            groupId: widget.groupId,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 ),
                 Container(
                   color: white,
@@ -163,39 +205,19 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
                     },
                   ),
                 ),
-                Container(
-                  color: white,
-                  margin: const EdgeInsets.only(top: 8.0),
-                  child: ListTile(
-                    title: const Text(
-                      'Group finance info',
-                      style: TextStyle(
-                        color: Colors.black87,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => GroupFinancePage(
-                            groupId: widget.groupId,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(height: 10),
-                GroupSavingGoalsSection(
-                  groupGoals: groupGoals,
+                GroupSettings(
                   groupId: widget.groupId,
-                  totalBalance: _totalBalance,
-                  myContributions: _myContributions,
+                  initialRequirePayment: _requirePaymentToJoin,
+                  initialPaymentAmount: _paymentAmount,
+                  initialLoanSettings: _groupDetails['loan_settings'] ?? {},
+                  onPaymentSettingChanged:
+                      (newRequirePayment, newAmount) async {
+                    setState(() {
+                      _requirePaymentToJoin = newRequirePayment;
+                      _paymentAmount = newAmount;
+                    });
+                  },
                 ),
-                GroupSettings(groupId: widget.groupId),
                 GroupMembers(
                   groupId: widget.groupId,
                   isGroup: true,

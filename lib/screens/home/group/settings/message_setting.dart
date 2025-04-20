@@ -14,7 +14,7 @@ class SendMessagesSetting extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListTile(
-      leading: Icon(Icons.message, color: Colors.blue),
+      leading: Icon(Icons.message, color: primaryTwo),
       title: const Text(
         'Send Messages',
         style: TextStyle(color: Colors.black87),

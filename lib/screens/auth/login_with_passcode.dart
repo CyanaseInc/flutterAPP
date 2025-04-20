@@ -96,7 +96,9 @@ class _NumericLoginScreenState extends State<NumericLoginScreen> {
 
         // Extract user details
         final email = user['email'];
-        final userName = user['username'];
+        final firstName = user['first_name'] as String? ?? '';
+        final lastName = user['last_name'] as String? ?? '';
+        final userName = '$firstName $lastName'.trim();
 
         // Extract profile details
         final profile = user['profile'];

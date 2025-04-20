@@ -14,7 +14,7 @@ class VisibilitySetting extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListTile(
-      leading: Icon(Icons.visibility, color: Colors.blue),
+      leading: Icon(Icons.visibility, color: primaryTwo),
       title: const Text(
         'Let Members See Each Other\'s Savings',
         style: TextStyle(color: Colors.black87),

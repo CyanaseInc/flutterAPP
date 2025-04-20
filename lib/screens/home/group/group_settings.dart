@@ -7,7 +7,19 @@ import 'settings/pay_join.dart';
 
 class GroupSettings extends StatefulWidget {
   final int groupId;
-  const GroupSettings({Key? key, required this.groupId}) : super(key: key);
+  final bool initialRequirePayment;
+  final double initialPaymentAmount;
+  final Map<String, dynamic> initialLoanSettings; // New parameter
+  final Function(bool, double) onPaymentSettingChanged;
+
+  const GroupSettings({
+    Key? key,
+    required this.groupId,
+    required this.initialRequirePayment,
+    required this.initialPaymentAmount,
+    required this.initialLoanSettings,
+    required this.onPaymentSettingChanged,
+  }) : super(key: key);
 
   @override
   _GroupSettingsState createState() => _GroupSettingsState();
@@ -16,8 +28,15 @@ class GroupSettings extends StatefulWidget {
 class _GroupSettingsState extends State<GroupSettings> {
   bool _allowMessageSending = true;
   bool _letMembersSeeSavings = true;
-  bool _requirePaymentToJoin = false;
-  double _paymentAmount = 0.0;
+  late bool _requirePaymentToJoin;
+  late double _paymentAmount;
+
+  @override
+  void initState() {
+    super.initState();
+    _requirePaymentToJoin = widget.initialRequirePayment;
+    _paymentAmount = widget.initialPaymentAmount;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -36,38 +55,39 @@ class _GroupSettingsState extends State<GroupSettings> {
         children: [
           SendMessagesSetting(
             allowMessageSending: _allowMessageSending,
-            onChanged: (value) {
-              setState(() {
-                _allowMessageSending = value;
-              });
-            },
+            onChanged: (value) => setState(() => _allowMessageSending = value),
           ),
           VisibilitySetting(
             letMembersSeeSavings: _letMembersSeeSavings,
-            onChanged: (value) {
-              setState(() {
-                _letMembersSeeSavings = value;
-              });
-            },
+            onChanged: (value) => setState(() => _letMembersSeeSavings = value),
           ),
-          LoanSettings(groupId: widget.groupId),
+          LoanSettings(
+            groupId: widget.groupId,
+            initialLoanSettings:
+                widget.initialLoanSettings, // Pass loan settings
+          ),
           PaymentSetting(
             requirePaymentToJoin: _requirePaymentToJoin,
             paymentAmount: _paymentAmount,
-            onPaymentToggleChanged: (value) {
-              setState(() {
-                _requirePaymentToJoin = value;
-              });
-            },
-            onPaymentAmountChanged: (amount) {
-              setState(() {
-                _paymentAmount = amount;
-              });
-            },
             groupId: widget.groupId,
+            onPaymentToggleChanged: _handlePaymentToggleChange,
+            onPaymentAmountChanged: _handlePaymentAmountChange,
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _handlePaymentToggleChange(bool value) async {
+    setState(() {
+      _requirePaymentToJoin = value;
+      _paymentAmount = value ? _paymentAmount : 0.0;
+    });
+    await widget.onPaymentSettingChanged(value, _paymentAmount);
+  }
+
+  Future<void> _handlePaymentAmountChange(double amount) async {
+    setState(() => _paymentAmount = amount);
+    await widget.onPaymentSettingChanged(_requirePaymentToJoin, amount);
   }
 }

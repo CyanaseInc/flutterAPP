@@ -297,6 +297,41 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, dynamic>> getGroupDetailsNonUser({
+    required String token,
+    required int groupId,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse(ApiEndpoints.apiUrlGetGroupDetailsNonUser),
+        headers: {
+          'Authorization': 'Token $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'groupid': groupId,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final responseData = jsonDecode(response.body);
+
+        final data = responseData as Map<String, dynamic>;
+
+        return data; // Return the 'data' portion of the response
+      } else {
+        throw Exception(
+            'Failed to fetch group details: ${response.statusCode} - ${response.body}');
+      }
+    } on http.ClientException catch (e) {
+      throw Exception('Network error: $e');
+    } on FormatException catch (e) {
+      throw Exception('Invalid JSON format: $e');
+    } catch (e) {
+      throw Exception('Unexpected error: $e');
+    }
+  }
+
   static Future<Map<String, dynamic>> userTrack(String token) async {
     try {
       final response = await http.get(
@@ -758,6 +793,36 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, dynamic>> loanSettings(
+      String token, Map<String, dynamic> data) async {
+    try {
+      final uri = Uri.parse(ApiEndpoints.loanSettingUrl);
+
+      // Option 1: Send as application/x-www-form-urlencoded
+      final response = await http.post(
+        uri,
+        headers: {
+          'Authorization': 'Token $token',
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: {
+          'groupid': data['groupId'],
+          'data': data['setting'], // Already JSON-encoded in _updateSettings
+        },
+      );
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final responseData = jsonDecode(response.body) as Map<String, dynamic>;
+        return responseData;
+      } else {
+        print('Failed to update loan settings: ${response.body}');
+        throw Exception('Failed to update loan settings: ${response.body}');
+      }
+    } catch (e) {
+      rethrow;
+    }
+  }
+
   static Future<Map<String, dynamic>> approveRequest(
       String token, Map<String, dynamic> data) async {
     try {
@@ -922,30 +987,20 @@ class ApiService {
     }
   }
 
-  static Future<List<Map<String, dynamic>>> getGroup(String token) async {
+  static Future<Map<String, dynamic>> getGroup(String token) async {
     final response = await http.post(
       Uri.parse(ApiEndpoints.getGroup),
       headers: {
         'Authorization': 'Token $token',
         'Content-Type': 'application/json',
       },
+      body: jsonEncode({}), // Add empty JSON body
     );
 
     if (response.statusCode == 200) {
-      // Decode the JSON response into a Map<String, dynamic>
-      final Map<String, dynamic> responseBody = jsonDecode(response.body);
-
-      // Check if the response contains a list of groups under a specific key (e.g., 'groups')
-      if (responseBody.containsKey('groups') &&
-          responseBody['groups'] is List) {
-        // Return the list of groups
-        return List<Map<String, dynamic>>.from(responseBody['groups']);
-      } else {
-        // If the response is a single group, wrap it in a list
-        return [responseBody];
-      }
+      return jsonDecode(response.body) as Map<String, dynamic>;
     } else {
-      throw Exception('Failed to fetch groups ${response.statusCode}');
+      throw Exception('Failed to fetch groups: ${response.statusCode}');
     }
   }
 

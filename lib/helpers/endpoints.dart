@@ -1,12 +1,13 @@
 class ApiEndpoints {
   //static const String server = "https/://server.cyanase.app";
-  static const String server = "http://192.168.83.220:8000";
+  static const String server = "http://192.168.206.220:8000";
 
   static const String checkuser = "$server/api/v1/en/checkUser/user/";
   static const String signup = "$server/api/v1/en/register/user/";
   static const String createGroup = "$server/api/v1/en/register/user/";
   static const String approveRequest =
       "$server/api/v1/en/approve/request/group/";
+  static const String loanSettingUrl = "$server/api/v1/en/loan/setting/group/";
   static const String denyRequest = "$server/api/v1/en/deny/request/group/";
   static const String payTojoin = "$server/api/v1/en/pay/to/join/group/";
   static const String newGroup = "$server/api/v1/en/newgroup/group/";
@@ -28,6 +29,8 @@ class ApiEndpoints {
   static const String apiUrlGetInvestmentClasses =
       "$server/api/v1/en/auth/get/investment/classes/";
   static const apiUrlGetGroupDetails = "$server/api/v1/en/details/group/";
+  static const apiUrlGetGroupDetailsNonUser =
+      "$server/api/v1/en/details/join/group/";
   static const String apiUrlGetInvestmentOptions =
       "$server/api/v1/en/auth/get/investment/options/";
   static const String apiUrlGetInvestmentClassOptions =

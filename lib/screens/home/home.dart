@@ -107,7 +107,7 @@ class _HomeScreenState extends State<HomeScreen>
       if (existingProfile.getCommon('token') != '') {
         final token = existingProfile.getCommon('token');
         final subscriptionResponse = await ApiService.subscriptionStatus(token);
-        print(subscriptionResponse);
+
         if (subscriptionResponse['status'] == 'pending') {
           await _showSubscriptionReminder();
         }

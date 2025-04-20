@@ -771,18 +771,6 @@ class _GroupSavingGoalsCardState extends State<GroupSavingGoalsCard> {
 
   @override
   Widget build(BuildContext context) {
-    // Improved soft pastel gradient background
-    final backgroundGradient = LinearGradient(
-      colors: [
-        Colors.white,
-        primaryTwo.withOpacity(0.1),
-        primaryColor.withOpacity(0.05),
-      ],
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      stops: const [0.0, 0.7, 1.0],
-    );
-
     return GestureDetector(
       onTap: () => _showContributors(context),
       child: AnimatedContainer(
@@ -790,7 +778,6 @@ class _GroupSavingGoalsCardState extends State<GroupSavingGoalsCard> {
         curve: Curves.easeInOut,
         margin: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
-          gradient: backgroundGradient,
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(

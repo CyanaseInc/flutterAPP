@@ -21,7 +21,8 @@ class MessageChatScreen extends StatefulWidget {
   final int? groupId;
   final String description;
   final VoidCallback? onMessageSent;
-
+  final bool isAdminOnlyMode;
+  final bool isCurrentUserAdmin;
   const MessageChatScreen({
     super.key,
     required this.name,
@@ -30,6 +31,8 @@ class MessageChatScreen extends StatefulWidget {
     this.groupId,
     this.onMessageSent,
     required this.description,
+    required this.isAdminOnlyMode, // Default to false (normal mode)
+    required this.isCurrentUserAdmin,
   });
 
   @override
@@ -594,6 +597,8 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
             left: 0,
             right: 0,
             child: InputArea(
+              isAdminOnlyMode: widget.isAdminOnlyMode,
+              isCurrentUserAdmin: widget.isCurrentUserAdmin,
               onSendAudioMessage: _sendAudioMessage,
               controller: _controller,
               isRecording: _isRecording,

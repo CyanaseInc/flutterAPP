@@ -125,16 +125,16 @@ class _LoginScreenState extends State<LoginScreen> {
         final userId = loginResponse['user_id'];
         final user = loginResponse['user'];
         final email = user['email'];
-        final userName = user['username'];
+
         final profile = user['profile'];
         final picture = profile['profile_picture'];
-        final name = user["first_name"];
+        final firstName = user["first_name"];
         final lastName = user['last_name'];
         final userCountry = profile['country'];
         final phoneNumber = profile['phoneno'];
         final isVerified = profile['is_verified'] ?? false;
         final mypasscode = profile['passcode'] as String?;
-
+        final userName = '$firstName $lastName'.trim();
         setState(() {
           _email = email;
           _passcode = (mypasscode != null && mypasscode.isNotEmpty);
@@ -202,8 +202,6 @@ class _LoginScreenState extends State<LoginScreen> {
             if (!dbOperationSuccess) {
               throw Exception('Failed to update profile in database');
             }
-
-            print('Profile updated successfully. Rows affected: $updatedRows');
           } else {
             // Insert new profile
             final int insertedId = await db.insert(
@@ -224,8 +222,6 @@ class _LoginScreenState extends State<LoginScreen> {
             if (!dbOperationSuccess) {
               throw Exception('Failed to insert profile into database');
             }
-
-            print('Profile inserted successfully with ID: $insertedId');
           }
 
           // Verify the operation was successful by querying the database
@@ -239,9 +235,6 @@ class _LoginScreenState extends State<LoginScreen> {
             if (verifiedProfile.isEmpty) {
               throw Exception(
                   'Profile verification failed - no profile found after operation');
-            } else {
-              print(
-                  'Profile verification successful: ${verifiedProfile.first}');
             }
           }
 

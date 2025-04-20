@@ -37,7 +37,6 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
   Future<void> _fetchPendingRequests() async {
     try {
       final db = await _dbHelper.database;
-      debugPrint('Fetch database isReadOnly:  ');
 
       final requests = await db.query(
         'participants',
@@ -52,7 +51,6 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
         });
       }
     } catch (e) {
-      debugPrint('Error fetching requests: $e');
       if (mounted) {
         setState(() => _isLoading = false);
       }
@@ -70,16 +68,12 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
     setState(() {
       _pendingRequests.removeWhere((r) {
         final rUserId = r['user_id'].toString();
-        debugPrint('Comparing r[user_id]: $rUserId with $userId');
         return rUserId == userId;
       });
-      debugPrint(
-          'Optimistically removed user_id: $userId, new length: ${_pendingRequests.length}');
     });
 
     try {
       final db = await _dbHelper.database;
-      debugPrint('Database isReadOnly:  ');
 
       final userProfile = await db.query('profile', limit: 1);
       if (userProfile.isEmpty || userProfile.first['token'] == null) {
@@ -96,13 +90,19 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
         'approved_by': adminId,
       };
 
-      debugPrint('Calling ApiService.approveRequest with data: $approveData');
       final response = await ApiService.approveRequest(token, approveData);
-      debugPrint('ApiService.approveRequest response: $response');
 
       if (!response['success']) {
         throw Exception(response['message'] ?? 'Failed to approve request');
       }
+
+      // Use request['user_name'] for the notification
+      final userName = request['user_name'] as String? ?? 'A user';
+      await _dbHelper.insertNotification(
+        groupId: widget.groupId,
+        message: "$userName has joined the group",
+        senderId: 'system',
+      );
 
       // Notify parent
       widget.onRequestProcessed();
@@ -110,7 +110,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${request['user_name']} approved!'),
+            content: Text('${request['user_name'] ?? 'User'} approved!'),
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),
@@ -119,11 +119,8 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
         );
       }
     } catch (e) {
-      debugPrint('Approval error: $e');
       setState(() {
         _pendingRequests = originalRequests;
-        debugPrint(
-            'Reverted to original requests, length: ${_pendingRequests.length}');
       });
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -151,16 +148,13 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
     setState(() {
       _pendingRequests.removeWhere((r) {
         final rUserId = r['user_id'].toString();
-        debugPrint('Comparing r[user_id]: $rUserId with $userId');
+
         return rUserId == userId;
       });
-      debugPrint(
-          'Optimistically removed user_id: $userId, new length: ${_pendingRequests.length}');
     });
 
     try {
       final db = await _dbHelper.database;
-      debugPrint('Database isReadOnly:  ');
 
       final userProfile = await db.query('profile', limit: 1);
       if (userProfile.isEmpty || userProfile.first['token'] == null) {

@@ -96,6 +96,7 @@ class DatabaseHelper {
     await db.execute('''
       CREATE TABLE groups (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        amAdmin INTEGER,
         name TEXT NOT NULL,
         description TEXT,
         profile_pic TEXT,
@@ -104,6 +105,9 @@ class DatabaseHelper {
         created_by TEXT NOT NULL,
         last_activity TEXT,
         settings TEXT
+        requires_payment INTEGER,
+       deposit_amount REAL,
+       restrict_messages_to_admins INTEGER
       )
     ''');
 

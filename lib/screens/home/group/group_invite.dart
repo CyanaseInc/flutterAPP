@@ -1,4 +1,5 @@
 import 'package:cyanase/helpers/loader.dart';
+import 'package:cyanase/screens/auth/login_with_phone.dart';
 import 'package:flutter/material.dart';
 import 'package:cyanase/theme/theme.dart';
 import 'package:cyanase/helpers/database_helper.dart';
@@ -58,12 +59,10 @@ class _GroupInviteScreenState extends State<GroupInviteScreen> {
       final userCountry = userProfile.first['country'] as String? ?? 'US';
       final currency = CurrencyHelper.getCurrencyCode(userCountry);
 
-      final response = await ApiService.getGroupDetails(
+      final response = await ApiService.getGroupDetailsNonUser(
         token: token,
         groupId: widget.groupId,
       );
-
-      print('API response: $response');
 
       if (response['success'] == true) {
         final data = response['data'] as Map<String, dynamic>? ?? {};
@@ -126,14 +125,12 @@ class _GroupInviteScreenState extends State<GroupInviteScreen> {
     final avatarUrl = profilePic != null && profilePic.isNotEmpty
         ? '${ApiEndpoints.server}/media/$profilePic'
         : null;
-    print("Rendering avatar for $name with profilePic: $avatarUrl");
+
     if (avatarUrl != null) {
       return CircleAvatar(
         radius: 30,
         backgroundImage: CachedNetworkImageProvider(avatarUrl),
-        onBackgroundImageError: (exception, stackTrace) {
-          print('Avatar error: $exception');
-        },
+        onBackgroundImageError: (exception, stackTrace) {},
       );
     }
 
@@ -273,7 +270,6 @@ class _GroupInviteScreenState extends State<GroupInviteScreen> {
     try {
       final canJoin = await _validatePayment(context, groupId);
       if (!canJoin) {
-        print('Cannot join: Payment required but not completed');
         return;
       }
       setState(() => _isJoining = true);
@@ -293,8 +289,9 @@ class _GroupInviteScreenState extends State<GroupInviteScreen> {
   }
 
   Future<bool> _validatePayment(BuildContext context, int groupId) async {
-    final requiresPayment = _groupDetails['requires_payment'] as bool? ?? true;
-    final paymentAmount = _groupDetails['deposit_amount'] as double? ?? 0.0;
+    final requiresPayment =
+        _groupDetails['requirePaymentToJoin'] as bool? ?? false;
+    final paymentAmount = _groupDetails['pay_amount'] as double? ?? 0.0;
 
     print(
         'Validating payment: requiresPayment=$requiresPayment, amount=$paymentAmount, hasPaid=$_hasPaid');
@@ -398,10 +395,7 @@ class _GroupInviteScreenState extends State<GroupInviteScreen> {
                           ? const SizedBox(
                               width: 20,
                               height: 20,
-                              child: CircularProgressIndicator(
-                                color: white,
-                                strokeWidth: 2,
-                              ),
+                              child: Loader(),
                             )
                           : const Text(
                               'Pay and Join',
@@ -439,7 +433,6 @@ class _GroupInviteScreenState extends State<GroupInviteScreen> {
 
   Future<void> _requestToJoin(BuildContext context, int groupId) async {
     try {
-      print('Starting join request for group_id=$groupId');
       if (!context.mounted) {
         throw Exception('Context not mounted');
       }
@@ -454,7 +447,12 @@ class _GroupInviteScreenState extends State<GroupInviteScreen> {
       final userProfile = await db.query('profile', limit: 1);
 
       if (userProfile.isEmpty || userProfile.first['token'] == null) {
-        throw Exception('User profile or token not found');
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => LoginScreen(),
+          ),
+        );
       }
       final token = userProfile.first['token'] as String;
       final userId = userProfile.first['user_id'] as String? ?? 'self';
@@ -462,25 +460,25 @@ class _GroupInviteScreenState extends State<GroupInviteScreen> {
 
       final joinData = {
         'groupid': widget.groupId.toString(),
-        'user_id': userId,
-        'role': 'member',
-        'invite_code': widget.inviteCode ?? '',
+        'participants': [
+          {
+            'user_id': userId,
+            'role': 'member',
+            'invite_code': widget.inviteCode ?? '',
+          }
+        ]
       };
-      print('Sending join data: $joinData');
 
       final response = await ApiService.addMembers(token, joinData)
           .timeout(const Duration(seconds: 10), onTimeout: () {
         throw TimeoutException('Join request timed out');
       });
 
-      print('Join response: $response');
-
       if (!response['success']) {
         throw Exception(
             response['message'] as String? ?? 'Failed to request join');
       }
 
-      print('Inserting group: id=${widget.groupId}');
       await db.insert(
           'groups',
           {
@@ -496,7 +494,6 @@ class _GroupInviteScreenState extends State<GroupInviteScreen> {
           },
           conflictAlgorithm: ConflictAlgorithm.replace);
 
-      print('Inserting participant: user_id=$userId');
       await db.insert(
           'participants',
           {
@@ -511,16 +508,11 @@ class _GroupInviteScreenState extends State<GroupInviteScreen> {
           },
           conflictAlgorithm: ConflictAlgorithm.replace);
 
-      print('Inserting notification');
-      await db.insert(
-          'notifications',
-          {
-            'group_id': widget.groupId,
-            'message': 'You have requested to join the group',
-            'sender_id': 'system',
-            'created_at': DateTime.now().toIso8601String(),
-          },
-          conflictAlgorithm: ConflictAlgorithm.replace);
+      await _dbHelper.insertNotification(
+        groupId: widget.groupId,
+        message: "$userName has joined the group",
+        senderId: 'system',
+      );
 
       if (context.mounted) {
         Navigator.pop(context);
@@ -532,7 +524,6 @@ class _GroupInviteScreenState extends State<GroupInviteScreen> {
         Navigator.pop(context);
       }
     } catch (e) {
-      print('Request to join error: $e');
       if (context.mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
