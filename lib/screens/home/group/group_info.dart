@@ -39,7 +39,8 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
   String _myContributions = '0.00';
   List<GroupSavingGoal> groupGoals = [];
   String _currencySymbol = '\$';
-
+  bool _isAdmin = false; // Track if the user is an admin
+  bool isAdminMode = false;
   @override
   void initState() {
     super.initState();
@@ -64,6 +65,8 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
       }
 
       final token = userProfile.first['token'] as String;
+      final userId =
+          userProfile.first['id'] as String?; // Assuming user_id is stored
       final userCountry = userProfile.first['country'] as String;
       final currency = CurrencyHelper.getCurrencyCode(userCountry);
 
@@ -76,15 +79,32 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
         final data = response['data'] ?? {};
         final contributions = data['contributions'] ?? {};
 
+        // Check if the user is an admin
+
+        final participantList =
+            (data['members']?['participant_list'] as List?) ?? [];
+        final userParticipant = participantList.firstWhere(
+          (participant) => participant['user_id'] == userId,
+          orElse: () => null,
+        );
+
+        if (userParticipant != null) {
+          setState(() {
+            _isAdmin = userParticipant['role'] == 'admin' ? true : false;
+          });
+        }
+
         setState(() {
           _currencySymbol = currency;
           _groupDetails = data;
           _requirePaymentToJoin = data['requirePaymentToJoin'] ?? false;
+          isAdminMode = data['restrict_messages_to_admins'];
           _paymentAmount = (data['pay_amount'] as num?)?.toDouble() ?? 0.0;
           _totalBalance = _formatCurrency(
               (contributions['group_total'] as num?)?.toDouble() ?? 0.0);
           _myContributions = _formatCurrency(
               (contributions['my_total'] as num?)?.toDouble() ?? 0.0);
+          _isAdmin = userParticipant['role'] == 'admin' ? true : false;
 
           groupGoals = (data['goals'] as List? ?? []).map((goal) {
             return GroupSavingGoal(
@@ -117,6 +137,7 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
         _totalBalance = _formatCurrency(0.0);
         _myContributions = _formatCurrency(0.0);
         groupGoals = [];
+        _isAdmin = false;
       });
     }
   }
@@ -205,23 +226,30 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
                     },
                   ),
                 ),
-                GroupSettings(
-                  groupId: widget.groupId,
-                  initialRequirePayment: _requirePaymentToJoin,
-                  initialPaymentAmount: _paymentAmount,
-                  initialLoanSettings: _groupDetails['loan_settings'] ?? {},
-                  onPaymentSettingChanged:
-                      (newRequirePayment, newAmount) async {
-                    setState(() {
-                      _requirePaymentToJoin = newRequirePayment;
-                      _paymentAmount = newAmount;
-                    });
-                  },
-                ),
+                // Show GroupSettings only if user is admin
+                if (_isAdmin)
+                  GroupSettings(
+                    groupId: widget.groupId,
+                    isAdminMode: isAdminMode,
+                    initialRequirePayment: _requirePaymentToJoin,
+                    initialPaymentAmount: _paymentAmount,
+                    initialLoanSettings: _groupDetails['loan_settings'] ?? {},
+                    onPaymentSettingChanged:
+                        (newRequirePayment, newAmount) async {
+                      setState(() {
+                        _requirePaymentToJoin = newRequirePayment;
+                        _paymentAmount = newAmount;
+                      });
+                    },
+                  ),
                 GroupMembers(
                   groupId: widget.groupId,
                   isGroup: true,
                   name: _groupDetails['group_name'] ?? widget.groupName,
+                  members:
+                      (_groupDetails['members']?['participant_list'] as List?)
+                              ?.cast<Map<String, dynamic>>() ??
+                          [], // Pass participant_list
                 ),
                 DangerZone(
                   groupId: widget.groupId,

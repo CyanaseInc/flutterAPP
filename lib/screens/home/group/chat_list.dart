@@ -140,7 +140,7 @@ class ChatListState extends State<ChatList>
 
       List<Map<String, dynamic>> adminGroups = [];
       int totalPending = 0;
-      print('groups: $groups');
+
       for (final groupData in groups) {
         final groupId = groupData['groupId'] as int?;
         final messageRestriction =
@@ -631,7 +631,7 @@ class ChatListState extends State<ChatList>
     chats.sort((a, b) {
       final bool aHasMessages = a['hasMessages'];
       final bool bHasMessages = b['hasMessages'];
-      print('chats: $chats');
+
       if (aHasMessages && bHasMessages) {
         final DateTime timeA = DateTime.parse(a['timestamp']);
         final DateTime timeB = DateTime.parse(b['timestamp']);

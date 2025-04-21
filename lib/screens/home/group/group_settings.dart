@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cyanase/theme/theme.dart';
 import 'settings/message_setting.dart';
-import 'settings/savings_visibility_setting.dart';
 import 'settings/loan_setting.dart';
 import 'settings/pay_join.dart';
 
@@ -9,12 +8,14 @@ class GroupSettings extends StatefulWidget {
   final int groupId;
   final bool initialRequirePayment;
   final double initialPaymentAmount;
-  final Map<String, dynamic> initialLoanSettings; // New parameter
+  final Map<String, dynamic> initialLoanSettings;
   final Function(bool, double) onPaymentSettingChanged;
+  final bool isAdminMode;
 
   const GroupSettings({
     Key? key,
     required this.groupId,
+    required this.isAdminMode,
     required this.initialRequirePayment,
     required this.initialPaymentAmount,
     required this.initialLoanSettings,
@@ -26,14 +27,14 @@ class GroupSettings extends StatefulWidget {
 }
 
 class _GroupSettingsState extends State<GroupSettings> {
-  bool _allowMessageSending = true;
-  bool _letMembersSeeSavings = true;
+  late bool _allowMessageSending;
   late bool _requirePaymentToJoin;
   late double _paymentAmount;
 
   @override
   void initState() {
     super.initState();
+    _allowMessageSending = widget.isAdminMode;
     _requirePaymentToJoin = widget.initialRequirePayment;
     _paymentAmount = widget.initialPaymentAmount;
   }
@@ -54,18 +55,16 @@ class _GroupSettingsState extends State<GroupSettings> {
         ),
         children: [
           SendMessagesSetting(
+            groupId: widget.groupId,
             allowMessageSending: _allowMessageSending,
             onChanged: (value) => setState(() => _allowMessageSending = value),
           ),
-          VisibilitySetting(
-            letMembersSeeSavings: _letMembersSeeSavings,
-            onChanged: (value) => setState(() => _letMembersSeeSavings = value),
-          ),
+          const SizedBox(height: 8),
           LoanSettings(
             groupId: widget.groupId,
-            initialLoanSettings:
-                widget.initialLoanSettings, // Pass loan settings
+            initialLoanSettings: widget.initialLoanSettings,
           ),
+          const SizedBox(height: 8),
           PaymentSetting(
             requirePaymentToJoin: _requirePaymentToJoin,
             paymentAmount: _paymentAmount,
@@ -73,6 +72,7 @@ class _GroupSettingsState extends State<GroupSettings> {
             onPaymentToggleChanged: _handlePaymentToggleChange,
             onPaymentAmountChanged: _handlePaymentAmountChange,
           ),
+          const SizedBox(height: 8),
         ],
       ),
     );

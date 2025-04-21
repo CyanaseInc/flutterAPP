@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:cyanase/theme/theme.dart';
 import 'package:cyanase/helpers/database_helper.dart';
+import 'package:cyanase/helpers/api_helper.dart';
 
 class GroupMembers extends StatefulWidget {
   final bool isGroup;
   final int? groupId;
   final String name;
   final String? profilePic;
+  final List<Map<String, dynamic>> members;
+  final String currencySymbol;
 
   const GroupMembers({
     Key? key,
@@ -14,6 +17,8 @@ class GroupMembers extends StatefulWidget {
     this.groupId,
     required this.name,
     this.profilePic,
+    required this.members,
+    this.currencySymbol = '',
   }) : super(key: key);
 
   @override
@@ -22,203 +27,300 @@ class GroupMembers extends StatefulWidget {
 
 class _GroupMembersState extends State<GroupMembers> {
   final DatabaseHelper _dbHelper = DatabaseHelper();
-  List<Map<String, String>> _members = []; // List of members with names & roles
+  bool _isAdmin = false;
 
   @override
   void initState() {
     super.initState();
-    _loadGroupMembers();
+    _checkAdminStatus();
   }
 
-  Future<void> _loadGroupMembers() async {
-    if (widget.isGroup && widget.groupId != null) {
-      try {
-        final members = await _dbHelper.getGroupMemberNames(widget.groupId!);
-        // Ensure the function returns List<Map<String, String>> containing "name" and "role"
-        setState(() {
-          _members = members;
-        });
-      } catch (e) {
-        print("Error loading group members: $e");
+  Future<void> _checkAdminStatus() async {
+    try {
+      final db = await _dbHelper.database;
+      final userProfile = await db.query('profile', limit: 1);
+      if (userProfile.isNotEmpty) {
+        final userId = userProfile.first['user_id'] as String?;
+        final group = await db.query(
+          'groups',
+          where: 'id = ?',
+          whereArgs: [widget.groupId],
+          limit: 1,
+        );
+        if (group.isNotEmpty && group.first['amAdmin'] == 1) {
+          setState(() {
+            _isAdmin = true;
+          });
+        } else {
+          final userParticipant = widget.members.firstWhere(
+            (member) => member['user_id'] == userId,
+            orElse: () => {'role': 'member'},
+          );
+          setState(() {
+            _isAdmin = userParticipant['role'] == 'admin';
+          });
+        }
       }
-    } else {
-      setState(() {
-        _members = [
-          {"name": widget.name, "role": "Member"}
-        ];
-      });
+    } catch (e) {
+      print("Error checking admin status: $e");
     }
   }
 
-  void _updateMemberRole(int memberIndex, String newRole) async {
+  Future<void> _updateMemberRole(String userId, String newRole) async {
     try {
-      // Update the role in the database
-      await _dbHelper.updateMemberRole(
-          widget.groupId!, _members[memberIndex]['name']!, newRole);
+      // Verify user exists in members
+      final member = widget.members.firstWhere(
+        (m) => m['user_id'] == userId,
+        orElse: () => throw Exception(
+            'User $userId is not a member of group ${widget.groupId}'),
+      );
 
-      // Update the UI
-      setState(() {
-        _members[memberIndex]['role'] = newRole;
-      });
+      final db = await _dbHelper.database;
+      final userProfile = await db.query('profile', limit: 1);
+      if (userProfile.isEmpty) {
+        throw Exception('User not logged in');
+      }
+      final token = userProfile.first['token'] as String;
+
+      final response = await ApiService.updateMemberRole(
+        token: token,
+        groupId: widget.groupId!,
+        userId: userId,
+        role: newRole,
+      );
+
+      if (response['success'] == true) {
+        setState(() {
+          final memberIndex =
+              widget.members.indexWhere((m) => m['user_id'] == userId);
+          if (memberIndex != -1) {
+            widget.members[memberIndex]['role'] = newRole;
+          }
+        });
+        // Update role in participants table
+        await db.update(
+          'participants',
+          {'role': newRole},
+          where: 'group_id = ? AND user_id = ?',
+          whereArgs: [widget.groupId, userId],
+        );
+
+        print('Updated role for user $userId to $newRole');
+      } else {
+        throw Exception(response['message'] ?? 'Failed to update role');
+      }
     } catch (e) {
       print("Error updating member role: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update role: $e')),
+      );
     }
   }
 
-  void _showRemoveMemberForm(BuildContext context, int memberIndex) {
+  Future<void> _removeMember(String userId) async {
+    try {
+      final db = await _dbHelper.database;
+      final userProfile = await db.query('profile', limit: 1);
+      if (userProfile.isEmpty) {
+        throw Exception('User not logged in');
+      }
+      final token = userProfile.first['token'] as String;
+
+      final response = await ApiService.removeMember(
+        token: token,
+        groupId: widget.groupId!,
+        userId: userId,
+      );
+
+      if (response['success'] == true) {
+        setState(() {
+          widget.members.removeWhere((member) => member['user_id'] == userId);
+        });
+        await db.update(
+          'participants',
+          {'is_removed': 1},
+          where: 'group_id = ? AND user_id = ?',
+          whereArgs: [widget.groupId, userId],
+        );
+        print('Removed user $userId from group ${widget.groupId}');
+      } else {
+        throw Exception(response['message'] ?? 'Failed to remove member');
+      }
+    } catch (e) {
+      print("Error removing member: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to remove member: $e')),
+      );
+    }
+  }
+
+  void _showRemoveMemberForm(BuildContext context, String userId) {
     final _reasonController = TextEditingController();
 
-    showDialog(
+    showModalBottomSheet(
       context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      backgroundColor: white,
       builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Remove Member'),
-          content: TextField(
-            controller: _reasonController,
-            decoration: const InputDecoration(
-              labelText: 'Reason for removal',
-            ),
+        return Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Remove Member',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _reasonController,
+                decoration: InputDecoration(
+                  labelText: 'Reason for removal',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  filled: true,
+                  fillColor: Colors.grey[100],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text(
+                      'Cancel',
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: () async {
+                      final reason = _reasonController.text;
+                      if (reason.isNotEmpty) {
+                        await _removeMember(userId);
+                        Navigator.pop(context);
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                              content: Text('Please provide a reason')),
+                        );
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Text(
+                      'Remove',
+                      style: TextStyle(color: white),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
-          actions: <Widget>[
-            TextButton(
-              child: const Text('Cancel'),
-              onPressed: () {
-                Navigator.pop(context);
-              },
-            ),
-            TextButton(
-              child: const Text('Remove'),
-              onPressed: () async {
-                final reason = _reasonController.text;
-                if (reason.isNotEmpty) {
-                  try {
-                    // Remove the member from the database
-                    await _dbHelper.removeMember(widget.groupId!);
-
-                    // Update the UI
-                    setState(() {
-                      _members.removeAt(memberIndex);
-                    });
-
-                    Navigator.pop(context);
-                  } catch (e) {
-                    print("Error removing member: $e");
-                  }
-                }
-              },
-            ),
-          ],
         );
       },
     );
   }
 
-  void _showMemberOptionsModal(BuildContext context, int memberIndex) {
-    final currentRole = _members[memberIndex]['role']; // Get the current role
+  void _showMemberOptionsModal(
+      BuildContext context, Map<String, dynamic> member) {
+    if (!_isAdmin) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Only admins can modify member roles')),
+      );
+      return;
+    }
 
-    showDialog(
+    final userId = member['user_id'] as String;
+    final currentRole = (member['role'] as String).toLowerCase();
+    final memberName = member['full_name'] ?? 'Member';
+
+    showModalBottomSheet(
       context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      isScrollControlled: true,
       builder: (BuildContext context) {
-        return Dialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12), // Rounded corners
+        return AnimatedPadding(
+          duration: const Duration(milliseconds: 200),
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
           ),
-          elevation: 4, // Add slight shadow
           child: Container(
-            padding: const EdgeInsets.all(16.0),
-            width: 300, // Control the width of the modal
+            padding:
+                const EdgeInsets.symmetric(vertical: 16.0, horizontal: 16.0),
+            constraints: const BoxConstraints(maxWidth: 600),
             child: Column(
               mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                // Title
-                const Text(
-                  'Member Options',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
-                  ),
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      '$memberName',
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Colors.grey),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 16), // Space between title and content
-
-                // Option 1: Make Admin or Remove Admin
-                GestureDetector(
+                const Divider(height: 24),
+                _buildOptionTile(
+                  context: context,
+                  icon: Icons.admin_panel_settings,
+                  color: currentRole != 'admin' ? Colors.blue : Colors.red,
+                  label: currentRole != 'admin' ? 'Make Admin' : 'Remove Admin',
                   onTap: () {
-                    if (currentRole != 'Admin') {
-                      _updateMemberRole(memberIndex, 'Admin');
-                    } else {
-                      _showRemoveMemberForm(context, memberIndex);
-                    }
+                    _updateMemberRole(
+                        userId, currentRole != 'admin' ? 'admin' : 'member');
                     Navigator.pop(context);
                   },
-                  child: Row(
-                    children: <Widget>[
-                      Icon(
-                        Icons.admin_panel_settings,
-                        color:
-                            currentRole != 'Admin' ? Colors.blue : Colors.red,
-                      ),
-                      const SizedBox(width: 10),
-                      Text(
-                        currentRole != 'Admin'
-                            ? 'Make Member Admin'
-                            : 'Remove Admin',
-                        style:
-                            const TextStyle(fontSize: 16, color: Colors.black),
-                      ),
-                    ],
-                  ),
                 ),
-                const SizedBox(height: 12), // Space between options
-
-                // Option 2: Make Secretary or Remove Secretary
-                GestureDetector(
+                _buildOptionTile(
+                  context: context,
+                  icon: Icons.security,
+                  color: currentRole != 'secretary' ? Colors.green : Colors.red,
+                  label: currentRole != 'secretary'
+                      ? 'Make Secretary'
+                      : 'Remove Secretary',
                   onTap: () {
-                    if (currentRole != 'Secretary') {
-                      _updateMemberRole(memberIndex, 'Secretary');
-                    } else {
-                      _showRemoveMemberForm(context, memberIndex);
-                    }
+                    _updateMemberRole(userId,
+                        currentRole != 'secretary' ? 'secretary' : 'member');
                     Navigator.pop(context);
                   },
-                  child: Row(
-                    children: <Widget>[
-                      Icon(
-                        Icons.security,
-                        color: currentRole != 'Secretary'
-                            ? Colors.green
-                            : Colors.red,
-                      ),
-                      const SizedBox(width: 10),
-                      Text(
-                        currentRole != 'Secretary'
-                            ? 'Make Member Secretary'
-                            : 'Remove Secretary',
-                        style:
-                            const TextStyle(fontSize: 16, color: Colors.black),
-                      ),
-                    ],
-                  ),
                 ),
-                const SizedBox(height: 12), // Space between options
-
-                // Option 3: Remove from Group (always present)
-                GestureDetector(
+                _buildOptionTile(
+                  context: context,
+                  icon: Icons.delete,
+                  color: Colors.red,
+                  label: 'report and Remove from Group',
                   onTap: () {
-                    _showRemoveMemberForm(context, memberIndex);
                     Navigator.pop(context);
+                    _showRemoveMemberForm(context, userId);
                   },
-                  child: Row(
-                    children: const <Widget>[
-                      Icon(Icons.delete, color: Colors.red),
-                      SizedBox(width: 10),
-                      Text(
-                        'Remove from Group',
-                        style: TextStyle(fontSize: 16, color: Colors.black),
-                      ),
-                    ],
-                  ),
                 ),
+                const SizedBox(height: 16),
               ],
             ),
           ),
@@ -227,7 +329,35 @@ class _GroupMembersState extends State<GroupMembers> {
     );
   }
 
-// Helper widget to create modern looking option tiles
+  Widget _buildOptionTile({
+    required BuildContext context,
+    required IconData icon,
+    required Color color,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return AnimatedOpacity(
+      opacity: 1.0,
+      duration: const Duration(milliseconds: 300),
+      child: ListTile(
+        leading: Icon(icon, color: color, size: 28),
+        title: Text(
+          label,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+            color: Colors.black87,
+          ),
+        ),
+        onTap: onTap,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        hoverColor: Colors.grey[200],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -235,22 +365,22 @@ class _GroupMembersState extends State<GroupMembers> {
       color: white,
       margin: const EdgeInsets.only(top: 8.0),
       child: ExpansionTile(
-        title: const Text(
-          'Members',
-          style: TextStyle(
+        title: Text(
+          'Members (${widget.members.length})',
+          style: const TextStyle(
             color: Colors.black87,
             fontSize: 16,
             fontWeight: FontWeight.bold,
           ),
         ),
-        children: _members.map((member) {
+        children: widget.members.map((member) {
           return ListTile(
             leading: CircleAvatar(
               backgroundImage: (widget.profilePic?.isNotEmpty == true)
                   ? NetworkImage(widget.profilePic!)
                   : const AssetImage('assets/images/avatar.png')
                       as ImageProvider,
-              radius: 30,
+              radius: 20,
             ),
             title: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -259,22 +389,21 @@ class _GroupMembersState extends State<GroupMembers> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      member['name']!,
+                      member['full_name'] ?? 'Unknown',
                       style: const TextStyle(fontSize: 16),
                     ),
                     Text(
-                      'Saving rank: ${_members.indexOf(member) + 1}',
+                      'Rank: ${member['savings_rank'] ?? 'N/A'}',
                       style: const TextStyle(fontSize: 14, color: Colors.grey),
                     ),
-                    _buildFinancialInfo(_members.indexOf(member)),
+                    _buildFinancialInfo(member),
                   ],
                 ),
-                _buildRoleBreadcrumb(member['role'] ?? 'Member'),
+                _buildRoleBreadcrumb(member['role'] ?? 'member'),
               ],
             ),
             onTap: () {
-              // Handle member tap to show options
-              _showMemberOptionsModal(context, _members.indexOf(member));
+              _showMemberOptionsModal(context, member);
             },
           );
         }).toList(),
@@ -283,17 +412,17 @@ class _GroupMembersState extends State<GroupMembers> {
   }
 
   Widget _buildRoleBreadcrumb(String role) {
-    role = role.trim();
+    role = role.trim().toLowerCase();
     Color? backgroundColor;
 
     switch (role) {
-      case 'Admin':
+      case 'admin':
         backgroundColor = primaryColor;
         break;
-      case 'Secretary':
+      case 'secretary':
         backgroundColor = Colors.grey;
         break;
-      case 'Member':
+      case 'member':
       default:
         return const SizedBox.shrink();
     }
@@ -305,7 +434,7 @@ class _GroupMembersState extends State<GroupMembers> {
         borderRadius: BorderRadius.circular(12),
       ),
       child: Text(
-        role,
+        role[0].toUpperCase() + role.substring(1),
         style: const TextStyle(
           fontSize: 12,
           fontWeight: FontWeight.bold,
@@ -315,20 +444,16 @@ class _GroupMembersState extends State<GroupMembers> {
     );
   }
 
-  Widget _buildFinancialInfo(int index) {
-    double loan = (index + 1) * 1000.0;
-    double savings = (index + 1) * 2000.0;
+  Widget _buildFinancialInfo(Map<String, dynamic> member) {
+    final deposits = (member['total_deposits'] as num?)?.toDouble();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (loan > 0)
-          Text(
-            'Loan: UGX ${loan.toStringAsFixed(0)}',
-            style: const TextStyle(fontSize: 14, color: Colors.red),
-          ),
         Text(
-          'Savings: UGX ${savings.toStringAsFixed(0)}',
+          deposits != null && deposits > 0
+              ? 'Savings: ${widget.currencySymbol}${deposits.toStringAsFixed(2)}'
+              : 'Savings: None',
           style: const TextStyle(fontSize: 14, color: Colors.green),
         ),
       ],

@@ -793,7 +793,7 @@ class ApiService {
     }
   }
 
-  static Future<Map<String, dynamic>> loanSettings(
+  static Future<Map<String, dynamic>> groupSettings(
       String token, Map<String, dynamic> data) async {
     try {
       final uri = Uri.parse(ApiEndpoints.loanSettingUrl);
@@ -810,7 +810,7 @@ class ApiService {
           'data': data['setting'], // Already JSON-encoded in _updateSettings
         },
       );
-
+      print('response, $response');
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final responseData = jsonDecode(response.body) as Map<String, dynamic>;
         return responseData;
@@ -846,6 +846,60 @@ class ApiService {
       final responseData = jsonDecode(response.body) as Map<String, dynamic>;
       return responseData;
     } catch (e) {
+      rethrow;
+    }
+  }
+
+  static Future<Map<String, dynamic>> updateMemberRole(
+      {required String token,
+      required int groupId,
+      required String role,
+      required String userId}) async {
+    try {
+      final uri = Uri.parse(ApiEndpoints.memberRolesUrl);
+      final response = await http.post(
+        uri,
+        headers: {
+          'Authorization': 'Token $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'role': role, 'groupId': groupId, 'user_id': userId}),
+      );
+      print('Update role response: ${response.body}');
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      } else {
+        throw Exception('Failed to update role: ${response.body}');
+      }
+    } catch (e) {
+      print('Error updating role: $e');
+      rethrow;
+    }
+  }
+
+  static Future<Map<String, dynamic>> removeMember({
+    required String token,
+    required int groupId,
+    required String userId,
+  }) async {
+    try {
+      final uri = Uri.parse(
+          'https://your-api-url/api/groups/$groupId/members/$userId/');
+      final response = await http.delete(
+        uri,
+        headers: {
+          'Authorization': 'Token $token',
+          'Content-Type': 'application/json',
+        },
+      );
+      print('Remove member response: ${response.body}');
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      } else {
+        throw Exception('Failed to remove member: ${response.body}');
+      }
+    } catch (e) {
+      print('Error removing member: $e');
       rethrow;
     }
   }

@@ -77,7 +77,7 @@ class _LoanSettingsState extends State<LoanSettings> {
         }),
       };
 
-      final response = await ApiService.loanSettings(token, data);
+      final response = await ApiService.groupSettings(token, data);
 
       if (response['success'] == true && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -337,7 +337,7 @@ class _LoanSettingsState extends State<LoanSettings> {
                   Container(
                     color: Colors.black.withOpacity(0.3),
                     child: const Center(
-                      child: CircularProgressIndicator(),
+                      child: Loader(),
                     ),
                   ),
               ],

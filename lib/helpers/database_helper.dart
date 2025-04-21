@@ -79,6 +79,7 @@ class DatabaseHelper {
   Future<void> _onCreate(Database db, int version) async {
     await db.execute('''
       CREATE TABLE profile (
+
         id TEXT PRIMARY KEY,
         token TEXT NOT NULL,
         name TEXT NOT NULL,
@@ -106,8 +107,9 @@ class DatabaseHelper {
         last_activity TEXT,
         settings TEXT
         requires_payment INTEGER,
-       deposit_amount REAL,
-       restrict_messages_to_admins INTEGER
+        deposit_amount REAL,
+        restrict_messages_to_admins INTEGER
+        
       )
     ''');
 
@@ -117,6 +119,7 @@ class DatabaseHelper {
         is_admin BOOLEAN NOT NULL DEFAULT TRUE,
         is_approved BOOLEAN NOT NULL DEFAULT TRUE,
         is_denied BOOLEAN NOT NULL DEFAULT FALSE,
+        is_removed INTEGER,
         user_name TEXT NOT NULL,
         group_id INTEGER NOT NULL,
         user_id TEXT NOT NULL,
@@ -410,7 +413,7 @@ class DatabaseHelper {
     return await db.delete('profile', where: 'id = ?', whereArgs: [userId]);
   }
 
-  Future<int> removeMember(int userId) async {
+  Future<int> removeMember(int groupID, String userId) async {
     final db = await database;
     return await db
         .delete('participants', where: 'id = ?', whereArgs: [userId]);
