@@ -1,49 +1,45 @@
 // ignore_for_file: avoid_print
 
-import 'package:contacts_service/contacts_service.dart';
+import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
-import 'package:libphonenumber/libphonenumber.dart';
 
-// Function to normalize phone numbers
-Future<String> normalizePhoneNumber(
-    String phoneNumber, String regionCode) async {
+// Function to normalize Ugandan phone numbers
+String normalizePhoneNumber(String phoneNumber, String regionCode) {
   try {
+    // Clean the phone number (remove non-digits except +)
+    phoneNumber = phoneNumber.replaceAll(RegExp(r'[^0-9+]'), '');
+
     // Prepend country code if missing
     if (!phoneNumber.startsWith('+')) {
-      phoneNumber = '+256${phoneNumber.replaceAll(RegExp(r'[^0-9]'), '')}';
+      phoneNumber = '+256${phoneNumber.replaceFirst(RegExp(r'^0'), '')}';
     }
 
-    // Check if the phone number is valid
-    bool? isValid = await PhoneNumberUtil.isValidPhoneNumber(
-      phoneNumber: phoneNumber,
-      isoCode: regionCode,
-    );
-
-    if (isValid != true) {
-      print("Invalid phone number: $phoneNumber"); // Print the invalid number
-      throw Exception("Invalid phone number: $phoneNumber");
+    // Validate phone number
+    if (!phoneNumber.startsWith('+256')) {
+      print("Invalid country code for Uganda: $phoneNumber");
+      throw Exception("Invalid country code for Uganda: $phoneNumber");
     }
 
-    // Normalize the phone number
-    String? normalizedNumber = await PhoneNumberUtil.normalizePhoneNumber(
-      phoneNumber: phoneNumber,
-      isoCode: regionCode,
-    );
-
-    if (normalizedNumber == null) {
-      print(
-          "Failed to normalize phone number: $phoneNumber"); // Print the failed number
-      throw Exception("Failed to normalize phone number: $phoneNumber");
+    // Check length (Ugandan numbers: +256 followed by 9 digits, total 12)
+    if (phoneNumber.length != 12) {
+      print("Invalid phone number length: $phoneNumber");
+      throw Exception("Invalid phone number length: $phoneNumber");
     }
 
-    return normalizedNumber;
+    // Ensure the number contains only digits after the country code
+    final digits = phoneNumber.substring(4); // Skip +256
+    if (!RegExp(r'^\d+$').hasMatch(digits)) {
+      print("Invalid phone number format: $phoneNumber");
+      throw Exception("Invalid phone number format: $phoneNumber");
+    }
+
+    return phoneNumber;
   } catch (e) {
-    print(
-        "Error normalizing phone number: $phoneNumber, Error: $e"); // Print the number and error
-    return phoneNumber; // Return the original number if normalization fails
+    print("Error normalizing phone number: $phoneNumber, Error: $e");
+    return phoneNumber; // Return original if normalization fails
   }
 }
 
@@ -66,22 +62,30 @@ Future<List<Map<String, String>>> fetchAndHashContacts() async {
   }
 
   // Fetch contacts
-  Iterable<Contact> contacts = await ContactsService.getContacts();
+  final contacts = await FlutterContacts.getContacts(
+    withProperties: true,
+    withPhoto: false,
+  );
 
   // Normalize and hash contacts
   for (var contact in contacts) {
-    if (contact.phones != null && contact.phones!.isNotEmpty) {
-      for (var phone in contact.phones!) {
-        print(
-            "Processing phone number: ${phone.value}"); // Log the phone number
-        String normalizedNumber = await normalizePhoneNumber(
-            phone.value!, 'UG'); // 'UG' is the ISO code for Uganda
-        String hashedNumber = hashPhoneNumber(normalizedNumber);
-        contactsWithHashes.add({
-          'name': contact.displayName ?? 'Unknown', // Original name
-          'phone': phone.value ?? 'No phone number', // Original phone number
-          'hashedPhone': hashedNumber, // Hashed phone number
-        });
+    if (contact.phones.isNotEmpty) {
+      for (var phone in contact.phones) {
+        print("Processing phone number: ${phone.number}");
+        try {
+          String normalizedNumber = normalizePhoneNumber(
+            phone.number,
+            'UG', // 'UG' is the ISO code for Uganda
+          );
+          String hashedNumber = hashPhoneNumber(normalizedNumber);
+          contactsWithHashes.add({
+            'name': contact.displayName ?? 'Unknown', // Original name
+            'phone': phone.number, // Original phone number
+            'hashedPhone': hashedNumber, // Hashed phone number
+          });
+        } catch (e) {
+          print("Error processing ${contact.displayName}: $e");
+        }
       }
     }
   }
@@ -116,9 +120,6 @@ Future<List<Map<String, String>>> getRegisteredContacts(
     print("Registered Contacts: $registeredContacts Sent Contacts: $sentHash");
     return registeredContacts;
   } else {
-    print("Request failed with status: ${response.statusCode}");
-    print("Response body: ${response.body}");
-    print("Response headers: ${response.headers}");
     throw Exception("Failed to fetch registered contacts");
   }
 }

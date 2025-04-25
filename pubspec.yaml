@@ -23,14 +23,14 @@ dependencies:
   record: ^4.4.0
   path_provider: ^2.1.5
   syncfusion_flutter_gauges: ^28.1.38
-  awesome_notifications: ^0.10.0
+  awesome_notifications: ^0.10.1
   vibration: ^2.0.1
-  contacts_service: ^0.6.3
+  flutter_contacts: ^1.1.9+2
   http: ^1.2.2
   crypto: ^3.0.2
   sqflite: ^2.2.1
   path: ^1.8.3
-  libphonenumber: ^2.0.0
+  flutter_libphonenumber: ^2.5.1
   permission_handler: ^11.3.1
   shared_preferences: ^2.5.2
   video_player: ^2.5.1
@@ -43,6 +43,7 @@ dependencies:
   animate_do: ^3.0.2
   qr_flutter: ^4.1.0
   lottie: ^3.1.2
+  percent_indicator: ^4.2.3
   flutter_verification_code_field: ^1.0.0
   webdev: ^3.7.1
   web: ^1.1.1

@@ -1,47 +1,40 @@
-import 'package:contacts_service/contacts_service.dart';
+import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:libphonenumber/libphonenumber.dart';
 import 'package:cyanase/helpers/database_helper.dart';
 
-// Function to normalize phone numbers
-Future<String> normalizePhoneNumber(
-    String phoneNumber, String regionCode) async {
+// Function to normalize Ugandan phone numbers
+String normalizePhoneNumber(String phoneNumber, String regionCode) {
   try {
+    // Clean the phone number (remove non-digits except +)
+    phoneNumber = phoneNumber.replaceAll(RegExp(r'[^0-9+]'), '');
+
     // Prepend country code if missing
     if (!phoneNumber.startsWith('+')) {
-      phoneNumber = '+256${phoneNumber.replaceAll(RegExp(r'[^0-9]'), '')}';
+      phoneNumber = '+256${phoneNumber.replaceFirst(RegExp(r'^0'), '')}';
     }
 
-    // Print the number being processed
-
-    // Check if the phone number is valid
-    bool? isValid = await PhoneNumberUtil.isValidPhoneNumber(
-      phoneNumber: phoneNumber,
-      isoCode: regionCode,
-    );
-
-    if (isValid != true) {
-      // Print the invalid number
-      throw Exception("Invalid phone number: $phoneNumber");
+    // Validate phone number
+    if (!phoneNumber.startsWith('+256')) {
+      throw Exception("Invalid country code for Uganda: $phoneNumber");
     }
 
-    // Normalize the phone number
-    String? normalizedNumber = await PhoneNumberUtil.normalizePhoneNumber(
-      phoneNumber: phoneNumber,
-      isoCode: regionCode,
-    );
-
-    if (normalizedNumber == null) {
-      // Print the failed number
-      throw Exception("Failed to normalize phone number: $phoneNumber");
+    // Check length (Ugandan numbers: +256 followed by 9 digits, total 12)
+    if (phoneNumber.length != 12) {
+      throw Exception("Invalid phone number length: $phoneNumber");
     }
 
-    return normalizedNumber;
+    // Ensure the number contains only digits after the country code
+    final digits = phoneNumber.substring(4); // Skip +256
+    if (!RegExp(r'^\d+$').hasMatch(digits)) {
+      throw Exception("Invalid phone number format: $phoneNumber");
+    }
+
+    return phoneNumber;
   } catch (e) {
-    // Print the number and error
-    return phoneNumber; // Return the original number if normalization fails
+    print('Normalization error for $phoneNumber: $e');
+    return phoneNumber; // Return original if normalization fails
   }
 }
 
@@ -56,21 +49,28 @@ Future<List<Map<String, String>>> fetchAndHashContacts() async {
   }
 
   // Fetch contacts
-  Iterable<Contact> contacts = await ContactsService.getContacts();
+  final contacts = await FlutterContacts.getContacts(
+    withProperties: true,
+    withPhoto: false,
+  );
 
   // Normalize contacts
   for (var contact in contacts) {
-    if (contact.phones != null && contact.phones!.isNotEmpty) {
-      for (var phone in contact.phones!) {
+    if (contact.phones.isNotEmpty) {
+      for (var phone in contact.phones) {
         try {
-          String normalizedNumber = await normalizePhoneNumber(
-              phone.value!, 'UG'); // 'UG' is the ISO code for Uganda
+          String normalizedNumber = normalizePhoneNumber(
+            phone.number,
+            'UG', // 'UG' is the ISO code for Uganda
+          );
           contactsWithHashes.add({
             'name': contact.displayName ?? 'Unknown', // Original name
-            'phone': phone.value ?? 'No phone number', // Original phone number
+            'phone': phone.number, // Original phone number
             'normalizedPhone': normalizedNumber, // Normalized phone number
           });
-        } catch (e) {}
+        } catch (e) {
+          print('Error processing ${contact.displayName}: $e');
+        }
       }
     }
   }
@@ -111,7 +111,7 @@ Future<List<Map<String, dynamic>>> getRegisteredContacts(
         'user_id': registered['id'].toString(), // Use the ID as the user_id
         'name': contact['name'],
         'phone': contact['phone'],
-        'profilePic': contact['profilePic'],
+        'profilePic': contact['profilePic'] ?? '',
         'is_registered': true, // Mark as registered
       };
     }).toList();
@@ -122,6 +122,7 @@ Future<List<Map<String, dynamic>>> getRegisteredContacts(
 
     return registeredContacts;
   } else {
-    throw Exception("Failed to fetch registered contacts");
+    throw Exception(
+        "Failed to fetch registered contacts: ${response.statusCode}");
   }
 }

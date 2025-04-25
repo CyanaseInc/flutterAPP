@@ -48,7 +48,7 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
   }
 
   Future<void> _loadGroupDetails() async {
-    setState(() => _isLoading = true);
+    setState(() => _isLoading = false);
     await _fetchGroupDetails();
     setState(() => _isLoading = false);
   }
@@ -65,8 +65,7 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
       }
 
       final token = userProfile.first['token'] as String;
-      final userId =
-          userProfile.first['id'] as String?; // Assuming user_id is stored
+      final userId = userProfile.first['id'] as String?;
       final userCountry = userProfile.first['country'] as String;
       final currency = CurrencyHelper.getCurrencyCode(userCountry);
 
@@ -79,8 +78,6 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
         final data = response['data'] ?? {};
         final contributions = data['contributions'] ?? {};
 
-        // Check if the user is an admin
-
         final participantList =
             (data['members']?['participant_list'] as List?) ?? [];
         final userParticipant = participantList.firstWhere(
@@ -90,7 +87,7 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
 
         if (userParticipant != null) {
           setState(() {
-            _isAdmin = userParticipant['role'] == 'admin' ? true : false;
+            _isAdmin = userParticipant['role'] == 'admin';
           });
         }
 
@@ -98,25 +95,15 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
           _currencySymbol = currency;
           _groupDetails = data;
           _requirePaymentToJoin = data['requirePaymentToJoin'] ?? false;
-          isAdminMode = data['restrict_messages_to_admins'];
+          isAdminMode = data['restrict_messages_to_admins'] ?? false;
           _paymentAmount = (data['pay_amount'] as num?)?.toDouble() ?? 0.0;
           _totalBalance = _formatCurrency(
               (contributions['group_total'] as num?)?.toDouble() ?? 0.0);
           _myContributions = _formatCurrency(
               (contributions['my_total'] as num?)?.toDouble() ?? 0.0);
-          _isAdmin = userParticipant['role'] == 'admin' ? true : false;
 
           groupGoals = (data['goals'] as List? ?? []).map((goal) {
-            return GroupSavingGoal(
-              goalId: goal['goal_id'] as int?,
-              goalName: goal['goal_name'] as String? ?? 'Unnamed Goal',
-              goalAmount: (goal['target_amount'] as num?)?.toDouble() ?? 0.0,
-              currentAmount:
-                  (goal['current_amount'] as num?)?.toDouble() ?? 0.0,
-              startDate: goal['start_date'] as String?,
-              endDate: goal['end_date'] as String?,
-              status: goal['status'] as String? ?? 'inactive',
-            );
+            return GroupSavingGoal.fromJson(goal, userId!); // Pass userId
           }).toList();
         });
       } else {
@@ -169,6 +156,7 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
                   groupId: widget.groupId,
                   totalBalance: _totalBalance,
                   myContributions: _myContributions,
+                  currencySymbol: '$_currencySymbol',
                 ),
                 Container(
                   color: white,

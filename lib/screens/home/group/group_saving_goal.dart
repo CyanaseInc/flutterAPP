@@ -4,6 +4,9 @@ import 'add_group_goal.dart';
 import 'edit_group_goal_screen.dart';
 import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:vibration/vibration.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:cyanase/helpers/database_helper.dart';
 
 class Contributor {
   final String name;
@@ -22,47 +25,68 @@ class GroupSavingGoal {
   String goalName;
   final double goalAmount;
   double currentAmount;
+  final double myContributions;
   final String? startDate;
   final String? endDate;
   final String? status;
   final List<Contributor> contributors;
+  final List<Contributor> pendingContributors;
 
   GroupSavingGoal({
     this.goalId,
     required this.goalName,
     required this.goalAmount,
     this.currentAmount = 0.0,
+    this.myContributions = 0.0,
     this.startDate,
     this.endDate,
     this.status,
     this.contributors = const [],
+    this.pendingContributors = const [],
   });
 
-  factory GroupSavingGoal.fromJson(Map<String, dynamic> json) {
+  factory GroupSavingGoal.fromJson(Map<String, dynamic> json, String userId) {
     List<Contributor> contributors = [];
+    List<Contributor> pendingContributors = [];
+    double myContributions = 0.0;
+    double totalContributions = 0.0;
+
     if (json['deposits'] != null && json['deposits'] is List) {
-      contributors = (json['deposits'] as List).map((deposit) {
-        return Contributor(
-          name: deposit['member_name'] ?? 'Anonymous',
-          amount: (deposit['amount'] as num).toDouble(),
+      for (var deposit in json['deposits'] as List) {
+        final amount = (deposit['amount'] as num).toDouble();
+        final contributor = Contributor(
+          name: deposit['member_full_name'] ?? 'Anonymous',
+          amount: amount,
           date: DateTime.parse(deposit['deposit_date']),
         );
-      }).toList();
+        if (deposit['status'] == 'completed') {
+          contributors.add(contributor);
+          totalContributions += amount;
+          if (deposit['member_id'].toString() == userId) {
+            myContributions += amount;
+          }
+        } else if (deposit['status'] == 'pending') {
+          pendingContributors.add(contributor);
+        }
+      }
     }
 
     return GroupSavingGoal(
       goalId: json['goal_id'],
-      goalName: json['goal_name'],
+      goalName: json['goal_name'] ?? 'Unnamed Goal',
       goalAmount: (json['target_amount'] as num).toDouble(),
-      currentAmount: (json['current_amount'] as num).toDouble(),
+      currentAmount: totalContributions,
+      myContributions: myContributions,
       startDate: json['start_date'],
       endDate: json['end_date'],
-      status: json['status'],
+      status: json['status'] ?? 'inactive',
       contributors: contributors,
+      pendingContributors: pendingContributors,
     );
   }
 
-  double get progressPercentage => (currentAmount / goalAmount) * 100;
+  double get progressPercentage =>
+      goalAmount > 0 ? (currentAmount / goalAmount) * 100 : 0.0;
 
   void addContribution(double amount, String contributorName) {
     contributors.add(Contributor(
@@ -88,20 +112,24 @@ class GroupSavingGoal {
     String? goalName,
     double? goalAmount,
     double? currentAmount,
+    double? myContributions,
     String? startDate,
     String? endDate,
     String? status,
     List<Contributor>? contributors,
+    List<Contributor>? pendingContributors,
   }) {
     return GroupSavingGoal(
       goalId: goalId ?? this.goalId,
       goalName: goalName ?? this.goalName,
       goalAmount: goalAmount ?? this.goalAmount,
       currentAmount: currentAmount ?? this.currentAmount,
+      myContributions: myContributions ?? this.myContributions,
       startDate: startDate ?? this.startDate,
       endDate: endDate ?? this.endDate,
       status: status ?? this.status,
       contributors: contributors ?? this.contributors,
+      pendingContributors: pendingContributors ?? this.pendingContributors,
     );
   }
 }
@@ -112,9 +140,12 @@ class GroupSavingGoalsSection extends StatefulWidget {
   final Function()? onGoalAdded;
   final Function(GroupSavingGoal)? onGoalUpdated;
   final Function(int)? onGoalDeleted;
-  final String totalBalance;
-  final String myContributions;
+  final String
+      totalBalance; // Kept for compatibility, not used in balance summary
+  final String
+      myContributions; // Kept for compatibility, not used in balance summary
   final bool showAllGoals;
+  final String currencySymbol;
 
   const GroupSavingGoalsSection({
     Key? key,
@@ -126,6 +157,7 @@ class GroupSavingGoalsSection extends StatefulWidget {
     required this.totalBalance,
     required this.myContributions,
     this.showAllGoals = false,
+    required this.currencySymbol,
   }) : super(key: key);
 
   @override
@@ -197,8 +229,9 @@ class _GroupSavingGoalsSectionState extends State<GroupSavingGoalsSection> {
             }
             if (result['withdrawAmount'] != null) {
               updatedGoal = updatedGoal.copyWith(
-                  currentAmount:
-                      updatedGoal.currentAmount - result['withdrawAmount']);
+                currentAmount:
+                    updatedGoal.currentAmount - result['withdrawAmount'],
+              );
             }
             _groupGoals[index] = updatedGoal;
             widget.onGoalUpdated?.call(updatedGoal);
@@ -210,10 +243,6 @@ class _GroupSavingGoalsSectionState extends State<GroupSavingGoalsSection> {
 
   @override
   Widget build(BuildContext context) {
-    final displayTotalBalance =
-        widget.totalBalance.isEmpty ? "0" : widget.totalBalance;
-    final displayMyContributions =
-        widget.myContributions.isEmpty ? "0" : widget.myContributions;
     final displayedGoals =
         widget.showAllGoals ? _groupGoals : _groupGoals.take(3).toList();
 
@@ -231,7 +260,7 @@ class _GroupSavingGoalsSectionState extends State<GroupSavingGoalsSection> {
         children: [
           _buildHeaderSection(),
           const SizedBox(height: 16),
-          _buildBalanceSummary(displayTotalBalance, displayMyContributions),
+          _buildBalanceSummary(),
           const SizedBox(height: 16),
           _buildGoalsList(displayedGoals),
           if (!widget.showAllGoals && _groupGoals.length > 3)
@@ -285,7 +314,23 @@ class _GroupSavingGoalsSectionState extends State<GroupSavingGoalsSection> {
     );
   }
 
-  Widget _buildBalanceSummary(String totalBalance, String myContributions) {
+  Widget _buildBalanceSummary() {
+    // Calculate total contributions to all goals
+    final groupTotal = _groupGoals.fold<double>(
+      0.0,
+      (sum, goal) => sum + goal.currentAmount,
+    );
+    // Calculate user's total contributions to all goals
+    final myTotal = _groupGoals.fold<double>(
+      0.0,
+      (sum, goal) => sum + goal.myContributions,
+    );
+    // Format with currency symbol
+    final displayGroupTotal =
+        "${widget.currencySymbol}${groupTotal.toStringAsFixed(2)}";
+    final displayMyTotal =
+        "${widget.currencySymbol}${myTotal.toStringAsFixed(2)}";
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -313,7 +358,7 @@ class _GroupSavingGoalsSectionState extends State<GroupSavingGoalsSection> {
               ),
               const SizedBox(height: 4),
               Text(
-                totalBalance,
+                displayGroupTotal,
                 style: TextStyle(
                   color: primaryTwo,
                   fontSize: 18,
@@ -338,7 +383,7 @@ class _GroupSavingGoalsSectionState extends State<GroupSavingGoalsSection> {
               ),
               const SizedBox(height: 4),
               Text(
-                myContributions,
+                displayMyTotal,
                 style: TextStyle(
                   color: primaryColor,
                   fontSize: 18,
@@ -375,6 +420,7 @@ class _GroupSavingGoalsSectionState extends State<GroupSavingGoalsSection> {
           key: ValueKey(goals[index].goalId ?? goals[index].goalName),
           groupGoal: goals[index],
           groupId: widget.groupId,
+          currencySymbol: widget.currencySymbol,
           onContributionAdded: widget.onGoalAdded,
           onGoalUpdated: widget.onGoalUpdated,
           onGoalDeleted: widget.onGoalDeleted,
@@ -403,6 +449,7 @@ class _GroupSavingGoalsSectionState extends State<GroupSavingGoalsSection> {
                     totalBalance: widget.totalBalance,
                     myContributions: widget.myContributions,
                     showAllGoals: true,
+                    currencySymbol: widget.currencySymbol,
                     onGoalAdded: widget.onGoalAdded,
                     onGoalUpdated: widget.onGoalUpdated,
                     onGoalDeleted: widget.onGoalDeleted,
@@ -427,6 +474,7 @@ class _GroupSavingGoalsSectionState extends State<GroupSavingGoalsSection> {
 class GroupSavingGoalsCard extends StatefulWidget {
   final GroupSavingGoal groupGoal;
   final int groupId;
+  final String currencySymbol;
   final Function()? onContributionAdded;
   final Function(GroupSavingGoal)? onGoalUpdated;
   final Function(int)? onGoalDeleted;
@@ -436,6 +484,7 @@ class GroupSavingGoalsCard extends StatefulWidget {
     Key? key,
     required this.groupGoal,
     required this.groupId,
+    required this.currencySymbol,
     this.onContributionAdded,
     this.onGoalUpdated,
     this.onGoalDeleted,
@@ -556,7 +605,9 @@ class _GroupSavingGoalsCardState extends State<GroupSavingGoalsCard> {
               ),
               const SizedBox(height: 16),
               _buildContributorsList(),
-              if (widget.groupGoal.contributors.isNotEmpty) _buildCloseButton(),
+              if (widget.groupGoal.contributors.isNotEmpty ||
+                  widget.groupGoal.pendingContributors.isNotEmpty)
+                _buildCloseButton(),
             ],
           ),
         ),
@@ -565,7 +616,16 @@ class _GroupSavingGoalsCardState extends State<GroupSavingGoalsCard> {
   }
 
   Widget _buildContributorsList() {
-    if (widget.groupGoal.contributors.isEmpty) {
+    final allContributors = [
+      ...widget.groupGoal.contributors,
+      ...widget.groupGoal.pendingContributors.map((c) => Contributor(
+            name: "${c.name} (Pending)",
+            amount: c.amount,
+            date: c.date,
+          )),
+    ];
+
+    if (allContributors.isEmpty) {
       return const Center(
         child: Padding(
           padding: EdgeInsets.symmetric(vertical: 20),
@@ -585,16 +645,18 @@ class _GroupSavingGoalsCardState extends State<GroupSavingGoalsCard> {
       height: MediaQuery.of(context).size.height * 0.5,
       child: ListView.builder(
         shrinkWrap: true,
-        itemCount: widget.groupGoal.contributors.length,
+        itemCount: allContributors.length,
         itemBuilder: (context, index) {
-          final contributor = widget.groupGoal.contributors[index];
+          final contributor = allContributors[index];
           return Card(
             elevation: 1,
             margin: const EdgeInsets.symmetric(vertical: 4),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(8),
             ),
-            color: Colors.grey[50],
+            color: contributor.name.contains('(Pending)')
+                ? Colors.yellow[50]
+                : Colors.grey[50],
             child: ListTile(
               leading: CircleAvatar(
                 backgroundColor: primaryColor,
@@ -621,7 +683,7 @@ class _GroupSavingGoalsCardState extends State<GroupSavingGoalsCard> {
                 ),
               ),
               trailing: Text(
-                'UGX ${contributor.amount.toStringAsFixed(0)}',
+                '${widget.currencySymbol}${contributor.amount.toStringAsFixed(0)}',
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
                   color: primaryTwo,
@@ -677,9 +739,9 @@ class _GroupSavingGoalsCardState extends State<GroupSavingGoalsCard> {
                 controller: amountController,
                 keyboardType: TextInputType.number,
                 decoration: InputDecoration(
-                  labelText: 'Amount (UGX)',
+                  labelText: 'Amount (${widget.currencySymbol})',
                   border: const OutlineInputBorder(),
-                  prefixText: 'UGX ',
+                  prefixText: '${widget.currencySymbol} ',
                 ),
               ),
               const SizedBox(height: 20),
@@ -694,30 +756,77 @@ class _GroupSavingGoalsCardState extends State<GroupSavingGoalsCard> {
                     onPressed: () async {
                       final amount = double.tryParse(amountController.text);
                       if (amount != null && amount > 0) {
-                        final updatedGoal = widget.groupGoal.copyWith(
-                          currentAmount:
-                              widget.groupGoal.currentAmount + amount,
-                          contributors: [
-                            ...widget.groupGoal.contributors,
-                            Contributor(
-                              name: 'You',
-                              amount: amount,
-                              date: DateTime.now(),
+                        try {
+                          final dbHelper = DatabaseHelper();
+                          final db = await dbHelper.database;
+                          final userProfile =
+                              await db.query('profile', limit: 1);
+                          if (userProfile.isEmpty) {
+                            throw Exception('User profile not found');
+                          }
+                          final token = userProfile.first['token'] as String;
+                          final userId = userProfile.first['id'] as String?;
+                          final userName =
+                              userProfile.first['full_name'] as String? ??
+                                  'You';
+
+                          final response = await http.post(
+                            Uri.parse(
+                                'http://192.168.254.220:8000/api/v1/en/contribute/'),
+                            headers: {
+                              'Authorization': 'Bearer $token',
+                              'Content-Type': 'application/json',
+                            },
+                            body: jsonEncode({
+                              'group_id': widget.groupId,
+                              'goal_id': widget.groupGoal.goalId,
+                              'amount': amount,
+                              'member_id': userId,
+                            }),
+                          );
+
+                          final responseData = jsonDecode(response.body);
+                          if (responseData['success'] == true) {
+                            final updatedGoal = widget.groupGoal.copyWith(
+                              currentAmount:
+                                  widget.groupGoal.currentAmount + amount,
+                              myContributions:
+                                  widget.groupGoal.myContributions + amount,
+                              contributors: [
+                                ...widget.groupGoal.contributors,
+                                Contributor(
+                                  name: userName,
+                                  amount: amount,
+                                  date: DateTime.now(),
+                                ),
+                              ],
+                            );
+
+                            widget.onGoalUpdated?.call(updatedGoal);
+                            widget.onContributionAdded?.call();
+
+                            if (!mounted) return;
+                            Navigator.pop(context);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content:
+                                    Text('Contribution added successfully'),
+                                backgroundColor: Colors.green,
+                              ),
+                            );
+                          } else {
+                            throw Exception(responseData['message'] ??
+                                'Failed to add contribution');
+                          }
+                        } catch (e) {
+                          if (!mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Error: ${e.toString()}'),
+                              backgroundColor: Colors.red,
                             ),
-                          ],
-                        );
-
-                        widget.onGoalUpdated?.call(updatedGoal);
-                        widget.onContributionAdded?.call();
-
-                        if (!mounted) return;
-                        Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Contribution added successfully'),
-                            backgroundColor: Colors.green,
-                          ),
-                        );
+                          );
+                        }
                       } else {
                         if (!mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -778,6 +887,7 @@ class _GroupSavingGoalsCardState extends State<GroupSavingGoalsCard> {
         curve: Curves.easeInOut,
         margin: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
+          color: Colors.white,
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
@@ -886,23 +996,37 @@ class _GroupSavingGoalsCardState extends State<GroupSavingGoalsCard> {
   }
 
   Widget _buildAmountInfo() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              "${widget.groupGoal.progressPercentage.toStringAsFixed(1)}%",
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: primaryTwo,
+              ),
+            ),
+            Text(
+              "${widget.currencySymbol}${widget.groupGoal.currentAmount.toStringAsFixed(0)} / ${widget.currencySymbol}${widget.groupGoal.goalAmount.toStringAsFixed(0)}",
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
         Text(
-          "${widget.groupGoal.progressPercentage.toStringAsFixed(1)}%",
+          "My Contributions: ${widget.currencySymbol}${widget.groupGoal.myContributions.toStringAsFixed(0)}",
           style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w600,
-            color: primaryTwo,
-          ),
-        ),
-        Text(
-          "UGX ${widget.groupGoal.currentAmount.toStringAsFixed(0)} / ${widget.groupGoal.goalAmount.toStringAsFixed(0)}",
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: Colors.black87,
+            color: primaryColor,
           ),
         ),
       ],
@@ -949,7 +1073,7 @@ class _GroupSavingGoalsCardState extends State<GroupSavingGoalsCard> {
               borderRadius: BorderRadius.circular(16),
             ),
             child: Text(
-              'View Contributors (${widget.groupGoal.contributors.length})',
+              'View Contributors (${widget.groupGoal.contributors.length + widget.groupGoal.pendingContributors.length})',
               style: TextStyle(
                 color: primaryTwo,
                 fontWeight: FontWeight.w600,

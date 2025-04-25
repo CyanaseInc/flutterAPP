@@ -1,0 +1,2 @@
+C:/Users/User/Downloads/Cyanase/code/app/android/app/.cxx/Debug/5a3j6814/x86/CMakeFiles/edit_cache.dir
+C:/Users/User/Downloads/Cyanase/code/app/android/app/.cxx/Debug/5a3j6814/x86/CMakeFiles/rebuild_cache.dir
