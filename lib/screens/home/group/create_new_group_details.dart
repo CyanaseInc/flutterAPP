@@ -9,7 +9,7 @@ import 'package:cyanase/helpers/api_helper.dart';
 class GroupDetailsScreen extends StatefulWidget {
   final List<Map<String, dynamic>> selectedContacts;
 
-  GroupDetailsScreen({required this.selectedContacts});
+  const GroupDetailsScreen({required this.selectedContacts, super.key});
 
   @override
   _GroupDetailsScreenState createState() => _GroupDetailsScreenState();
@@ -38,7 +38,7 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
     final groupName = _groupNameController.text.trim();
     if (groupName.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Please enter a group name')),
+        const SnackBar(content: Text('Please enter a group name')),
       );
       return;
     }
@@ -57,8 +57,9 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
       }
 
       final token = userProfile.first['token'] as String;
-      final userId =
-          userProfile.first['id'] as String; // Current user's ID (creator)
+      final userId = userProfile.first['id'] as String; // Current user's ID
+      final userName = userProfile.first['name'] as String? ??
+          'Creator'; // Fallback for creator's name
 
       // Prepare the data for the POST request
       final Map<String, dynamic> groupData = {
@@ -70,9 +71,10 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
         'participants': [
           ...widget.selectedContacts
               .map((contact) => {
-                    'user_id': contact['id'],
-                    'role': contact['id'] == userId ? 'admin' : 'member',
-                    'is_approved': true, // auto-approve creator
+                    'user_id': contact['id'].toString(),
+                    'role':
+                        contact['id'].toString() == userId ? 'admin' : 'member',
+                    'is_approved': true,
                     'is_denied': false,
                   })
               .toList(),
@@ -81,8 +83,7 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
             'role': 'admin',
             'is_approved': true,
             'is_denied': false,
-            'invited_by': userId.toString(),
-            'nickname': 'You'
+            'invited_by': userId,
           }
         ]
       };
@@ -101,77 +102,97 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
           'profile_pic': _groupImage?.path ?? '',
           'type': 'group',
           'created_at': DateTime.now().toIso8601String(),
-          'created_by': userId, // Use actual user ID
+          'created_by': userId,
           'last_activity': DateTime.now().toIso8601String(),
           'settings': '',
         });
 
-        // Insert the creator as an admin explicitly
+        // Insert the creator as an admin
         await _dbHelper.insertParticipant({
           'group_id': groupId,
           'user_id': userId,
-          'role': 'admin', // Creator is admin
+          'user_name': userName,
+          'role': 'admin',
           'joined_at': DateTime.now().toIso8601String(),
           'muted': 0,
+          'is_admin': 1,
+          'is_approved': 1,
+          'is_denied': 0,
         });
 
         // Save other participants to the SQLite database
         for (final contact in widget.selectedContacts) {
-          final contactId = contact['id'];
-          if (contactId == null || contactId == userId)
-            continue; // Skip creator (already added)
+          final contactId = contact['id'].toString();
+          if (contactId == userId) continue; // Skip creator (already added)
 
           await _dbHelper.insertParticipant({
             'group_id': groupId,
             'user_id': contactId,
-            'role': 'member', // All others are members
+            'user_name': contact['name'] ?? 'Unknown',
+            'role': 'member',
             'joined_at': DateTime.now().toIso8601String(),
             'muted': 0,
+            'is_admin': 0,
+            'is_approved': 1,
+            'is_denied': 0,
           });
         }
 
         // Navigate to the home screen
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => HomeScreen(),
-          ),
-        );
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const HomeScreen(),
+            ),
+          );
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Group created successfully!')),
-        );
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Group created successfully!')),
+          );
+        }
       } else {
         throw Exception(
             'Failed to create group: No group ID returned from API');
       }
     } catch (e) {
       print("Error creating group: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Failed to create group: ${e.toString()}")),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Failed to create group: ${e.toString()}")),
+        );
+      }
     } finally {
-      setState(() {
-        _isSaving = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
     }
+  }
+
+  @override
+  void dispose() {
+    _groupNameController.dispose();
+    _groupDescriptionController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
+        title: const Text(
           "New Group",
           style: TextStyle(color: white, fontSize: 20),
         ),
         backgroundColor: primaryTwo,
-        iconTheme: IconThemeData(color: white),
+        iconTheme: const IconThemeData(color: white),
         actions: [
           IconButton(
             icon: _isSaving
-                ? CircularProgressIndicator(color: white)
-                : Icon(Icons.check, color: white),
+                ? const CircularProgressIndicator(color: white)
+                : const Icon(Icons.check, color: white),
             onPressed: _isSaving ? null : _saveGroup,
           ),
         ],
@@ -180,6 +201,7 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
         child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Center(
                 child: GestureDetector(
@@ -188,71 +210,61 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                     radius: 50,
                     backgroundImage: _groupImage != null
                         ? FileImage(_groupImage!)
-                        : AssetImage('assets/images/default_group.png')
+                        : const AssetImage('assets/images/default_group.png')
                             as ImageProvider,
                     child: _groupImage == null
-                        ? Icon(Icons.camera_alt,
-                            size: 40, color: Colors.grey[300])
+                        ? Icon(Icons.camera_alt, size: 40, color: Colors.grey)
                         : null,
                   ),
                 ),
               ),
-              SizedBox(height: 20),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'Group Name',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: primaryTwo,
-                  ),
+              const SizedBox(height: 20),
+              const Text(
+                'Group Name',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: primaryTwo,
                 ),
               ),
-              SizedBox(height: 8),
+              const SizedBox(height: 8),
               TextField(
                 controller: _groupNameController,
-                decoration: InputDecoration(
+                decoration: const InputDecoration(
                   border: OutlineInputBorder(),
                 ),
                 textAlign: TextAlign.left,
               ),
-              SizedBox(height: 20),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'Group Description',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: primaryTwo,
-                  ),
+              const SizedBox(height: 20),
+              const Text(
+                'Group Description',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: primaryTwo,
                 ),
               ),
-              SizedBox(height: 8),
+              const SizedBox(height: 8),
               TextField(
                 controller: _groupDescriptionController,
-                decoration: InputDecoration(
+                decoration: const InputDecoration(
                   border: OutlineInputBorder(),
                 ),
                 textAlign: TextAlign.left,
               ),
-              SizedBox(height: 20),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'Selected Members:',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: primaryTwo,
-                  ),
+              const SizedBox(height: 20),
+              const Text(
+                'Selected Members:',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: primaryTwo,
                 ),
               ),
-              SizedBox(height: 8),
+              const SizedBox(height: 8),
               ListView.builder(
                 shrinkWrap: true,
-                physics: NeverScrollableScrollPhysics(),
+                physics: const NeverScrollableScrollPhysics(),
                 itemCount: widget.selectedContacts.length,
                 itemBuilder: (context, index) {
                   final contact = widget.selectedContacts[index];
@@ -260,13 +272,13 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                     contentPadding: EdgeInsets.zero,
                     leading: CircleAvatar(
                       backgroundImage: contact['profilePic'] != null &&
-                              contact['profilePic']!.isNotEmpty
-                          ? NetworkImage(contact['profilePic']!)
-                          : AssetImage('assets/images/avatar.png')
+                              contact['profilePic'].isNotEmpty
+                          ? NetworkImage(contact['profilePic'])
+                          : const AssetImage('assets/images/avatar.png')
                               as ImageProvider,
                       child: contact['profilePic'] == null ||
-                              contact['profilePic']!.isEmpty
-                          ? Icon(Icons.person, color: white)
+                              contact['profilePic'].isEmpty
+                          ? const Icon(Icons.person, color: white)
                           : null,
                     ),
                     title: Text(

@@ -8,8 +8,8 @@ import 'package:cyanase/helpers/loader.dart';
 import 'package:cyanase/helpers/api_helper.dart';
 import 'package:cyanase/helpers/endpoints.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'pending_groups_screen.dart';
 import 'package:lottie/lottie.dart';
+import 'chatlist_header.dart';
 
 class ChatList extends StatefulWidget {
   const ChatList({Key? key}) : super(key: key);
@@ -65,11 +65,6 @@ class ChatListState extends State<ChatList>
     });
   }
 
-  String _toSentenceCase(String input) {
-    if (input.isEmpty) return input;
-    return input[0].toUpperCase() + input.substring(1).toLowerCase();
-  }
-
   Future<bool> _isUserApproved(int groupId) async {
     final db = await _dbHelper.database;
     final userProfile = await db.query('profile', limit: 1);
@@ -93,7 +88,6 @@ class ChatListState extends State<ChatList>
     final userProfile = await db.query('profile', limit: 1);
     final userId = userProfile.first['user_id'] as String? ?? '145';
 
-    // First check the group table for quick access
     final group = await db.query(
       'groups',
       where: 'id = ?',
@@ -105,7 +99,6 @@ class ChatListState extends State<ChatList>
       return true;
     }
 
-    // Fallback to participants table for accuracy
     final participant = await db.query(
       'participants',
       where: 'group_id = ? AND user_id = ?',
@@ -138,6 +131,25 @@ class ChatListState extends State<ChatList>
         throw Exception('Invalid API response format: $response');
       }
 
+      final localGroups = await db.query('groups', columns: ['id']);
+      final localGroupIds = localGroups.map((g) => g['id'] as int).toSet();
+      final apiGroupIds = groups.map((g) => g['groupId'] as int).toSet();
+
+      final groupsToDelete = localGroupIds.difference(apiGroupIds);
+      for (final groupId in groupsToDelete) {
+        await db.delete(
+          'participants',
+          where: 'group_id = ?',
+          whereArgs: [groupId],
+        );
+        await db.delete(
+          'groups',
+          where: 'id = ?',
+          whereArgs: [groupId],
+        );
+        print('Deleted group $groupId and its participants');
+      }
+
       List<Map<String, dynamic>> adminGroups = [];
       int totalPending = 0;
 
@@ -163,6 +175,16 @@ class ChatListState extends State<ChatList>
         int pendingCount = 0;
 
         if (participants != null && participants.isNotEmpty) {
+          final existingParticipants = await db.query(
+            'participants',
+            where: 'group_id = ?',
+            whereArgs: [groupId],
+            columns: ['user_id'],
+          );
+          final existingParticipantIds =
+              existingParticipants.map((p) => p['user_id'] as String).toSet();
+
+          final apiParticipantIds = <String>{};
           for (final participantData in participants) {
             final participantUserId = participantData['user_id']?.toString();
             final userName = participantData['user_name'] as String?;
@@ -181,6 +203,10 @@ class ChatListState extends State<ChatList>
                 ? participantData['is_denied']
                 : participantData['is_denied'] == 1;
 
+            if (participantUserId == null) continue;
+
+            apiParticipantIds.add(participantUserId);
+
             if (participantUserId == userId) {
               isCurrentUserAdmin = (role == 'admin' || isAdminDynamic == true);
             }
@@ -194,12 +220,14 @@ class ChatListState extends State<ChatList>
             final participantDataToStore = {
               'group_id': groupId,
               'user_id': participantUserId,
+              'user_name': userName ?? 'Unknown',
               'role': role ?? 'member',
               'joined_at': joinedAt ?? DateTime.now().toIso8601String(),
+              'muted': muted,
               'is_admin': (role == 'admin' || isAdminDynamic == true) ? 1 : 0,
               'is_approved': isApproved ? 1 : 0,
               'is_denied': isDenied ? 1 : 0,
-              'user_name': userName ?? '',
+              'is_removed': 0,
             };
 
             final existingParticipant = await db.query(
@@ -219,6 +247,17 @@ class ChatListState extends State<ChatList>
                 whereArgs: [groupId, participantUserId],
               );
             }
+          }
+
+          final participantsToDelete =
+              existingParticipantIds.difference(apiParticipantIds);
+          for (final participantId in participantsToDelete) {
+            await db.delete(
+              'participants',
+              where: 'group_id = ? AND user_id = ?',
+              whereArgs: [groupId, participantId],
+            );
+            print('Deleted participant $participantId from group $groupId');
           }
         }
 
@@ -285,235 +324,27 @@ class ChatListState extends State<ChatList>
     }
   }
 
-  Widget _buildPendingBanner() {
-    return AnimatedOpacity(
-      opacity: _fadeAnimation!.value,
-      duration: const Duration(seconds: 1),
-      child: InkWell(
-        onTap: () {
-          if (_adminGroups.isNotEmpty) {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => PendingGroupsScreen(
-                  adminGroups: _adminGroups,
-                  onRequestProcessed: _getGroup,
-                ),
-              ),
-            );
-          }
-        },
-        child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          decoration: BoxDecoration(
-            color: primaryTwo,
-            borderRadius: BorderRadius.circular(8),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.15),
-                blurRadius: 6,
-                offset: const Offset(0, 3),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              Icon(Icons.person_add, color: white, size: 28),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  '$_pendingRequestCount pending group request${_pendingRequestCount == 1 ? '' : 's'}',
-                  style: const TextStyle(
-                    color: white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              Icon(Icons.chevron_right, color: white, size: 28),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Column(
         children: [
-          const SizedBox(height: 20),
-          if (_pendingRequestCount > 0) _buildPendingBanner(),
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: 'Search groups...',
-                prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              onChanged: _filterChats,
-            ),
+          SearchAndHeaderComponent(
+            pendingRequestCount: _pendingRequestCount,
+            adminGroups: _adminGroups,
+            searchController: _searchController,
+            fadeAnimation: _fadeAnimation,
+            onFilterChats: _filterChats,
+            onReloadChats: _reloadChats,
           ),
-          const SizedBox(height: 15),
           Expanded(
-            child: StreamBuilder<void>(
-              stream: _refreshController.stream,
-              builder: (context, snapshot) {
-                return FutureBuilder<List<Map<String, dynamic>>>(
-                  future: _loadChats(),
-                  builder: (context, futureSnapshot) {
-                    if (!futureSnapshot.hasData) {
-                      return const Center(child: Loader());
-                    }
-
-                    _allChats = futureSnapshot.data!;
-                    _filteredChats = _searchController.text.isEmpty
-                        ? _allChats
-                        : _allChats
-                            .where((chat) => chat["name"]
-                                .toLowerCase()
-                                .contains(_searchController.text.toLowerCase()))
-                            .toList();
-
-                    if (_filteredChats.isEmpty) {
-                      return Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Container(
-                              width: 180,
-                              height: 180,
-                              decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: primaryTwo.withOpacity(0.1)),
-                              child: Center(
-                                child: Container(
-                                  width: 240,
-                                  height: 200,
-                                  color: Colors.transparent,
-                                  child: Lottie.asset(
-                                    'assets/animations/group.json',
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const Text(
-                              "Welcome to Saving Groups",
-                              style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                color: primaryTwo,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            const Text(
-                              "Create or join a group to start saving and investing with friends and family",
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                            const SizedBox(height: 24),
-                            ElevatedButton.icon(
-                              onPressed: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => NewGroupScreen(),
-                                  ),
-                                );
-                              },
-                              icon: Icon(Icons.add, color: primaryColor),
-                              label: Text(
-                                "Create a Group",
-                                style: TextStyle(color: primaryColor),
-                              ),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: primaryTwo,
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 32, vertical: 16),
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }
-
-                    return ListView.builder(
-                      itemCount: _filteredChats.length,
-                      itemBuilder: (context, index) {
-                        final chat = _filteredChats[index];
-                        final hasUnreadMessages = chat["unreadCount"] > 0;
-
-                        return ListTile(
-                          leading: _getAvatar(chat["name"], chat["profilePic"],
-                              chat["isGroup"]),
-                          title: Text(
-                            chat["name"],
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          subtitle: chat["lastMessage"],
-                          trailing: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(
-                                chat["time"],
-                                style: const TextStyle(
-                                  color: Colors.grey,
-                                  fontSize: 12,
-                                ),
-                              ),
-                              if (hasUnreadMessages)
-                                Container(
-                                  padding: const EdgeInsets.all(4),
-                                  decoration: BoxDecoration(
-                                    color: primaryColor,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Text(
-                                    chat["unreadCount"].toString(),
-                                    style: const TextStyle(
-                                      color: white,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => MessageChatScreen(
-                                  name: chat["name"],
-                                  isAdminOnlyMode:
-                                      chat["restrict_messages_to_admins"],
-                                  isCurrentUserAdmin: chat["amAdmin"],
-                                  description:
-                                      chat["description"] ?? 'Our Saving Group',
-                                  profilePic: chat["profilePic"],
-                                  groupId: chat["isGroup"] ? chat["id"] : null,
-                                  onMessageSent: _reloadChats,
-                                ),
-                              ),
-                            );
-                          },
-                        );
-                      },
-                    );
-                  },
-                );
-              },
+            child: ChatListComponent(
+              allChats: _allChats,
+              filteredChats: _filteredChats,
+              onReloadChats: _reloadChats,
+              refreshStream: _refreshController.stream,
+              loadChats: _loadChats,
+              toSentenceCase: _toSentenceCase,
             ),
           ),
         ],
@@ -667,6 +498,31 @@ class ChatListState extends State<ChatList>
     return message;
   }
 
+  String _toSentenceCase(String input) {
+    if (input.isEmpty) return input;
+    return input[0].toUpperCase() + input.substring(1).toLowerCase();
+  }
+}
+
+// Component for Chat List
+class ChatListComponent extends StatelessWidget {
+  final List<Map<String, dynamic>> allChats;
+  final List<Map<String, dynamic>> filteredChats;
+  final VoidCallback onReloadChats;
+  final Stream<void> refreshStream;
+  final Future<List<Map<String, dynamic>>> Function() loadChats;
+  final String Function(String) toSentenceCase;
+
+  const ChatListComponent({
+    Key? key,
+    required this.allChats,
+    required this.filteredChats,
+    required this.onReloadChats,
+    required this.refreshStream,
+    required this.loadChats,
+    required this.toSentenceCase,
+  }) : super(key: key);
+
   Widget _getAvatar(String name, String? profilePic, bool isGroup) {
     if (profilePic != null && profilePic.isNotEmpty) {
       return CircleAvatar(
@@ -696,5 +552,157 @@ class ChatListState extends State<ChatList>
         backgroundImage: AssetImage('assets/images/avatar.png'),
       );
     }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<void>(
+      stream: refreshStream,
+      builder: (context, snapshot) {
+        return FutureBuilder<List<Map<String, dynamic>>>(
+          future: loadChats(),
+          builder: (context, futureSnapshot) {
+            if (!futureSnapshot.hasData) {
+              return const Center(child: Loader());
+            }
+
+            final chats = futureSnapshot.data!;
+            final displayChats = filteredChats.isEmpty && chats.isNotEmpty
+                ? chats
+                : filteredChats;
+
+            if (displayChats.isEmpty) {
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 180,
+                      height: 180,
+                      decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: primaryTwo.withOpacity(0.1)),
+                      child: Center(
+                        child: Container(
+                          width: 240,
+                          height: 200,
+                          color: Colors.transparent,
+                          child: Lottie.asset(
+                            'assets/animations/group.json',
+                          ),
+                        ),
+                      ),
+                    ),
+                    const Text(
+                      "Welcome to Saving Groups",
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: primaryTwo,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      "Create or join a group to start saving and investing with friends and family",
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 24),
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => NewGroupScreen(),
+                          ),
+                        );
+                      },
+                      icon: Icon(Icons.add, color: primaryColor),
+                      label: Text(
+                        "Create a Group",
+                        style: TextStyle(color: primaryColor),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: primaryTwo,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 32, vertical: 16),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            return ListView.builder(
+              itemCount: displayChats.length,
+              itemBuilder: (context, index) {
+                final chat = displayChats[index];
+                final hasUnreadMessages = chat["unreadCount"] > 0;
+
+                return ListTile(
+                  leading: _getAvatar(
+                      chat["name"], chat["profilePic"], chat["isGroup"]),
+                  title: Text(
+                    chat["name"],
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  subtitle: chat["lastMessage"],
+                  trailing: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        chat["time"],
+                        style: const TextStyle(
+                          color: Colors.grey,
+                          fontSize: 12,
+                        ),
+                      ),
+                      if (hasUnreadMessages)
+                        Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: primaryColor,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Text(
+                            chat["unreadCount"].toString(),
+                            style: const TextStyle(
+                              color: white,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => MessageChatScreen(
+                          name: chat["name"],
+                          isAdminOnlyMode: chat["restrict_messages_to_admins"],
+                          isCurrentUserAdmin: chat["amAdmin"],
+                          description:
+                              chat["description"] ?? 'Our Saving Group',
+                          profilePic: chat["profilePic"],
+                          groupId: chat["isGroup"] ? chat["id"] : null,
+                          onMessageSent: onReloadChats,
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            );
+          },
+        );
+      },
+    );
   }
 }

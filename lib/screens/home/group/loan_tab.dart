@@ -2,59 +2,53 @@ import 'package:flutter/material.dart';
 import 'package:cyanase/theme/theme.dart';
 
 class LoansTab extends StatelessWidget {
-  // Sample loan data (replace with API data)
-  final List<Map<String, dynamic>> loans = [
-    {
-      'member': 'John Doe',
-      'loanAmount': 5000000,
-      'daysLeft': 45,
-      'repaymentAmount': 5500000,
-      'progress': 0.4, // 40% repaid
-    },
-    {
-      'member': 'Jane Smith',
-      'loanAmount': 3000000,
-      'daysLeft': 30,
-      'repaymentAmount': 3300000,
-      'progress': 0.6, // 60% repaid
-    },
-  ];
+  final int groupId;
+  final Map<String, dynamic> loansData;
+
+  const LoansTab({Key? key, required this.groupId, required this.loansData})
+      : super(key: key);
 
   @override
   Widget build(BuildContext context) {
+    final summary = loansData['summary'] ?? {};
+    final loans = List<Map<String, dynamic>>.from(loansData['loans'] ?? []);
+
     return SingleChildScrollView(
       child: Container(
-        color: Colors.white, // Changed from gradient to solid white
+        color: Colors.white,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SizedBox(height: 24),
+            const SizedBox(height: 24),
             Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
               child: FintechSummaryCard(
                 title: 'Ongoing Loans',
                 subtitle: 'Total loans currently being repaid',
-                amount: 'UGX 5,000',
-                usdEquivalent: '\$130.50',
+                amount: summary['ongoing_loans']?['amount'] ?? 'UGX 0',
+                usdEquivalent:
+                    summary['ongoing_loans']?['usd_equivalent'] ?? '\$0.00',
                 icon: Icons.money_off,
-                color: primaryTwo, // Changed from gradient to solid color
+                color: primaryTwo,
               ),
             ),
-            SizedBox(height: 16),
+            const SizedBox(height: 16),
             Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
               child: FintechSummaryCard(
-                title: ' Loans Before Interest',
+                title: 'Loans Before Interest',
                 subtitle: 'Sum of all outstanding loans before',
-                amount: 'UGX 8,000,000',
-                usdEquivalent: '\$2,000',
+                amount: summary['loans_before_interest']?['amount'] ?? 'UGX 0',
+                usdEquivalent: summary['loans_before_interest']
+                        ?['usd_equivalent'] ??
+                    '\$0.00',
                 icon: Icons.account_balance,
-                color: primaryColor, // Changed from gradient to solid color
+                color: primaryColor,
               ),
             ),
-            SizedBox(height: 24),
+            const SizedBox(height: 24),
             Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Text(
                 'Loan Details',
                 style: TextStyle(
@@ -65,9 +59,20 @@ class LoansTab extends StatelessWidget {
                 ),
               ),
             ),
-            SizedBox(height: 12),
-            ...loans.map((loan) => FintechLoanCard(loan: loan)).toList(),
-            SizedBox(height: 24),
+            const SizedBox(height: 12),
+            loans.isEmpty
+                ? const Center(
+                    child: Text(
+                      'No loans available',
+                      style: TextStyle(color: Colors.grey, fontSize: 16),
+                    ),
+                  )
+                : Column(
+                    children: loans
+                        .map((loan) => FintechLoanCard(loan: loan))
+                        .toList(),
+                  ),
+            const SizedBox(height: 24),
           ],
         ),
       ),
@@ -81,7 +86,7 @@ class FintechSummaryCard extends StatelessWidget {
   final String amount;
   final String? usdEquivalent;
   final IconData icon;
-  final Color color; // Changed from gradientColors to single color
+  final Color color;
 
   const FintechSummaryCard({
     required this.title,
@@ -95,7 +100,7 @@ class FintechSummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AnimatedContainer(
-      duration: Duration(milliseconds: 300),
+      duration: const Duration(milliseconds: 300),
       curve: Curves.easeInOut,
       child: Card(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
@@ -103,23 +108,23 @@ class FintechSummaryCard extends StatelessWidget {
         shadowColor: Colors.black.withOpacity(0.15),
         child: Container(
           decoration: BoxDecoration(
-            color: color, // Changed from gradient to solid color
+            color: color,
             borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
                 color: Colors.white.withOpacity(0.5),
-                offset: Offset(-5, -5),
+                offset: const Offset(-5, -5),
                 blurRadius: 10,
               ),
               BoxShadow(
                 color: primaryTwo.withOpacity(0.2),
-                offset: Offset(5, 5),
+                offset: const Offset(5, 5),
                 blurRadius: 10,
               ),
             ],
           ),
           child: Padding(
-            padding: EdgeInsets.all(20),
+            padding: const EdgeInsets.all(20),
             child: Row(
               children: [
                 CircleAvatar(
@@ -127,21 +132,21 @@ class FintechSummaryCard extends StatelessWidget {
                   backgroundColor: white.withOpacity(0.3),
                   child: Icon(icon, color: white, size: 32),
                 ),
-                SizedBox(width: 16),
+                const SizedBox(width: 16),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         title,
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w700,
                           color: white,
                           letterSpacing: 0.5,
                         ),
                       ),
-                      SizedBox(height: 6),
+                      const SizedBox(height: 6),
                       Text(
                         subtitle,
                         style: TextStyle(
@@ -150,10 +155,10 @@ class FintechSummaryCard extends StatelessWidget {
                           letterSpacing: 0.2,
                         ),
                       ),
-                      SizedBox(height: 10),
+                      const SizedBox(height: 10),
                       Text(
                         amount,
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
                           color: white,
@@ -190,7 +195,7 @@ class FintechLoanCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Card(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         elevation: 6,
@@ -202,12 +207,12 @@ class FintechLoanCard extends StatelessWidget {
             boxShadow: [
               BoxShadow(
                 color: Colors.white.withOpacity(0.5),
-                offset: Offset(-3, -3),
+                offset: const Offset(-3, -3),
                 blurRadius: 8,
               ),
               BoxShadow(
                 color: primaryTwo.withOpacity(0.15),
-                offset: Offset(3, 3),
+                offset: const Offset(3, 3),
                 blurRadius: 8,
               ),
             ],
@@ -219,7 +224,7 @@ class FintechLoanCard extends StatelessWidget {
             ),
             title: Text(
               loan['member'],
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
                 color: primaryTwo,
@@ -236,7 +241,7 @@ class FintechLoanCard extends StatelessWidget {
             ),
             children: [
               Padding(
-                padding: EdgeInsets.all(16),
+                padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -253,7 +258,7 @@ class FintechLoanCard extends StatelessWidget {
                         ),
                         Text(
                           '${loan['daysLeft']} days',
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
                             color: primaryTwo,
@@ -262,7 +267,7 @@ class FintechLoanCard extends StatelessWidget {
                         ),
                       ],
                     ),
-                    SizedBox(height: 12),
+                    const SizedBox(height: 12),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -276,7 +281,7 @@ class FintechLoanCard extends StatelessWidget {
                         ),
                         Text(
                           'UGX ${loan['repaymentAmount'].toStringAsFixed(0)}',
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
                             color: primaryTwo,
@@ -285,7 +290,7 @@ class FintechLoanCard extends StatelessWidget {
                         ),
                       ],
                     ),
-                    SizedBox(height: 16),
+                    const SizedBox(height: 16),
                     Text(
                       'Repayment Progress',
                       style: TextStyle(
@@ -294,7 +299,7 @@ class FintechLoanCard extends StatelessWidget {
                         letterSpacing: 0.2,
                       ),
                     ),
-                    SizedBox(height: 8),
+                    const SizedBox(height: 8),
                     LinearProgressIndicator(
                       value: loan['progress'],
                       backgroundColor: Colors.grey[200],
@@ -302,10 +307,10 @@ class FintechLoanCard extends StatelessWidget {
                       minHeight: 8,
                       borderRadius: BorderRadius.circular(4),
                     ),
-                    SizedBox(height: 8),
+                    const SizedBox(height: 8),
                     Text(
                       '${(loan['progress'] * 100).toStringAsFixed(0)}% Repaid',
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 12,
                         color: primaryTwo,
                         fontWeight: FontWeight.w600,

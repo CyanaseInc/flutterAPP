@@ -297,6 +297,150 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, dynamic>> getGroupStat({
+    required String token,
+    required int groupId,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse(ApiEndpoints.apiUrlGetGroupStat),
+        headers: {
+          'Authorization': 'Token $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'groupid': groupId,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final responseData = jsonDecode(response.body);
+
+        final data = responseData as Map<String, dynamic>;
+
+        return data; // Return the 'data' portion of the response
+      } else {
+        throw Exception(
+            'Failed to fetch group details: ${response.statusCode} - ${response.body}');
+      }
+    } on http.ClientException catch (e) {
+      throw Exception('Network error: $e');
+    } on FormatException catch (e) {
+      throw Exception('Invalid JSON format: $e');
+    } catch (e) {
+      throw Exception('Unexpected error: $e');
+    }
+  }
+
+  static Future<Map<String, dynamic>> getGroupFinance({
+    required String token,
+    required int groupId,
+  }) async {
+    final response = await http.get(
+      Uri.parse(''),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to load group finance data: ${response.body}');
+    }
+  }
+
+  static Future<Map<String, dynamic>> addInvestment({
+    required String token,
+    required int groupId,
+    required Map<String, dynamic> data,
+  }) async {
+    final response = await http.post(
+      Uri.parse(''),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode(data),
+    );
+
+    if (response.statusCode == 201) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to add investment: ${response.body}');
+    }
+  }
+
+  static Future<Map<String, dynamic>> addInvestmentInterest({
+    required String token,
+    required int investmentId,
+    required Map<String, dynamic> data,
+  }) async {
+    final response = await http.post(
+      Uri.parse(''),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode(data),
+    );
+
+    if (response.statusCode == 201) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to add interest: ${response.body}');
+    }
+  }
+
+  static Future<Map<String, dynamic>> cashOutInvestment({
+    required String token,
+    required int investmentId,
+    required double amount,
+  }) async {
+    final response = await http.post(
+      Uri.parse(''),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({'amount': amount}),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Failed to cash out: ${response.body}');
+    }
+  }
+
+  static Future<Map<String, dynamic>> payoutInterest({
+    required String token,
+    required int groupId,
+    required double amount,
+    required String password,
+  }) async {
+    final response = await http.post(
+      Uri.parse(ApiEndpoints.payOutUrl),
+      headers: {
+        'Authorization': 'Token $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'groupid': groupId,
+        'amount': amount,
+        'password': password,
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body);
+    } else {
+      print('response.body ${response.body}');
+      throw Exception('Failed to payout interest: ${response.body}');
+    }
+  }
+
   static Future<Map<String, dynamic>> getGroupDetailsNonUser({
     required String token,
     required int groupId,
@@ -810,7 +954,7 @@ class ApiService {
           'data': data['setting'], // Already JSON-encoded in _updateSettings
         },
       );
-      print('response, $response');
+
       if (response.statusCode >= 200 && response.statusCode < 300) {
         final responseData = jsonDecode(response.body) as Map<String, dynamic>;
         return responseData;
@@ -865,7 +1009,7 @@ class ApiService {
         },
         body: jsonEncode({'role': role, 'groupId': groupId, 'user_id': userId}),
       );
-      print('Update role response: ${response.body}');
+
       if (response.statusCode >= 200 && response.statusCode < 300) {
         return jsonDecode(response.body) as Map<String, dynamic>;
       } else {
@@ -892,7 +1036,7 @@ class ApiService {
           'Content-Type': 'application/json',
         },
       );
-      print('Remove member response: ${response.body}');
+
       if (response.statusCode >= 200 && response.statusCode < 300) {
         return jsonDecode(response.body) as Map<String, dynamic>;
       } else {
