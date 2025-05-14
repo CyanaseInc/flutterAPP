@@ -55,7 +55,6 @@ class _GoalsTabState extends State<GoalsTab> {
           goals = fetchedGoals;
           isLoading = false;
         });
-        print('Fetched goals: $goals');
       } else {
         setState(() {
           isLoading = false;

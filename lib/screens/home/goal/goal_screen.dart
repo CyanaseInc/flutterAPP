@@ -281,7 +281,8 @@ class GoalCard extends StatelessWidget {
           selectedOption: "default_option", // Provide default value
           selectedFundManager: "default_manager", // Provide default value
           selectedOptionId: 0, // Provide default value
-          detailText: "Default detail text", // Provide default value
+          detailText: "Default detail text",
+          groupId: 0, // Provide default value
         ),
       ),
     );

@@ -44,15 +44,15 @@ class _DepositState extends State<Deposit> {
   // Fetch investment data from the API
   Future<void> _fetchInvestmentData() async {
     try {
-      // final dbHelper = DatabaseHelper();
-      // final db = await dbHelper.database;
-      // final userProfile = await db.query('profile', limit: 1);
-      // final token = userProfile.first['token'] as String;
+      final dbHelper = DatabaseHelper();
+      final db = await dbHelper.database;
+      final userProfile = await db.query('profile', limit: 1);
+      final token = userProfile.first['token'] as String;
 
-      await WebSharedStorage.init();
-      var existingProfile = WebSharedStorage();
+      // // await WebSharedStorage.init();
+      // // var existingProfile = WebSharedStorage();
 
-      final token = existingProfile.getCommon('token');
+      // final token = existingProfile.getCommon('token');
 
       // Fetch investment data from the API
       final response = await ApiService.getClasses(token);
@@ -170,7 +170,8 @@ class _DepositState extends State<Deposit> {
                           selectedOptionId:
                               selectedOption?['id'], // Pass the option ID
                           selectedFundManager: selectedFundManager,
-                          depositCategory: 'personal',
+                          depositCategory: 'personal_invest',
+                          groupId: 0, // Replace with a valid integer value
                         ), // for ID),
                       ],
                     ),

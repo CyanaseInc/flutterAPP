@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cyanase/theme/theme.dart';
+import 'package:intl/intl.dart';
 
 class LoansTab extends StatelessWidget {
   final int groupId;
@@ -69,7 +70,12 @@ class LoansTab extends StatelessWidget {
                   )
                 : Column(
                     children: loans
-                        .map((loan) => FintechLoanCard(loan: loan))
+                        .asMap()
+                        .entries
+                        .map((entry) => FintechLoanCard(
+                              loan: entry.value,
+                              index: entry.key,
+                            ))
                         .toList(),
                   ),
             const SizedBox(height: 24),
@@ -189,11 +195,35 @@ class FintechSummaryCard extends StatelessWidget {
 
 class FintechLoanCard extends StatelessWidget {
   final Map<String, dynamic> loan;
+  final int index;
 
-  const FintechLoanCard({required this.loan});
+  const FintechLoanCard({required this.loan, required this.index});
 
   @override
   Widget build(BuildContext context) {
+    print('loan, $loan');
+    final loanAmount = (loan['loanAmount'] as num?)?.toDouble() ?? 0.0;
+    final phoneNumber = loan['phone_number'];
+    final repaymentAmount =
+        (loan['repaymentAmount'] as num?)?.toDouble() ?? 0.0;
+    final interestRate = loanAmount > 0
+        ? ((repaymentAmount - loanAmount) / loanAmount) * 100
+        : 0.0;
+    final daysLeft = (loan['daysLeft'] as num?)?.toInt() ?? 0;
+    final progress = (loan['progress'] as num?)?.toDouble() ?? 0.0;
+    // Fallbacks for missing fields
+    final createdAt = loan['created_at'] != null
+        ? DateTime.tryParse(loan['created_at'] as String) ?? DateTime.now()
+        : DateTime.now().subtract(Duration(days: daysLeft + 60)); // Estimate
+    final repaymentPeriod = (loan['repayment_period'] as num?)?.toInt() ?? 60;
+    final dueDate = createdAt.add(Duration(days: repaymentPeriod));
+    final amountPaid = loan['amount_paid'] != null
+        ? (loan['amount_paid'] as num?)?.toDouble() ?? 0.0
+        : progress * repaymentAmount;
+    final outstandingBalance = loan['outstanding_balance'] != null
+        ? (loan['outstanding_balance'] as num?)?.toDouble() ?? 0.0
+        : repaymentAmount - amountPaid;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Card(
@@ -223,7 +253,7 @@ class FintechLoanCard extends StatelessWidget {
               child: Icon(Icons.person, color: primaryTwo, size: 24),
             ),
             title: Text(
-              loan['member'],
+              loan['member'] ?? 'Unknown Member',
               style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
@@ -232,7 +262,7 @@ class FintechLoanCard extends StatelessWidget {
               ),
             ),
             subtitle: Text(
-              'Loan: UGX ${loan['loanAmount'].toStringAsFixed(0)}',
+              '${phoneNumber}',
               style: TextStyle(
                 fontSize: 12,
                 color: Colors.grey[600],
@@ -245,50 +275,48 @@ class FintechLoanCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Days Left',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[600],
-                            letterSpacing: 0.2,
-                          ),
-                        ),
-                        Text(
-                          '${loan['daysLeft']} days',
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: primaryTwo,
-                            letterSpacing: 0.2,
-                          ),
-                        ),
-                      ],
+                    _buildDetailRow(
+                      'Loan Amount',
+                      NumberFormat.currency(symbol: 'UGX ', decimalDigits: 0)
+                          .format(loanAmount),
                     ),
                     const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Repayment Amount',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[600],
-                            letterSpacing: 0.2,
-                          ),
-                        ),
-                        Text(
-                          'UGX ${loan['repaymentAmount'].toStringAsFixed(0)}',
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: primaryTwo,
-                            letterSpacing: 0.2,
-                          ),
-                        ),
-                      ],
+                    _buildDetailRow(
+                      'Repayment Amount',
+                      NumberFormat.currency(symbol: 'UGX ', decimalDigits: 0)
+                          .format(repaymentAmount),
+                    ),
+                    const SizedBox(height: 12),
+                    _buildDetailRow(
+                      'Interest Rate',
+                      '${interestRate.toStringAsFixed(2)}%',
+                    ),
+                    const SizedBox(height: 12),
+                    _buildDetailRow(
+                      'Issue Date',
+                      DateFormat('MMM dd, yyyy').format(createdAt),
+                    ),
+                    const SizedBox(height: 12),
+                    _buildDetailRow(
+                      'Due Date',
+                      DateFormat('MMM dd, yyyy').format(dueDate),
+                    ),
+                    const SizedBox(height: 12),
+                    _buildDetailRow(
+                      'Days Left',
+                      '$daysLeft days',
+                    ),
+                    const SizedBox(height: 12),
+                    _buildDetailRow(
+                      'Amount Paid',
+                      NumberFormat.currency(symbol: 'UGX ', decimalDigits: 0)
+                          .format(amountPaid),
+                    ),
+                    const SizedBox(height: 12),
+                    _buildDetailRow(
+                      'Outstanding Balance',
+                      NumberFormat.currency(symbol: 'UGX ', decimalDigits: 0)
+                          .format(outstandingBalance),
                     ),
                     const SizedBox(height: 16),
                     Text(
@@ -301,7 +329,7 @@ class FintechLoanCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     LinearProgressIndicator(
-                      value: loan['progress'],
+                      value: progress,
                       backgroundColor: Colors.grey[200],
                       color: primaryTwo,
                       minHeight: 8,
@@ -309,7 +337,7 @@ class FintechLoanCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      '${(loan['progress'] * 100).toStringAsFixed(0)}% Repaid',
+                      '${(progress * 100).toStringAsFixed(0)}% Repaid',
                       style: const TextStyle(
                         fontSize: 12,
                         color: primaryTwo,
@@ -323,6 +351,31 @@ class FintechLoanCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 14,
+            color: Colors.grey[600],
+            letterSpacing: 0.2,
+          ),
+        ),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: primaryTwo,
+            letterSpacing: 0.2,
+          ),
+        ),
+      ],
     );
   }
 }

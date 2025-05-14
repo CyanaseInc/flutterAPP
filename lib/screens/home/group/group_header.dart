@@ -19,6 +19,7 @@ class GroupHeader extends StatefulWidget {
   final String description;
   final String totalBalance;
   final String myContributions;
+  final Map<String, dynamic> initialLoanSettings;
 
   const GroupHeader({
     Key? key,
@@ -28,6 +29,7 @@ class GroupHeader extends StatefulWidget {
     required this.groupId,
     required this.totalBalance,
     required this.myContributions,
+    required this.initialLoanSettings,
   }) : super(key: key);
 
   @override
@@ -38,11 +40,20 @@ class _GroupHeaderState extends State<GroupHeader> {
   File? _profilePicFile;
   bool _isLoading = false;
   String? _currentProfilePicUrl;
+  bool _allowLoan = false;
 
   @override
   void initState() {
     super.initState();
     _currentProfilePicUrl = widget.profilePic;
+
+    // Access allow_loans (note the plural)
+    try {
+      _allowLoan = widget.initialLoanSettings['allow_loans'] ?? false;
+    } catch (e) {
+      debugPrint('Error accessing initialLoanSettings: $e');
+      _allowLoan = false;
+    }
   }
 
   void _updateProfilePic(File image) {
@@ -215,10 +226,29 @@ class _GroupHeaderState extends State<GroupHeader> {
           );
         } else if (value == 'Add Interest') {
           // Handle add interest action here
-          // You might want to add similar modal dialog or navigation
         }
       }
     });
+  }
+
+  void _showLoansNotAllowedDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Loans Not Allowed'),
+          content: const Text('Loans are not allowed in this group.'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text('OK'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -363,7 +393,7 @@ class _GroupHeaderState extends State<GroupHeader> {
                     color: primaryTwo,
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(height: 16),
               ],
             ),
           ),
@@ -385,7 +415,21 @@ class _GroupHeaderState extends State<GroupHeader> {
                 profilePic: widget.profilePic,
                 groupId: widget.groupId,
               ),
-              LoanButton(),
+              _allowLoan
+                  ? LoanButton(
+                      groupId: widget.groupId,
+                      loansettings: widget.initialLoanSettings)
+                  : Opacity(
+                      opacity: 0.5,
+                      child: GestureDetector(
+                        onTap: _showLoansNotAllowedDialog,
+                        child: AbsorbPointer(
+                          child: LoanButton(
+                              groupId: widget.groupId,
+                              loansettings: widget.initialLoanSettings),
+                        ),
+                      ),
+                    ),
               WithdrawButton(),
             ],
           ),

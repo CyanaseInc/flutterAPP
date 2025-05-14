@@ -194,7 +194,7 @@ class ApiService {
       Map<String, dynamic> credentials) async {
     try {
       final response = await post(ApiEndpoints.login, credentials);
-      return response;
+      return jsonDecode(response.body) as Map<String, dynamic>;
     } catch (e) {
       throw Exception('Login failed: $e');
     }
@@ -357,9 +357,9 @@ class ApiService {
     required Map<String, dynamic> data,
   }) async {
     final response = await http.post(
-      Uri.parse(''),
+      Uri.parse(ApiEndpoints.addInvestmentUrl),
       headers: {
-        'Authorization': 'Bearer $token',
+        'Authorization': 'Token $token',
         'Content-Type': 'application/json',
       },
       body: jsonEncode(data),
@@ -601,6 +601,28 @@ class ApiService {
     try {
       final response = await http.post(
         Uri.parse(ApiEndpoints.paySubscription),
+        headers: {
+          'Authorization': 'Token $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(data), // Convert requestData to JSON
+      );
+      // Check the response status
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body); // Convert response to Map
+      } else {
+        throw Exception('Failed to subscribe: ${response.reasonPhrase}');
+      }
+    } catch (e) {
+      throw Exception('Error with subscription: $e');
+    }
+  }
+
+  static Future<Map<String, dynamic>> groupSbscription(
+      String token, data) async {
+    try {
+      final response = await http.post(
+        Uri.parse(ApiEndpoints.payGroupSubscription),
         headers: {
           'Authorization': 'Token $token',
           'Content-Type': 'application/json',
@@ -1081,7 +1103,7 @@ class ApiService {
 
       // Add headers
       request.headers['Authorization'] = 'Token $token';
-      print('data: $data');
+
       // Add fields
       request.fields['groupid'] = data['groupid'];
       request.fields['participants'] = jsonEncode(data);
@@ -1299,6 +1321,124 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, dynamic>> SubscriptionSetting(
+      String token, Map<String, dynamic> data) async {
+    final response = await http.post(
+      Uri.parse(
+          ApiEndpoints.SubscriptionSetting), // Replace with your API endpoint
+      headers: {
+        'Authorization': 'Token $token',
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode(data), // Convert requestData to JSON
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to submit deposit: ${response.statusCode}');
+    } else {
+      return jsonDecode(response.body);
+    }
+  }
+
+  static Future<Map<String, dynamic>> PaySubscriptions(
+      String token, Map<String, dynamic> data) async {
+    final response = await http.post(
+      Uri.parse(ApiEndpoints.paySubscription), // Replace with your API endpoint
+      headers: {
+        'Authorization': 'Token $token',
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode(data), // Convert requestData to JSON
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to submit deposit: ${response.statusCode}');
+    } else {
+      return jsonDecode(response.body);
+    }
+  }
+
+  static Future<Map<String, dynamic>> submitLoanApplication(
+      String token, Map<String, dynamic> data) async {
+    final response = await http.post(
+      Uri.parse(ApiEndpoints.loanApplication), // Replace with your API endpoint
+      headers: {
+        'Authorization': 'Token $token',
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode(data), // Convert requestData to JSON
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to submit deposit: ${response.statusCode}');
+    } else {
+      return jsonDecode(response.body);
+    }
+  }
+
+  static Future<Map<String, dynamic>> processLoanRequest({
+    required String token,
+    required int loanId,
+    required int groupId,
+    required bool approved,
+  }) async {
+    // Replace with actual API call
+    final response = await http.post(
+      Uri.parse(ApiEndpoints.processLoanRequest),
+      headers: {
+        'Authorization': 'Token $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode(
+          {'group_id': groupId, 'loan_id': loanId, 'approved': approved}),
+    );
+
+    final responseData = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      return {
+        'success': true,
+        'message': responseData['message'] ?? 'Picture deleted successfully',
+      };
+    } else {
+      throw Exception(
+          responseData['message'] ?? 'Failed to delete profile picture');
+    }
+  }
+
+  static Future<Map<String, dynamic>> recordLoanPayment({
+    required String token,
+    required int loanId,
+    required int groupId,
+    required double amount,
+  }) async {
+    // Replace with actual API call
+    final response = await http.post(
+      Uri.parse(ApiEndpoints.payLoan),
+      headers: {
+        'Authorization': 'Token $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode(
+          {'group_id': groupId, 'loan_id': loanId, 'amount': amount}),
+    );
+
+    final responseData = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      return {
+        'success': true,
+        'message': responseData['message'] ?? 'Picture deleted successfully',
+      };
+    } else {
+      throw Exception(
+          responseData['message'] ?? 'Failed to delete profile picture');
+    }
+  }
+
   static Future<Map<String, dynamic>> getTransaction(
       String token, Map<String, dynamic> data) async {
     final response = await http.post(
@@ -1322,6 +1462,24 @@ class ApiService {
       String token, Map<String, dynamic> requestData) async {
     final response = await http.post(
       Uri.parse(ApiEndpoints.apiUrlDeposit), // Replace with your API endpoint
+      headers: {
+        'Authorization': 'Token $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode(requestData), // Convert requestData to JSON
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to submit deposit: ${response.statusCode}');
+    } else {
+      return jsonDecode(response.body);
+    }
+  }
+
+  static Future<Map<String, dynamic>> groupDeposit(
+      String token, Map<String, dynamic> requestData) async {
+    final response = await http.post(
+      Uri.parse(ApiEndpoints.groupDeposit), // Replace with your API endpoint
       headers: {
         'Authorization': 'Token $token',
         'Content-Type': 'application/json',

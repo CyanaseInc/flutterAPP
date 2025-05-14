@@ -22,8 +22,18 @@ class _InvestmentsTabState extends State<InvestmentsTab> {
   @override
   void initState() {
     super.initState();
-    investments = List<Map<String, dynamic>>.from(
+    // Get the initial investments and sort them by date (newest first)
+    final initialInvestments = List<Map<String, dynamic>>.from(
         widget.investmentsData['investments'] ?? []);
+
+    // Sort by date in descending order (newest first)
+    initialInvestments.sort((a, b) {
+      final dateA = DateTime.parse(a['date'] ?? '1970-01-01');
+      final dateB = DateTime.parse(b['date'] ?? '1970-01-01');
+      return dateB.compareTo(dateA);
+    });
+
+    investments = initialInvestments;
   }
 
   Future<void> _addInvestment(
@@ -47,6 +57,7 @@ class _InvestmentsTabState extends State<InvestmentsTab> {
           'amountin': 0,
           'rate': (interest / amount * 100).toInt(),
           'status': true,
+          'groupid': widget.groupId,
           'created': DateTime.now()
               .toIso8601String()
               .split('T')[0]
@@ -56,8 +67,9 @@ class _InvestmentsTabState extends State<InvestmentsTab> {
 
       if (response['success'] == true) {
         setState(() {
-          investments.add({
-            'id': response['data']['id'],
+          // Insert at the beginning of the list instead of adding to the end
+          investments.insert(0, {
+            'id': response['investment_id'],
             'name': name,
             'amount': 'UGX ${amount.toInt()}',
             'interest': 'UGX ${interest.toInt()}',
@@ -325,6 +337,77 @@ class _InvestmentsTabState extends State<InvestmentsTab> {
               color: primaryTwo,
             ),
             const SizedBox(height: 16),
+            // New Total Member Subscription Card
+            Card(
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20)),
+              elevation: 6,
+              shadowColor: Colors.black.withOpacity(0.2),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: white,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: primaryTwo.withOpacity(0.2)),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 24,
+                        backgroundColor: primaryTwo.withOpacity(0.1),
+                        child: Icon(Icons.people, color: primaryTwo, size: 28),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Total Member Subscription',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: primaryTwo,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Total subscriptions by all members',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              summary['total_member_subscription']?['amount'] ??
+                                  'UGX 0',
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: primaryTwo,
+                              ),
+                            ),
+                            Text(
+                              summary['total_member_subscription']
+                                      ?['usd_equivalent'] ??
+                                  '\$0.00',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey[600],
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
             ModernSummaryCard(
               title: 'Interest Earned',
               subtitle: 'Your earned interest',
@@ -515,91 +598,138 @@ class _InvestmentsTabState extends State<InvestmentsTab> {
     String? amount;
     String? interest;
 
+    // Removed unused and incorrectly declared variable
+    bool isLoading = false; // Add this loading state variable
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Add New Investment'),
-        content: Form(
-          key: _formKey,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  decoration: const InputDecoration(
-                    labelText: 'Investment Name',
-                    border: OutlineInputBorder(),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter an investment name';
-                    }
-                    return null;
-                  },
-                  onSaved: (value) => name = value,
+      barrierDismissible: false, // Prevent dismissing while loading
+      builder: (context) => StatefulBuilder(
+        // Use StatefulBuilder to update the dialog state
+        builder: (context, setState) {
+          return AlertDialog(
+            title: const Text('Add New Investment',
+                style: TextStyle(fontSize: 18)),
+            content: Form(
+              key: _formKey,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextFormField(
+                      decoration: const InputDecoration(
+                        labelText: 'Investment Name',
+                        enabledBorder: UnderlineInputBorder(
+                          borderSide: BorderSide(color: Colors.grey),
+                        ),
+                        focusedBorder: UnderlineInputBorder(
+                          borderSide: BorderSide(color: primaryTwo),
+                        ),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter an investment name';
+                        }
+                        return null;
+                      },
+                      onSaved: (value) => name = value,
+                      enabled: !isLoading, // Disable when loading
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      decoration: const InputDecoration(
+                        labelText: 'Amount (UGX)',
+                        enabledBorder: UnderlineInputBorder(
+                          borderSide: BorderSide(color: Colors.grey),
+                        ),
+                        focusedBorder: UnderlineInputBorder(
+                          borderSide: BorderSide(color: primaryTwo),
+                        ),
+                      ),
+                      keyboardType: TextInputType.number,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter an amount';
+                        }
+                        if (double.tryParse(value) == null) {
+                          return 'Please enter a valid number';
+                        }
+                        return null;
+                      },
+                      onSaved: (value) => amount = value,
+                      enabled: !isLoading, // Disable when loading
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      decoration: const InputDecoration(
+                        labelText: 'Interest (%)',
+                        enabledBorder: UnderlineInputBorder(
+                          borderSide: BorderSide(color: Colors.grey),
+                        ),
+                        focusedBorder: UnderlineInputBorder(
+                          borderSide: BorderSide(color: primaryTwo),
+                        ),
+                      ),
+                      keyboardType: TextInputType.number,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter an interest amount';
+                        }
+                        if (double.tryParse(value) == null) {
+                          return 'Please enter a valid number';
+                        }
+                        return null;
+                      },
+                      onSaved: (value) => interest = value,
+                      enabled: !isLoading, // Disable when loading
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  decoration: const InputDecoration(
-                    labelText: 'Amount (UGX)',
-                    border: OutlineInputBorder(),
-                  ),
-                  keyboardType: TextInputType.number,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter an amount';
-                    }
-                    if (double.tryParse(value) == null) {
-                      return 'Please enter a valid number';
-                    }
-                    return null;
-                  },
-                  onSaved: (value) => amount = value,
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  decoration: const InputDecoration(
-                    labelText: 'Interest (UGX)',
-                    border: OutlineInputBorder(),
-                  ),
-                  keyboardType: TextInputType.number,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter an interest amount';
-                    }
-                    if (double.tryParse(value) == null) {
-                      return 'Please enter a valid number';
-                    }
-                    return null;
-                  },
-                  onSaved: (value) => interest = value,
-                ),
-              ],
+              ),
             ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (_formKey.currentState!.validate()) {
-                _formKey.currentState!.save();
-                _addInvestment(
-                  name!,
-                  double.parse(amount!),
-                  double.parse(interest!),
-                  context,
-                );
-                Navigator.pop(context);
-              }
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: primaryTwo),
-            child: Text('Add', style: TextStyle(color: white)),
-          ),
-        ],
+            actions: [
+              TextButton(
+                onPressed: isLoading ? null : () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: isLoading
+                    ? null
+                    : () async {
+                        if (_formKey.currentState!.validate()) {
+                          _formKey.currentState!.save();
+                          setState(() => isLoading = true); // Show loading
+
+                          try {
+                            await _addInvestment(
+                              name!,
+                              double.parse(amount!),
+                              double.parse(interest!),
+                              context,
+                            );
+                          } catch (e) {
+                            setState(() =>
+                                isLoading = false); // Hide loading on error
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                  content:
+                                      Text('Failed to add investment: $e')),
+                            );
+                          }
+                        }
+                      },
+                style: ElevatedButton.styleFrom(backgroundColor: primaryTwo),
+                child: isLoading
+                    ? SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: Loader(), // Show loader when loading
+                      )
+                    : Text('Add', style: TextStyle(color: white)),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -952,7 +1082,7 @@ class ModernInvestmentCard extends StatelessWidget {
                     labelText: 'Cash Out Amount (UGX)',
                     border: UnderlineInputBorder(),
                     focusedBorder: UnderlineInputBorder(
-                      borderSide: BorderSide(color: Colors.blue, width: 2),
+                      borderSide: BorderSide(color: primaryTwo, width: 2),
                     ),
                   ),
                   keyboardType: TextInputType.number,

@@ -85,19 +85,24 @@ class _DepositScreenState extends State<DepositScreen> {
 
             // PageView for different steps
             SizedBox(
-              height: 300, // Adjust height as needed
+              height: 500,
               child: PageView(
                 controller: _pageController,
                 physics: const NeverScrollableScrollPhysics(),
                 children: [
-                  DepositHelper(
-                    depositCategory: 'group_general',
-                    detailText:
-                        'Contribute to the saving group by depositing here',
+                  Padding(
+                    padding: const EdgeInsets.all(
+                        16.0), // Adjust the padding as needed
+                    child: DepositHelper(
+                      groupId: widget.groupId,
+                      depositCategory: 'group_deposit',
+                      detailText:
+                          'Contribute to the saving group by depositing here',
+                    ),
                   ),
                 ],
               ),
-            ),
+            )
           ],
         ),
       ),

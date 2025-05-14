@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:cyanase/helpers/loader.dart';
+import 'package:cyanase/helpers/pay_subscriptions.dart';
 import 'package:cyanase/screens/home/group/functions/sort_message_ui_function.dart';
 import 'package:flutter/material.dart';
 import 'package:cyanase/theme/theme.dart';
@@ -21,6 +22,9 @@ class MessageChatScreen extends StatefulWidget {
   final VoidCallback? onMessageSent;
   final bool isAdminOnlyMode;
   final bool isCurrentUserAdmin;
+  final bool allowSubscription;
+  final bool hasUserPaid;
+  final String subscriptionAmount;
   const MessageChatScreen({
     super.key,
     required this.name,
@@ -31,6 +35,9 @@ class MessageChatScreen extends StatefulWidget {
     required this.description,
     required this.isAdminOnlyMode, // Default to false (normal mode)
     required this.isCurrentUserAdmin,
+    required this.allowSubscription,
+    required this.hasUserPaid,
+    required this.subscriptionAmount,
   });
 
   @override
@@ -71,6 +78,11 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
     _loadGroupMembers();
     _loadMessages();
     _scrollController.addListener(_onScroll);
+    if (widget.allowSubscription && !widget.hasUserPaid) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _showSubscriptionReminder(context);
+      });
+    }
   }
 
   @override
@@ -232,6 +244,120 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
         'sender_id': message['sender_id'],
       };
     });
+  }
+
+  void _showSubscriptionReminder(BuildContext context) {
+    bool showPaymentOptions = false;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setState) {
+            return AnimatedOpacity(
+              opacity: 1.0,
+              duration: const Duration(milliseconds: 300),
+              child: Dialog(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 300),
+                  transitionBuilder:
+                      (Widget child, Animation<double> animation) {
+                    return SlideTransition(
+                      position: Tween<Offset>(
+                        begin: const Offset(1.0, 0.0),
+                        end: Offset.zero,
+                      ).animate(animation),
+                      child: child,
+                    );
+                  },
+                  child: showPaymentOptions
+                      ? PayHelper(
+                          amount: widget.subscriptionAmount,
+                          groupId: widget.groupId ?? 0,
+                          paymentType: 'group_subscription',
+                          userId: currentUserId,
+                          onBack: Navigator.of(context).pop,
+                          onPaymentSuccess: () {
+                            setState(() {});
+                            Navigator.of(context).pop();
+
+                            widget.onMessageSent?.call();
+                          },
+                        )
+                      : Container(
+                          key: const ValueKey('subscription_reminder'),
+                          padding: const EdgeInsets.all(20),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.lock,
+                                size: 40,
+                              ),
+                              const SizedBox(height: 16),
+                              const Text(
+                                "Subscription Required",
+                                style: TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                    color: primaryTwo),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                "Please pay the monthly subscription of ${widget.subscriptionAmount} to participate in this group.",
+                                style: const TextStyle(fontSize: 16),
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 20),
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceEvenly,
+                                children: [
+                                  TextButton(
+                                    onPressed: () {
+                                      Navigator.of(context).pop();
+                                    },
+                                    child: const Text(
+                                      "Cancel",
+                                      style: TextStyle(fontSize: 16),
+                                    ),
+                                  ),
+                                  ElevatedButton(
+                                    onPressed: () {
+                                      setState(() {
+                                        showPaymentOptions = true;
+                                      });
+                                    },
+                                    style: ElevatedButton.styleFrom(
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      backgroundColor:
+                                          primaryTwo, // Background color when enabled
+                                      disabledBackgroundColor:
+                                          primaryTwo, // Background color when disabled
+                                    ),
+                                    child: const Text(
+                                      "Pay Now",
+                                      style: TextStyle(fontSize: 10),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   Future<void> _sendImageMessage(String imagePath) async {

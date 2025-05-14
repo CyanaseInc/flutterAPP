@@ -501,14 +501,18 @@ class ChatListState extends State<ChatList>
                                 builder: (context) => MessageChatScreen(
                                   name: chat["name"],
                                   isAdminOnlyMode:
-                                      chat["restrict_messages_to_admins"] ??
-                                          false,
-                                  isCurrentUserAdmin: chat["isAdmin"] ?? false,
+                                      chat["restrict_messages_to_admins"],
+                                  isCurrentUserAdmin: chat["amAdmin"],
                                   description:
                                       chat["description"] ?? 'Our Saving Group',
                                   profilePic: chat["profilePic"],
                                   groupId: chat["isGroup"] ? chat["id"] : null,
                                   onMessageSent: _reloadChats,
+                                  allowSubscription:
+                                      chat["allows_subscription"],
+                                  hasUserPaid: chat["has_user_paid"],
+                                  subscriptionAmount:
+                                      chat["subscription_amount"],
                                 ),
                               ),
                             );

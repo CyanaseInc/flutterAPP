@@ -108,6 +108,10 @@ class DatabaseHelper {
         settings TEXT
         requires_payment INTEGER,
         deposit_amount REAL,
+        allows_subscription INTEGER,
+        subscription_frequency TEXT,
+        subscription_amount TEXT,
+        has_user_paid INTEGER,
         restrict_messages_to_admins INTEGER
         
       )

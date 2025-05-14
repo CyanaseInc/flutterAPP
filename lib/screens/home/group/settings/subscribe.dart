@@ -5,28 +5,42 @@ import 'package:cyanase/helpers/api_helper.dart';
 import 'package:cyanase/helpers/get_currency.dart';
 import 'package:cyanase/helpers/loader.dart';
 
-class PaymentSetting extends StatefulWidget {
-  final bool requirePaymentToJoin;
+class SubscriptionSetting extends StatefulWidget {
+  final bool requireSubscription;
   final double paymentAmount;
+  final String paymentFrequency;
   final ValueChanged<bool> onPaymentToggleChanged;
   final ValueChanged<double> onPaymentAmountChanged;
+  final ValueChanged<String> onPaymentFrequencyChanged;
   final int groupId;
 
-  const PaymentSetting({
+  const SubscriptionSetting({
     Key? key,
-    required this.requirePaymentToJoin,
+    required this.requireSubscription,
     required this.paymentAmount,
+    required this.paymentFrequency,
     required this.onPaymentToggleChanged,
     required this.onPaymentAmountChanged,
+    required this.onPaymentFrequencyChanged,
     required this.groupId,
   }) : super(key: key);
 
   @override
-  _PaymentSettingState createState() => _PaymentSettingState();
+  _SubscriptionSettingState createState() => _SubscriptionSettingState();
 }
 
-class _PaymentSettingState extends State<PaymentSetting> {
+class _SubscriptionSettingState extends State<SubscriptionSetting> {
   bool _isLoading = false;
+  late String _selectedFrequency;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedFrequency = widget.paymentFrequency.isNotEmpty &&
+            ['Monthly', 'Yearly'].contains(widget.paymentFrequency)
+        ? widget.paymentFrequency
+        : 'Monthly';
+  }
 
   Future<Map<String, dynamic>?> _getTokenAndCurrency() async {
     try {
@@ -54,9 +68,10 @@ class _PaymentSettingState extends State<PaymentSetting> {
     }
   }
 
-  Future<bool> _updatePaymentSettings({
+  Future<bool> _updateSubscriptionSettings({
     required bool requirePayment,
     required double amount,
+    required String frequency,
   }) async {
     setState(() => _isLoading = true);
     try {
@@ -66,20 +81,20 @@ class _PaymentSettingState extends State<PaymentSetting> {
       }
 
       final token = profile['token'] as String;
-      final currency = profile['currency'] as String;
 
       final data = {
         'groupId': widget.groupId,
-        'requirePaymentToJoin': requirePayment,
+        'requireSubscription': requirePayment,
         'paymentAmount': amount,
-        'currency': currency,
+        'paymentFrequency': frequency,
       };
 
-      final response = await ApiService.PayToJoinGroup(token, data);
+      final response = await ApiService.SubscriptionSetting(token, data);
 
       if (response['success'] == true) {
         widget.onPaymentToggleChanged(requirePayment);
         widget.onPaymentAmountChanged(amount);
+        widget.onPaymentFrequencyChanged(frequency);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Payment settings updated successfully'),
@@ -105,42 +120,82 @@ class _PaymentSettingState extends State<PaymentSetting> {
 
   void _showPaymentAmountDialog(String currency) {
     TextEditingController amountController = TextEditingController(
-      text: widget.paymentAmount > 0 ? widget.paymentAmount.toString() : '',
+      text: widget.paymentAmount > 0 ? widget.paymentAmount.toString() : '0',
     );
 
     showDialog(
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: Text(
-            'Set Payment Amount ($currency)',
-            style: const TextStyle(color: Colors.black, fontSize: 18),
+          title: const Text(
+            'Set Subscription Details',
+            style: TextStyle(color: Colors.black, fontSize: 18),
           ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: amountController,
-                decoration: InputDecoration(
-                  labelText: 'Amount ($currency)',
-                  hintText: 'Enter the payment amount',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8.0),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8.0),
-                    borderSide: BorderSide(color: primaryTwo),
-                  ),
+          content: Container(
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(
+                  color: Colors.grey.shade300,
+                  width: 1.0,
                 ),
-                keyboardType: TextInputType.number,
-                enabled: !_isLoading,
               ),
-              const SizedBox(height: 10),
-              Text(
-                'Cyanase takes 30% of this amount',
-                style: TextStyle(color: Colors.grey[600], fontSize: 15),
-              ),
-            ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: amountController,
+                  decoration: InputDecoration(
+                    labelText: 'Amount ($currency)',
+                    hintText: 'Enter the payment amount',
+                    enabledBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(
+                        color: primaryTwo,
+                        width: 1.0,
+                      ),
+                    ),
+                    focusedBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(
+                        color: primaryTwo, // Use theme color for focus
+                        width: 2.0,
+                      ),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  keyboardType: TextInputType.number,
+                  enabled: !_isLoading,
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  value: _selectedFrequency,
+                  decoration: const InputDecoration(
+                    labelText: 'Payment Frequency',
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                  items: ['Monthly', 'Yearly'].map((String value) {
+                    return DropdownMenuItem<String>(
+                      value: value,
+                      child: Text(value),
+                    );
+                  }).toList(),
+                  onChanged: _isLoading
+                      ? null
+                      : (String? newValue) {
+                          if (newValue != null) {
+                            setState(() {
+                              _selectedFrequency = newValue;
+                            });
+                          }
+                        },
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Cyanase takes 30% of this amount',
+                  style: TextStyle(color: Colors.grey[600], fontSize: 15),
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(
@@ -156,9 +211,10 @@ class _PaymentSettingState extends State<PaymentSetting> {
                   : () async {
                       final amount = double.tryParse(amountController.text);
                       if (amount != null && amount >= 0) {
-                        final success = await _updatePaymentSettings(
+                        final success = await _updateSubscriptionSettings(
                           requirePayment: true,
                           amount: amount,
+                          frequency: _selectedFrequency,
                         );
                         if (success) {
                           Navigator.pop(context);
@@ -173,13 +229,10 @@ class _PaymentSettingState extends State<PaymentSetting> {
                       }
                     },
               child: _isLoading
-                  ? SizedBox(
+                  ? const SizedBox(
                       width: 20,
                       height: 20,
-                      child: CircularProgressIndicator(
-                        color: primaryTwo,
-                        strokeWidth: 2,
-                      ),
+                      child: Loader(),
                     )
                   : Text(
                       'Save',
@@ -197,21 +250,21 @@ class _PaymentSettingState extends State<PaymentSetting> {
     return ListTile(
       leading: Icon(Icons.payment, color: primaryTwo),
       title: const Text(
-        'Pay to join group',
+        'Subscriptions',
         style: TextStyle(color: Colors.black87),
       ),
       subtitle: const Text(
-        'Require payment before joining the group',
+        'This allows members to pay a monthly or annual fee to remain active in the group',
         style: TextStyle(color: Colors.grey, fontSize: 12),
       ),
       trailing: _isLoading
-          ? SizedBox(
+          ? const SizedBox(
               width: 24,
               height: 24,
               child: Loader(),
             )
           : Switch(
-              value: widget.requirePaymentToJoin,
+              value: widget.requireSubscription,
               onChanged: _isLoading
                   ? null
                   : (value) async {
@@ -221,9 +274,10 @@ class _PaymentSettingState extends State<PaymentSetting> {
                           _showPaymentAmountDialog(profile['currency']);
                         }
                       } else {
-                        final success = await _updatePaymentSettings(
+                        final success = await _updateSubscriptionSettings(
                           requirePayment: false,
                           amount: 0.0,
+                          frequency: _selectedFrequency,
                         );
                         if (!success) {
                           setState(() {});

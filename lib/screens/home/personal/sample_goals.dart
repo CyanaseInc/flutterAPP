@@ -56,12 +56,10 @@ class _SampleGoalsState extends State<SampleGoals> {
           goals = fetchedGoals;
           isLoading = false;
         });
-        print('Fetched goals: $goals');
       } else {
         setState(() {
           isLoading = false;
         });
-        print('No goals found in response or invalid format');
       }
     } catch (e) {
       setState(() {

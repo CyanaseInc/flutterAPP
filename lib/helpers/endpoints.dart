@@ -1,21 +1,28 @@
 class ApiEndpoints {
   //static const String server = "https/://server.cyanase.app";
-  static const String server = "http://192.168.215.220:8000";
+  static const String server = "http://192.168.204.220:8000";
 
   static const String checkuser = "$server/api/v1/en/checkUser/user/";
   static const String signup = "$server/api/v1/en/register/user/";
   static const String createGroup = "$server/api/v1/en/register/user/";
   static const String approveRequest =
       "$server/api/v1/en/approve/request/group/";
+  static const String processLoanRequest =
+      "$server/api/v1/en/approve/loan/request/group/";
+  static const String payLoan = "$server/api/v1/en/pay/loan/group/";
   static const String loanSettingUrl = "$server/api/v1/en/loan/setting/group/";
   static const String memberRolesUrl = "$server/api/v1/en/member/roles/group/";
   static const String groupSettingUrl =
       "$server/api/v1/en/general/setting/group/";
   static const String denyRequest = "$server/api/v1/en/deny/request/group/";
+  static const String addInvestmentUrl =
+      "$server/api/v1/en/add/investment/group/";
   static const String payOutUrl = "$server/api/v1/en/pay/out/group/";
   static const String addInterestUrl = "$server/api/v1/en/add/interest/group/";
   static const String cashOut = "$server/api/v1/en/investment/cashout/group/";
   static const String payTojoin = "$server/api/v1/en/pay/to/join/group/";
+  static const String SubscriptionSetting =
+      "$server/api/v1/en/subscription/group/";
   static const String newGroup = "$server/api/v1/en/newgroup/group/";
   static const String joinGroup = "$server/api/v1/en/register/user/";
   static const String sendMessage = "$server/api/v1/en/register/user/";
@@ -59,7 +66,12 @@ class ApiEndpoints {
   static const String apiUrlGetUserTrack = "$server/api/v1/en/get/user/track/";
   static const String apiUrlGetSubStatus =
       "$server/api/v1/en/get/subscription/status/";
+  static const String loanApplication =
+      "$server/api/v1/en/loan/application/group/";
   static const String paySubscription = "$server/api/v1/en/make/subscription/";
+  static const String payGroupSubscription =
+      "$server/api/v1/en/make/subscription/group";
+  static const String groupDeposit = "$server/api/v1/en/general/deposit/group";
   static const String apiUrlGetWithdraw = "$server/api/v1/en/get/withdraw/";
   static const String apiUrlGetWithdrawFee =
       "$server/api/v1/en/get/withdraw/fee/";

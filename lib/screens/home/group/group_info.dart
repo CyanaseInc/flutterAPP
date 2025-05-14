@@ -39,8 +39,9 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
   String _myContributions = '0.00';
   List<GroupSavingGoal> groupGoals = [];
   String _currencySymbol = '\$';
-  bool _isAdmin = false; // Track if the user is an admin
+  bool _isAdmin = false;
   bool isAdminMode = false;
+
   @override
   void initState() {
     super.initState();
@@ -48,7 +49,7 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
   }
 
   Future<void> _loadGroupDetails() async {
-    setState(() => _isLoading = false);
+    setState(() => _isLoading = true); // Fixed: Set loading to true
     await _fetchGroupDetails();
     setState(() => _isLoading = false);
   }
@@ -77,15 +78,15 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
       if (response['success'] == true) {
         final data = response['data'] ?? {};
         final contributions = data['contributions'] ?? {};
-
         final participantList =
             (data['members']?['participant_list'] as List?) ?? [];
+
         final userParticipant = participantList.firstWhere(
           (participant) => participant['user_id'] == userId,
           orElse: () => null,
         );
 
-        if (userParticipant != null) {
+        if (userParticipant != null && mounted) {
           setState(() {
             _isAdmin = userParticipant['role'] == 'admin';
           });
@@ -101,9 +102,8 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
               (contributions['group_total'] as num?)?.toDouble() ?? 0.0);
           _myContributions = _formatCurrency(
               (contributions['my_total'] as num?)?.toDouble() ?? 0.0);
-
           groupGoals = (data['goals'] as List? ?? []).map((goal) {
-            return GroupSavingGoal.fromJson(goal, userId!); // Pass userId
+            return GroupSavingGoal.fromJson(goal, userId!);
           }).toList();
         });
       } else {
@@ -149,6 +149,7 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
                       _groupDetails['group_description'] ?? widget.description,
                   totalBalance: _totalBalance,
                   myContributions: _myContributions,
+                  initialLoanSettings: _groupDetails['loan_settings'] ?? {},
                 ),
                 const SizedBox(height: 10),
                 GroupSavingGoalsSection(
@@ -214,11 +215,14 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
                     },
                   ),
                 ),
-                // Show GroupSettings only if user is admin
                 if (_isAdmin)
                   GroupSettings(
                     groupId: widget.groupId,
                     isAdminMode: isAdminMode,
+                    initialRequireSubscription:
+                        _groupDetails['requireSubscription'] ?? false,
+                    initialSubscriptionAmount:
+                        _groupDetails['subscription_amount'] ?? 0.0,
                     initialRequirePayment: _requirePaymentToJoin,
                     initialPaymentAmount: _paymentAmount,
                     initialLoanSettings: _groupDetails['loan_settings'] ?? {},
@@ -237,7 +241,7 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
                   members:
                       (_groupDetails['members']?['participant_list'] as List?)
                               ?.cast<Map<String, dynamic>>() ??
-                          [], // Pass participant_list
+                          [],
                 ),
                 DangerZone(
                   groupId: widget.groupId,

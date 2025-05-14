@@ -15,7 +15,7 @@ class MessageChat extends StatefulWidget {
   final String? replyToType;
   final bool isAudio;
   final bool isImage;
-  final bool isNotification; // Added for notifications
+  final bool isNotification;
   final bool isPlaying;
   final Duration audioDuration;
   final Duration audioPosition;
@@ -35,7 +35,7 @@ class MessageChat extends StatefulWidget {
     this.replyToType,
     required this.isAudio,
     required this.isImage,
-    required this.isNotification, // Added parameter
+    required this.isNotification,
     required this.onPlayAudio,
     this.isPlaying = false,
     this.audioDuration = Duration.zero,
@@ -62,6 +62,8 @@ class _MessageChatState extends State<MessageChat> {
     _replyFileExists = widget.replyTo != null && widget.replyToType == "image"
         ? doesFileExist(widget.replyTo!)
         : Future.value(false);
+
+    // Show popup immediately if subscription is required and user hasn't paid
   }
 
   Future<bool> doesFileExist(String filePath) async {
@@ -166,12 +168,10 @@ class _MessageChatState extends State<MessageChat> {
               label: widget.isMe ? "Sent message" : "Received message",
               child: Container(
                 constraints: BoxConstraints(
-                  maxWidth: MediaQuery.of(context).size.width *
-                      0.6, // Reduced from 0.75 to make bubbles narrower
+                  maxWidth: MediaQuery.of(context).size.width * 0.6,
                 ),
-                padding: const EdgeInsets.symmetric(
-                    vertical: 8,
-                    horizontal: 12), // Reduced padding for compactness
+                padding:
+                    const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: widget.isMe
@@ -190,7 +190,7 @@ class _MessageChatState extends State<MessageChat> {
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withOpacity(0.05),
-                      blurRadius: 4, // Reduced shadow for subtlety
+                      blurRadius: 4,
                       offset: const Offset(0, 2),
                     ),
                   ],
@@ -202,8 +202,7 @@ class _MessageChatState extends State<MessageChat> {
                   children: [
                     if (widget.replyTo != null && widget.replyToId != null)
                       _buildReplySection(context),
-                    if (widget.replyTo != null)
-                      const SizedBox(height: 4), // Reduced spacing
+                    if (widget.replyTo != null) const SizedBox(height: 4),
                     if (widget.message == null)
                       const Text(
                         "Message unavailable",
@@ -218,8 +217,7 @@ class _MessageChatState extends State<MessageChat> {
                         widget.message!,
                         style: TextStyle(
                           color: widget.isMe ? white : Colors.black87,
-                          fontSize:
-                              15, // Slightly reduced font size for compactness
+                          fontSize: 15,
                           fontFamily: 'Roboto',
                         ),
                       ),
@@ -228,23 +226,22 @@ class _MessageChatState extends State<MessageChat> {
                       mainAxisSize: MainAxisSize.min,
                       mainAxisAlignment: widget.isMe
                           ? MainAxisAlignment.end
-                          : MainAxisAlignment.start, // Align time appropriately
+                          : MainAxisAlignment.start,
                       children: [
                         Text(
                           formattedTime,
                           style: TextStyle(
-                            fontSize: 10, // Smaller time font for compactness
+                            fontSize: 10,
                             color:
                                 widget.isMe ? Colors.white70 : Colors.grey[600],
                           ),
                         ),
-                        if (widget.isMe)
-                          const SizedBox(width: 4), // Reduced spacing
+                        if (widget.isMe) const SizedBox(width: 4),
                         if (widget.isMe)
                           Icon(
                             Icons.done_all,
                             color: Colors.white70,
-                            size: 12, // Reduced icon size
+                            size: 12,
                           ),
                       ],
                     ),

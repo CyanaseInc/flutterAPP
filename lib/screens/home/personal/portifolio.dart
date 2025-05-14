@@ -1,3 +1,4 @@
+import 'package:cyanase/helpers/loader.dart';
 import 'package:cyanase/helpers/web_db.dart';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -31,16 +32,16 @@ class _PortfolioState extends State<Portfolio> {
 
   Future<void> _fetchPortfolioData() async {
     try {
-      // final dbHelper = DatabaseHelper();
-      // final db = await dbHelper.database;
-      // final userProfile = await db.query('profile', limit: 1);
-      await WebSharedStorage.init();
-      var existingProfile = WebSharedStorage();
+      final dbHelper = DatabaseHelper();
+      final db = await dbHelper.database;
+      final userProfile = await db.query('profile', limit: 1);
+      // await WebSharedStorage.init();
+      // var existingProfile = WebSharedStorage();
 
-      // if (userProfile.isNotEmpty) {
-      if (existingProfile.getCommon('token') != '') {
-        // final token = userProfile.first['token'] as String;
-        final token = existingProfile.getCommon('token');
+      if (userProfile.isNotEmpty) {
+        // if (existingProfile.getCommon('token') != '') {
+        final token = userProfile.first['token'] as String;
+        // final token = existingProfile.getCommon('token');
         final response = await ApiService.depositNetworth(token);
         final data = response['data'] ?? {};
 
@@ -108,8 +109,7 @@ class _PortfolioState extends State<Portfolio> {
           const SliverToBoxAdapter(child: SizedBox(height: 20)),
           isLoading
               ? const SliverToBoxAdapter(
-                  child: Center(
-                      child: CircularProgressIndicator(color: primaryColor)),
+                  child: Center(child: Loader()),
                 )
               : SliverToBoxAdapter(child: _buildPortfolioCarousel(context)),
           const SliverToBoxAdapter(child: SizedBox(height: 30)),
