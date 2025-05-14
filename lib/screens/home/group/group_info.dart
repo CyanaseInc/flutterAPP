@@ -4,7 +4,7 @@ import 'group_header.dart';
 import 'group_settings.dart';
 import 'group_members.dart';
 import 'danger_zone.dart';
-import 'group_stat.dart';
+import 'group_manager.dart';
 import 'invite.dart';
 import 'group_saving_goal.dart';
 import 'package:cyanase/theme/theme.dart';
@@ -163,7 +163,7 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
                   margin: const EdgeInsets.only(top: 8.0),
                   child: ListTile(
                     title: const Text(
-                      'Group finance info',
+                      'Manage group',
                       style: TextStyle(
                         color: Colors.black87,
                         fontSize: 16,

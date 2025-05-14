@@ -113,6 +113,7 @@ class _AddGroupMembersScreenState extends State<AddGroupMembersScreen> {
             'role': 'member',
             'joined_at': DateTime.now().toIso8601String(),
             'muted': 0,
+            'user_name': contact['name'] ?? 'Unknown',
           });
 
           await _dbHelper.insertNotification(

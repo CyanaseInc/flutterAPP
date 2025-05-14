@@ -26,47 +26,48 @@ class _SampleGoalsState extends State<SampleGoals> {
 
   Future<void> fetchGoalData() async {
     try {
-      // final dbHelper = DatabaseHelper();
-      // final db = await dbHelper.database;
-      // final userProfile = await db.query('profile', limit: 1);
+      final dbHelper = DatabaseHelper();
+      final db = await dbHelper.database;
+      final userProfile = await db.query('profile', limit: 1);
 
-      // if (userProfile.isEmpty) {
-      //   throw Exception('No user profile found');
-      // }
+      if (userProfile.isEmpty) {
+        throw Exception('No user profile found');
+      }
 
-      // final token = userProfile.first['token'] as String;
+      final token = userProfile.first['token'] as String;
 
       await WebSharedStorage.init();
-      var existingProfile = WebSharedStorage();
-
-      final token = existingProfile.getCommon('token');
+      // var existingProfile = WebSharedStorage();
+      // final token = existingProfile.getCommon('token');
 
       // Fetch goals from the API
       final Map<String, dynamic> response =
           await ApiService.getAllUserGoals(token);
 
-      if (response['success'] = true) {
-        // Extract the 'goal' list from the response
-        if (response.containsKey('data') && response['data'] is List) {
-          final List<dynamic> goalList = response['data'][2] as List<dynamic>;
-          final List<Map<String, dynamic>> fetchedGoals = goalList
-              .map((item) => Map<String, dynamic>.from(item as Map))
-              .toList();
+      // Check if response contains goals, regardless of success field
+      if (response.containsKey('goal') && response['goal'] is List) {
+        final List<dynamic> goalList = response['goal'] as List<dynamic>;
+        final List<Map<String, dynamic>> fetchedGoals = goalList
+            .take(2) // Limit to the first two goals
+            .map((item) => Map<String, dynamic>.from(item as Map))
+            .toList();
 
-          setState(() {
-            goals = fetchedGoals;
-            isLoading = false;
-          });
-        } else {
-          setState(() {
-            isLoading = false;
-          });
-        }
+        setState(() {
+          goals = fetchedGoals;
+          isLoading = false;
+        });
+        print('Fetched goals: $goals');
+      } else {
+        setState(() {
+          isLoading = false;
+        });
+        print('No goals found in response or invalid format');
       }
     } catch (e) {
       setState(() {
         isLoading = false;
       });
+      print('Error fetching goals: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to load goals: $e')),
       );
@@ -95,11 +96,16 @@ class _SampleGoalsState extends State<SampleGoals> {
 
   Widget _buildGoalCard(Map<String, dynamic> goal) {
     double progress = 0.0;
-    if (goal['deposit'] != null && goal['deposit'].isNotEmpty) {
+    if (goal['deposit'] != null && (goal['deposit'] as List).isNotEmpty) {
       final deposits = (goal['deposit'] as List)
-          .map((d) => double.tryParse(d.toString()) ?? 0.0);
+          .map((d) => double.tryParse(d.toString()) ?? 0.0)
+          .toList();
       final totalDeposits = deposits.reduce((a, b) => a + b);
-      progress = totalDeposits / (goal['goal_amount'] as num);
+      final goalAmount = (goal['goal_amount'] as num?)?.toDouble() ??
+          1.0; // Avoid division by zero
+      if (goalAmount > 0) {
+        progress = totalDeposits / goalAmount;
+      }
     }
 
     return GestureDetector(
@@ -123,7 +129,8 @@ class _SampleGoalsState extends State<SampleGoals> {
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(8),
                       image: DecorationImage(
-                        image: NetworkImage(goal['goal_picture'] as String),
+                        image:
+                            NetworkImage(goal['goal_picture'] as String? ?? ''),
                         fit: BoxFit.cover,
                         onError: (exception, stackTrace) =>
                             const AssetImage('assets/default_goal.jpg'),
@@ -133,7 +140,7 @@ class _SampleGoalsState extends State<SampleGoals> {
                   const SizedBox(width: 16),
                   Expanded(
                     child: Text(
-                      goal['goal_name'] as String,
+                      goal['goal_name'] as String? ?? 'Unnamed Goal',
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -150,21 +157,21 @@ class _SampleGoalsState extends State<SampleGoals> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Goal: ${(goal['goal_amount'] as num).toStringAsFixed(2)}',
+                'Goal: ${(goal['goal_amount'] as num?)?.toStringAsFixed(2) ?? '0.00'}',
                 style: TextStyle(
                   fontSize: 16,
                   color: Colors.grey[700],
                 ),
               ),
               Text(
-                'Period: ${goal['goal_period']} years',
+                'Period: ${goal['goal_period']?.toString() ?? 'N/A'} years',
                 style: TextStyle(
                   fontSize: 14,
                   color: Colors.grey[600],
                 ),
               ),
               Text(
-                'Created: ${goal['created']}',
+                'Created: ${goal['created']?.toString() ?? 'N/A'}',
                 style: TextStyle(
                   fontSize: 14,
                   color: Colors.grey[600],

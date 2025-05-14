@@ -1,4 +1,3 @@
-
 import 'package:cyanase/helpers/loader.dart';
 import 'package:cyanase/helpers/web_db.dart';
 import 'package:flutter/material.dart';
@@ -31,18 +30,18 @@ class _FundManagerSliderState extends State<FundManagerSlider> {
 
   Future<void> _fetchInvestmentData() async {
     try {
-      // final dbHelper = DatabaseHelper();
-      // final db = await dbHelper.database;
-      // final userProfile = await db.query('profile', limit: 1);
-      // if (userProfile.isEmpty) {
-      //   throw Exception('No user profile found');
-      // }
-      // final token = userProfile.first['token'] as String;
+      final dbHelper = DatabaseHelper();
+      final db = await dbHelper.database;
+      final userProfile = await db.query('profile', limit: 1);
+      if (userProfile.isEmpty) {
+        throw Exception('No user profile found');
+      }
+      final token = userProfile.first['token'] as String;
 
       await WebSharedStorage.init();
-      var existingProfile = WebSharedStorage();
+      // var existingProfile = WebSharedStorage();
 
-      final token = existingProfile.getCommon('token');
+      // final token = existingProfile.getCommon('token');
 
       final List<Map<String, dynamic>> investmentData =
           await ApiService.getClasses(token);

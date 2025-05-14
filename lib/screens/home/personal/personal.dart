@@ -42,24 +42,24 @@ class _PersonalTabState extends State<PersonalTab> {
 
   Future<void> _getDepositNetworth() async {
     try {
-      // final dbHelper = DatabaseHelper();
-      // final db = await dbHelper.database;
-      // final userProfile = await db.query('profile', limit: 1);
+      final dbHelper = DatabaseHelper();
+      final db = await dbHelper.database;
+      final userProfile = await db.query('profile', limit: 1);
 
-      await WebSharedStorage.init();
-      var existingProfile = WebSharedStorage();
+      // await WebSharedStorage.init();
+      // var existingProfile = WebSharedStorage();
 
       // if (userProfile.isNotEmpty) {
-      if (existingProfile.getCommon('token') != '') {
-        // final token = userProfile.first['token'] as String;
-        // final userCountry = userProfile.first['country'] as String;
-        final token = existingProfile.getCommon('token');
-        final userCountry = existingProfile.getCommon('country');
+      if (userProfile.isNotEmpty) {
+        final token = userProfile.first['token'] as String;
+        final userCountry = userProfile.first['country'] as String;
         final currencyCode = CurrencyHelper.getCurrencyCode(userCountry);
+        // final token = existingProfile.getCommon('token');
+        // final userCountry = existingProfile.getCommon('country');
 
         final response = await ApiService.depositNetworth(token);
+
         final userTrack = await ApiService.userTrack(token);
-        print(userTrack);
 
         if (userTrack['success'] == true) {
           double totalDeposit = 0;

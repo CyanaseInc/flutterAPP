@@ -376,36 +376,48 @@ class ApiService {
     required String token,
     required int investmentId,
     required Map<String, dynamic> data,
+    String? password,
   }) async {
-    final response = await http.post(
-      Uri.parse(''),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode(data),
-    );
+    // Create the complete request body
+    final requestBody = {
+      'investment_id': investmentId,
+      ...data, // Spread the existing data
+      if (password != null) 'password': password, // Conditionally add password
+    };
 
-    if (response.statusCode == 201) {
-      return jsonDecode(response.body);
-    } else {
-      throw Exception('Failed to add interest: ${response.body}');
+    try {
+      final response = await http.post(
+        Uri.parse(ApiEndpoints.addInterestUrl),
+        headers: {
+          'Authorization': 'Token $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode(requestBody),
+      );
+
+      if (response.statusCode == 201) {
+        return jsonDecode(response.body);
+      } else {
+        throw Exception('Failed to add interest: ${response.body}');
+      }
+    } catch (e) {
+      rethrow;
     }
   }
 
-  static Future<Map<String, dynamic>> cashOutInvestment({
-    required String token,
-    required int investmentId,
-    required double amount,
-  }) async {
-    final response = await http.post(
-      Uri.parse(''),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode({'amount': amount}),
-    );
+  static Future<Map<String, dynamic>> deleteInvestment(
+      {required String token,
+      required int investmentId,
+      required String password}) async {
+    final response = await http.post(Uri.parse(ApiEndpoints.cashOut),
+        headers: {
+          'Authorization': 'Token $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'investment_id': investmentId,
+          'password': password,
+        }));
 
     if (response.statusCode == 200) {
       return jsonDecode(response.body);
@@ -476,7 +488,7 @@ class ApiService {
     }
   }
 
-  static Future<Map<String, dynamic>> userTrack(String token) async {
+  static Future<dynamic> userTrack(String token) async {
     try {
       final response = await http.get(
         Uri.parse(ApiEndpoints.apiUrlGetUserTrack),
@@ -485,9 +497,21 @@ class ApiService {
           'Content-Type': 'application/json',
         },
       );
-      // Check the response status
+
       if (response.statusCode == 200) {
-        return jsonDecode(response.body); // Convert response to Map
+        final decodedResponse = jsonDecode(response.body);
+        // Normalize the response to always return a Map with a 'data' field
+        if (decodedResponse is List<dynamic>) {
+          return {
+            'success': true,
+            'data': decodedResponse,
+          };
+        } else if (decodedResponse is Map<String, dynamic>) {
+          return decodedResponse;
+        } else {
+          throw Exception(
+              'Unexpected response format: ${decodedResponse.runtimeType}');
+        }
       } else {
         throw Exception('Failed to fetch user track: ${response.reasonPhrase}');
       }

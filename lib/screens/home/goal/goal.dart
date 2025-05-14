@@ -26,29 +26,27 @@ class _GoalsTabState extends State<GoalsTab> {
 
   Future<void> fetchGoalData() async {
     try {
-      // final dbHelper = DatabaseHelper();
-      // final db = await dbHelper.database;
-      // final userProfile = await db.query('profile', limit: 1);
+      final dbHelper = DatabaseHelper();
+      final db = await dbHelper.database;
+      final userProfile = await db.query('profile', limit: 1);
 
-      // if (userProfile.isEmpty) {
-      //   throw Exception('No user profile found');
-      // }
+      if (userProfile.isEmpty) {
+        throw Exception('No user profile found');
+      }
 
-      // final token = userProfile.first['token'] as String;
+      final token = userProfile.first['token'] as String;
 
       await WebSharedStorage.init();
-      var existingProfile = WebSharedStorage();
-
-      final token = existingProfile.getCommon('token');
+      // var existingProfile = WebSharedStorage();
+      // final token = existingProfile.getCommon('token');
 
       // Fetch goals from the API
-      final response = await ApiService.getAllUserGoals(token);
+      final Map<String, dynamic> response =
+          await ApiService.getAllUserGoals(token);
 
-      if (response['success'] = true) {
-        // Decode the response body into a Map<String, dynamic>
-
-        // Extract the 'goal' list from the response
-        final List<dynamic> goalList = response['data'][2] as List<dynamic>;
+      // Check if response contains goals, regardless of success field
+      if (response.containsKey('goal') && response['goal'] is List) {
+        final List<dynamic> goalList = response['goal'] as List<dynamic>;
         final List<Map<String, dynamic>> fetchedGoals = goalList
             .map((item) => Map<String, dynamic>.from(item as Map))
             .toList();
@@ -57,15 +55,21 @@ class _GoalsTabState extends State<GoalsTab> {
           goals = fetchedGoals;
           isLoading = false;
         });
+        print('Fetched goals: $goals');
+      } else {
+        setState(() {
+          isLoading = false;
+        });
+        print('No goals found in response or invalid format');
       }
     } catch (e) {
       setState(() {
         isLoading = false;
       });
+      print('Error fetching goals: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to load goals: $e')),
       );
-      print('Error in fetchGoalData: $e');
     }
   }
 
