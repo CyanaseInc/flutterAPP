@@ -1,5 +1,8 @@
+import 'package:cyanase/helpers/loader.dart';
 import 'package:flutter/material.dart';
 import 'package:cyanase/theme/theme.dart'; // Import your theme
+import 'package:cyanase/helpers/database_helper.dart';
+import 'package:cyanase/helpers/api_helper.dart';
 
 class NotificationsSettingsPage extends StatefulWidget {
   @override
@@ -8,17 +11,109 @@ class NotificationsSettingsPage extends StatefulWidget {
 }
 
 class _NotificationsSettingsPageState extends State<NotificationsSettingsPage> {
-  // State variables to manage switch values
   bool _autoSaveEnabled = false;
   bool _goalsEnabled = false;
-  bool _updatesEnabled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    getProfile();
+  }
+
+  Future<void> _updateSetting(String settingKey, bool value) async {
+    try {
+      final dbHelper = DatabaseHelper();
+      final db = await dbHelper.database;
+      final userProfile = await db.query('profile', limit: 1);
+
+      if (userProfile.isEmpty) {
+        throw Exception('User profile not found');
+      }
+
+      final token = userProfile.first['token'] as String;
+      final settings = {
+        settingKey: value,
+      };
+
+      final response =
+          await ApiService.updateNotificationSettings(token, settings);
+
+      if (response['success'] == true) {
+        // Map the setting key to the correct database column name
+        String dbColumn;
+        switch (settingKey) {
+          case 'goals':
+            dbColumn = 'goals_alert';
+            break;
+          case 'auto_save':
+            dbColumn = 'auto_save';
+            break;
+          default:
+            dbColumn = settingKey;
+        }
+
+        print('Updating database: $dbColumn = ${value ? 1 : 0}');
+        await db.update('profile', {dbColumn: value ? 1 : 0});
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Settings updated successfully'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      } else {
+        throw Exception(response['message'] ?? 'Failed to update settings');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: ${e.toString()}')),
+        );
+      }
+      // Revert the switch state on error
+      setState(() {
+        switch (settingKey) {
+          case 'auto_save':
+            _autoSaveEnabled = !value;
+            break;
+          case 'goals':
+            _goalsEnabled = !value;
+            break;
+        }
+      });
+    }
+  }
+
+  void getProfile() async {
+    final dbHelper = DatabaseHelper();
+    final db = await dbHelper.database;
+    final userProfile = await db.query('profile', limit: 1);
+    print('User Profile from DB: $userProfile');
+    if (mounted) {
+      setState(() {
+        if (userProfile.isNotEmpty) {
+          _autoSaveEnabled = userProfile.first['auto_save'] == 1;
+          _goalsEnabled = userProfile.first['goals_alert'] == 1;
+        } else {
+          _autoSaveEnabled = false;
+          _goalsEnabled = false;
+        }
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Text("Notifications "),
-        backgroundColor: primaryTwo, // WhatsApp green color
+        backgroundColor: primaryTwo,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back_ios, color: white),
+          onPressed: () => Navigator.pop(context),
+        ),
         elevation: 0,
         iconTheme: IconThemeData(
           color: white, // Change the back arrow color to white
@@ -38,9 +133,8 @@ class _NotificationsSettingsPageState extends State<NotificationsSettingsPage> {
               subtitle: "Make all of my deposits automatic",
               value: _autoSaveEnabled,
               onChanged: (bool value) {
-                setState(() {
-                  _autoSaveEnabled = value;
-                });
+                setState(() => _autoSaveEnabled = value);
+                _updateSetting('auto_save', value);
               },
             ),
             Divider(height: 1, indent: 72), // Add a divider
@@ -51,24 +145,13 @@ class _NotificationsSettingsPageState extends State<NotificationsSettingsPage> {
               subtitle: "Remind me to invest for my goals",
               value: _goalsEnabled,
               onChanged: (bool value) {
-                setState(() {
-                  _goalsEnabled = value;
-                });
+                setState(() => _goalsEnabled = value);
+                _updateSetting('goals', value);
               },
             ),
             Divider(height: 1, indent: 72), // Add a divider
 
             // Updates Section
-            _buildNotificationOption(
-              title: "Updates",
-              subtitle: "Get me product updates and investment newsletters",
-              value: _updatesEnabled,
-              onChanged: (bool value) {
-                setState(() {
-                  _updatesEnabled = value;
-                });
-              },
-            ),
           ],
         ),
       ),

@@ -6,6 +6,7 @@ import 'screens/auth/login_with_passcode.dart';
 import 'screens/auth/login_with_phone.dart';
 import 'theme/theme.dart';
 import 'package:cyanase/helpers/database_helper.dart';
+import 'screens/home/home.dart';
 
 class NotificationHandler {
   @pragma('vm:entry-point')
@@ -75,8 +76,51 @@ class _MyAppState extends State<MyApp> {
       title: 'Cyanase',
       theme: appTheme,
       navigatorKey: navigatorKey,
+      debugShowCheckedModeBanner: false,
       home: const SplashScreenWrapper(),
+      builder: (context, child) {
+        return MediaQuery(
+          data: MediaQuery.of(context).copyWith(textScaleFactor: 1.0),
+          child: child!,
+        );
+      },
+      // Enable route caching
+      onGenerateRoute: (settings) {
+        return PageRouteBuilder(
+          settings: settings,
+          pageBuilder: (context, animation, secondaryAnimation) {
+            return _buildPage(settings.name!, settings.arguments);
+          },
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(
+              opacity: animation,
+              child: child,
+            );
+          },
+          transitionDuration: const Duration(milliseconds: 200),
+        );
+      },
     );
+  }
+
+  Widget _buildPage(String name, Object? arguments) {
+    switch (name) {
+      case '/':
+        return const SplashScreenWrapper();
+      case '/login':
+        return const LoginScreen();
+      case '/numeric_login':
+        return const NumericLoginScreen();
+      case '/home':
+        return HomeScreen(
+          passcode: (arguments as Map<String, dynamic>?)?['passcode'],
+          email: (arguments as Map<String, dynamic>?)?['email'],
+          name: (arguments as Map<String, dynamic>?)?['name'],
+          picture: (arguments as Map<String, dynamic>?)?['picture'],
+        );
+      default:
+        return const SplashScreenWrapper();
+    }
   }
 }
 
@@ -105,7 +149,6 @@ class _SplashScreenWrapperState extends State<SplashScreenWrapper> {
         where: 'email IS NOT NULL AND phone_number IS NOT NULL',
       );
       if (mounted) {
-        debugPrint('Profile check result: ${result.length} profiles found');
         if (result.isNotEmpty) {
           Navigator.pushReplacement(
             context,

@@ -33,7 +33,7 @@ String normalizePhoneNumber(String phoneNumber, String regionCode) {
 
     return phoneNumber;
   } catch (e) {
-    print('Normalization error for $phoneNumber: $e');
+    
     return phoneNumber; // Return original if normalization fails
   }
 }

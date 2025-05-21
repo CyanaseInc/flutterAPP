@@ -3,17 +3,21 @@ import 'package:flutter/material.dart';
 import 'package:cyanase/theme/theme.dart';
 import 'package:cyanase/helpers/database_helper.dart';
 import 'package:cyanase/helpers/api_helper.dart';
+import 'package:cyanase/helpers/withdraw_helper.dart';
 
 class EditGroupGoalScreen extends StatefulWidget {
   final int goalId;
   final String goalName;
   final double currentAmount;
-
+  final bool isAdmin;
+  final int groupId;
   const EditGroupGoalScreen({
     Key? key,
     required this.goalId,
     required this.goalName,
     required this.currentAmount,
+    required this.isAdmin,
+    required this.groupId,
   }) : super(key: key);
 
   @override
@@ -89,6 +93,11 @@ class _EditGroupGoalScreenState extends State<EditGroupGoalScreen> {
   }
 
   Future<void> _submitWithdrawal() async {
+    if (!widget.isAdmin) {
+      _showSnackBar('Only group admins can withdraw funds', Colors.red);
+      return;
+    }
+
     final withdrawAmount = double.tryParse(_withdrawController.text) ?? 0.0;
     if (withdrawAmount <= 0) {
       _showSnackBar('Enter a valid withdrawal amount', Colors.red);
@@ -102,13 +111,25 @@ class _EditGroupGoalScreenState extends State<EditGroupGoalScreen> {
 
     setState(() => _isWithdrawing = true);
     try {
-      // Replace with actual API call if available
-      await Future.delayed(const Duration(milliseconds: 500));
-      Navigator.pop(context, {
-        'goalId': widget.goalId,
-        'withdrawAmount': withdrawAmount,
-      });
-      _showSnackBar('Withdrawal request submitted', Colors.green, Icons.send);
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          content: SingleChildScrollView(
+            child: WithdrawHelper(
+              withdrawType: 'group_goal_withdraw',
+              withdrawDetails: 'Withdraw from ${widget.goalName}',
+              goalId: widget.goalId,
+              groupId: widget.groupId,
+              onWithdrawProcessed: () {
+                Navigator.pop(context, {
+                  'goalId': widget.goalId,
+                  'withdrawAmount': withdrawAmount,
+                });
+              },
+            ),
+          ),
+        ),
+      );
     } finally {
       if (mounted) {
         setState(() => _isWithdrawing = false);
@@ -295,9 +316,12 @@ class _EditGroupGoalScreenState extends State<EditGroupGoalScreen> {
                     TextField(
                       controller: _withdrawController,
                       keyboardType: TextInputType.number,
+                      enabled: widget.isAdmin,
                       decoration: InputDecoration(
                         labelText: 'Amount (UGX)',
-                        hintText: 'Enter amount to withdraw',
+                        hintText: widget.isAdmin
+                            ? 'Enter amount to withdraw'
+                            : 'Only admins can withdraw funds',
                         border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8)),
                         focusedBorder: OutlineInputBorder(
@@ -319,9 +343,12 @@ class _EditGroupGoalScreenState extends State<EditGroupGoalScreen> {
                     Align(
                       alignment: Alignment.centerRight,
                       child: ElevatedButton(
-                        onPressed: _isWithdrawing ? null : _submitWithdrawal,
+                        onPressed: widget.isAdmin && !_isWithdrawing
+                            ? _submitWithdrawal
+                            : null,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: primaryTwo,
+                          backgroundColor:
+                              widget.isAdmin ? primaryTwo : Colors.grey,
                           padding: const EdgeInsets.symmetric(
                               horizontal: 20, vertical: 12),
                           shape: RoundedRectangleBorder(
@@ -334,8 +361,11 @@ class _EditGroupGoalScreenState extends State<EditGroupGoalScreen> {
                                 child: CircularProgressIndicator(
                                     color: Colors.white, strokeWidth: 2),
                               )
-                            : const Text('Submit Withdrawal',
-                                style: TextStyle(
+                            : Text(
+                                widget.isAdmin
+                                    ? 'Submit Withdrawal'
+                                    : 'Admin Only',
+                                style: const TextStyle(
                                     fontSize: 14, fontWeight: FontWeight.bold)),
                       ),
                     ),

@@ -1,3 +1,4 @@
+import 'package:cyanase/helpers/endpoints.dart';
 import 'package:cyanase/helpers/web_db.dart';
 import 'package:flutter/material.dart';
 import '../../../theme/theme.dart';
@@ -127,8 +128,9 @@ class _SampleGoalsState extends State<SampleGoals> {
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(8),
                       image: DecorationImage(
-                        image:
-                            NetworkImage(goal['goal_picture'] as String? ?? ''),
+                        image: NetworkImage(ApiEndpoints.server +
+                                goal['goal_picture'] as String? ??
+                            ''),
                         fit: BoxFit.cover,
                         onError: (exception, stackTrace) =>
                             const AssetImage('assets/default_goal.jpg'),

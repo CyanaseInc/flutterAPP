@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_gauges/gauges.dart';
 import 'package:cyanase/theme/theme.dart';
+import 'package:intl/intl.dart';
 
 class GoalHeader extends StatefulWidget {
   final double saved;
@@ -87,7 +88,7 @@ class _GoalHeaderState extends State<GoalHeader>
                   annotations: <GaugeAnnotation>[
                     GaugeAnnotation(
                       widget: Text(
-                        '${_animation.value.toStringAsFixed(1)}%', // Use the animated value
+                        '${NumberFormat('#,##0.0').format(_animation.value)}%', // Use the animated value with commas
                         style: TextStyle(
                           fontSize: 30, // Reduced font size
                           fontWeight: FontWeight.bold,
@@ -104,12 +105,13 @@ class _GoalHeaderState extends State<GoalHeader>
               ],
             ),
           ),
-          // Savings Progress Text
+          // Savings Progress Textaddcommas toallnumberhere
+
           Center(
             child: Text(
-              'Saved out of UGX${widget.goal.toStringAsFixed(2)}',
+              'Saved out of UGX ${NumberFormat('#,##0.00').format(widget.goal)}',
               style: TextStyle(
-                fontSize: 15, // Reduced font size
+                fontSize: 18, // Reduced font size
                 color: Colors.grey[600],
                 fontWeight: FontWeight.bold, // Using grey for the text color
               ),

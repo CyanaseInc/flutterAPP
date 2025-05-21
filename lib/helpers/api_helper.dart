@@ -142,6 +142,56 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, dynamic>> verifyPasscode(
+      String token, Map<String, dynamic> userData) async {
+    final url = Uri.parse(ApiEndpoints
+        .verifyPasscode); // Ensure this path matches your Django URL
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {
+          "Authorization": "Token $token",
+          "Content-Type": "application/json",
+        },
+        body: jsonEncode(userData), // userData should be directly encodable
+      );
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        throw Exception(
+            'Failed to check user: ${response.statusCode} - ${response.body}');
+      }
+    } catch (e) {
+      throw Exception('Error during user check: $e');
+    }
+  }
+
+  static Future<Map<String, dynamic>> saveNextOfKin(
+      String token, Map<String, dynamic> userData) async {
+    final url = Uri.parse(ApiEndpoints
+        .apiUrlUserNextOfKin); // Ensure this path matches your Django URL
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {
+          "Authorization": "Token $token",
+          "Content-Type": "application/json",
+        },
+        body: jsonEncode(userData), // userData should be directly encodable
+      );
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        throw Exception(
+            'Failed to check user: ${response.statusCode} - ${response.body}');
+      }
+    } catch (e) {
+      throw Exception('Error during user check: $e');
+    }
+  }
+
   static Future<Map<String, dynamic>> CheckResetPassword(
       Map<String, dynamic> userData) async {
     final url = Uri.parse(ApiEndpoints
@@ -190,11 +240,37 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, dynamic>> changeUserPassword(
+      String token, Map<String, dynamic> userData) async {
+    final url = Uri.parse(ApiEndpoints
+        .changeUserPassword); // Ensure this path matches your Django URL
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {
+          "Authorization": "Token $token",
+          "Content-Type": "application/json",
+        },
+        body: jsonEncode(userData), // userData should be directly encodable
+      );
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        throw Exception(
+            'Failed to check user: ${response.statusCode} - ${response.body}');
+      }
+    } catch (e) {
+      throw Exception('Error during user check: $e');
+    }
+  }
+
   static Future<Map<String, dynamic>> login(
       Map<String, dynamic> credentials) async {
     try {
       final response = await post(ApiEndpoints.login, credentials);
-      return jsonDecode(response.body) as Map<String, dynamic>;
+
+      return response as Map<String, dynamic>;
     } catch (e) {
       throw Exception('Login failed: $e');
     }
@@ -204,6 +280,7 @@ class ApiService {
       Map<String, dynamic> credentials) async {
     try {
       final response = await post(ApiEndpoints.passcodeLogin, credentials);
+
       return response;
     } catch (e) {
       throw Exception('Login failed: $e');
@@ -314,11 +391,8 @@ class ApiService {
       );
 
       if (response.statusCode == 200) {
-        final responseData = jsonDecode(response.body);
-
-        final data = responseData as Map<String, dynamic>;
-
-        return data; // Return the 'data' portion of the response
+        final responseData = jsonDecode(response.body) as Map<String, dynamic>;
+        return responseData;
       } else {
         throw Exception(
             'Failed to fetch group details: ${response.statusCode} - ${response.body}');
@@ -561,7 +635,7 @@ class ApiService {
 
       // Send the request
       var response = await request.send();
-
+      print('respons vvvvvve: $response.body');
       // Check the response
       if (response.statusCode == 200) {
         final responseData = await response.stream.bytesToString();
@@ -1302,6 +1376,104 @@ class ApiService {
     }
   }
 
+  static Future<Map<String, dynamic>> withdrawRequest(
+      String token, Map<String, dynamic> data) async {
+    final response = await http.post(
+      Uri.parse(ApiEndpoints.withdrawPayment), // Replace with your API endpoint
+      headers: {
+        'Authorization': 'Token $token',
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode(data), // Convert requestData to JSON
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to submit deposit: ${response.statusCode}');
+    } else {
+      return jsonDecode(response.body);
+    }
+  }
+
+  static Future<Map<String, dynamic>> addInterest(
+      String token, Map<String, dynamic> data) async {
+    final response = await http.post(
+      Uri.parse(ApiEndpoints.addInterestUrl), // Replace with your API endpoint
+      headers: {
+        'Authorization': 'Token $token',
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode(data), // Convert requestData to JSON
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to submit deposit: ${response.statusCode}');
+    } else {
+      return jsonDecode(response.body);
+    }
+  }
+
+  static Future<Map<String, dynamic>> userWithdrawRequest(
+      String token, Map<String, dynamic> data) async {
+    final response = await http.post(
+      Uri.parse(
+          ApiEndpoints.userWithdrawPayment), // Replace with your API endpoint
+      headers: {
+        'Authorization': 'Token $token',
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode(data), // Convert requestData to JSON
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to submit deposit: ${response.statusCode}');
+    } else {
+      return jsonDecode(response.body);
+    }
+  }
+
+  static Future<Map<String, dynamic>> groupSubscriptionWithdraw(
+      String token, Map<String, dynamic> data) async {
+    final response = await http.post(
+      Uri.parse(ApiEndpoints
+          .groupSubscriptionWithdraw), // Replace with your API endpoint
+      headers: {
+        'Authorization': 'Token $token',
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode(data), // Convert requestData to JSON
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to submit deposit: ${response.statusCode}');
+    } else {
+      return jsonDecode(response.body);
+    }
+  }
+
+  static Future<Map<String, dynamic>> groupGoalWithdraw(
+      String token, Map<String, dynamic> data) async {
+    final response = await http.post(
+      Uri.parse(
+          ApiEndpoints.goalWithdrawPayment), // Replace with your API endpoint
+      headers: {
+        'Authorization': 'Token $token',
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode(data), // Convert requestData to JSON
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to submit deposit: ${response.statusCode}');
+    } else {
+      return jsonDecode(response.body);
+    }
+  }
+
   static Future<Map<String, dynamic>> PayToJoinGroup(
       String token, Map<String, dynamic> data) async {
     final response = await http.post(
@@ -1409,21 +1581,24 @@ class ApiService {
     }
   }
 
-  static Future<Map<String, dynamic>> recordLoanPayment({
+  static Future<Map<String, dynamic>> processWithdrawRequest({
     required String token,
-    required int loanId,
+    required int withdrawId,
     required int groupId,
-    required double amount,
+    required bool approved,
   }) async {
     // Replace with actual API call
     final response = await http.post(
-      Uri.parse(ApiEndpoints.payLoan),
+      Uri.parse(ApiEndpoints.processWithdrawRequest),
       headers: {
         'Authorization': 'Token $token',
         'Content-Type': 'application/json',
       },
-      body: jsonEncode(
-          {'group_id': groupId, 'loan_id': loanId, 'amount': amount}),
+      body: jsonEncode({
+        'group_id': groupId,
+        'withdraw_id': withdrawId,
+        'approved': approved
+      }),
     );
 
     final responseData = jsonDecode(response.body);
@@ -1480,6 +1655,64 @@ class ApiService {
       String token, Map<String, dynamic> requestData) async {
     final response = await http.post(
       Uri.parse(ApiEndpoints.groupDeposit), // Replace with your API endpoint
+      headers: {
+        'Authorization': 'Token $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode(requestData), // Convert requestData to JSON
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to submit deposit: ${response.statusCode}');
+    } else {
+      return jsonDecode(response.body);
+    }
+  }
+
+  static Future<Map<String, dynamic>> payLoan(
+      String token, Map<String, dynamic> requestData) async {
+    final response = await http.post(
+      Uri.parse(ApiEndpoints.payLoan),
+      headers: {
+        'Authorization': 'Token $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode(requestData),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to submit deposit: ${response.statusCode}');
+    } else {
+      final decodedResponse = jsonDecode(response.body);
+
+      return decodedResponse; // This may cause the error if decodedResponse is a List
+    }
+  }
+
+  static Future<Map<String, dynamic>> groupTopUp(
+      String token, Map<String, dynamic> requestData) async {
+    final response = await http.post(
+      Uri.parse(ApiEndpoints.groupTopup),
+      headers: {
+        'Authorization': 'Token $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode(requestData),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to submit deposit: ${response.statusCode}');
+    } else {
+      final decodedResponse = jsonDecode(response.body);
+
+      return decodedResponse; // This may cause the error if decodedResponse is a List
+    }
+  }
+
+  static Future<Map<String, dynamic>> goalContribute(
+      String token, Map<String, dynamic> requestData) async {
+    final response = await http.post(
+      Uri.parse(ApiEndpoints.goalContribute), // Replace with your API endpoint
       headers: {
         'Authorization': 'Token $token',
         'Content-Type': 'application/json',
@@ -1567,6 +1800,84 @@ class ApiService {
       return response;
     } catch (e) {
       throw Exception('Failed to fetch user details: $e');
+    }
+  }
+
+  static Future<Map<String, dynamic>> withdrawFromGroup({
+    required String token,
+    required int groupId,
+    required double amount,
+    required String password,
+    required String withdrawMethod,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse(ApiEndpoints.withdrawFromGroup),
+        headers: {
+          'Authorization': 'Token $token',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'group_id': groupId,
+          'amount': amount,
+          'password': password,
+          'withdraw_method': withdrawMethod,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        throw Exception(
+            'Failed to process withdrawal: ${response.reasonPhrase}');
+      }
+    } catch (e) {
+      throw Exception('Error processing withdrawal: $e');
+    }
+  }
+
+  static Future<Map<String, dynamic>> getNextOfKin(String token) async {
+    final url = Uri.parse(ApiEndpoints.apiUrlGetNextOfKin);
+    try {
+      final response = await http.get(
+        url,
+        headers: {
+          "Authorization": "Token $token",
+          "Content-Type": "application/json",
+        },
+      );
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        throw Exception(
+            'Failed to fetch next of kin: \\${response.statusCode} - \\${response.body}');
+      }
+    } catch (e) {
+      throw Exception('Error fetching next of kin: $e');
+    }
+  }
+
+  static Future<Map<String, dynamic>> updateNotificationSettings(
+    String token,
+    Map<String, dynamic> settings,
+  ) async {
+    try {
+      final response = await http.post(
+        Uri.parse(ApiEndpoints.apiUrlUpdateNotificationSettings),
+        headers: {
+          'Authorization': 'Token $token',
+          'Content-Type': 'application/json',
+        },
+        body: json.encode(settings),
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        throw Exception('Failed to update notification settings');
+      }
+    } catch (e) {
+      throw Exception('Error updating notification settings: $e');
     }
   }
 

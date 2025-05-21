@@ -1,3 +1,4 @@
+import 'package:cyanase/screens/home/group/pending_withdraw.dart';
 import 'package:flutter/material.dart';
 import 'package:cyanase/theme/theme.dart';
 import 'pending_groups_screen.dart';
@@ -9,6 +10,7 @@ class SearchAndHeaderComponent extends StatelessWidget {
   final int pendingRequestCount;
   final List<Map<String, dynamic>> adminGroups;
   final List<Map<String, dynamic>> pendingAdminLoans;
+  final List<Map<String, dynamic>> pendingWithdraw;
   final List<Map<String, dynamic>> ongoingUserLoans;
   final List<Map<String, dynamic>> pendingUserLoans;
   final TextEditingController searchController;
@@ -27,6 +29,7 @@ class SearchAndHeaderComponent extends StatelessWidget {
     required this.ongoingUserLoans,
     required this.pendingAdminLoans,
     required this.pendingUserLoans,
+    required this.pendingWithdraw,
   }) : super(key: key);
 
   Widget _buildLoanBanner({
@@ -135,6 +138,8 @@ class SearchAndHeaderComponent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+     // Detailed logging for pendingWithdraw
+   
     return Column(
       children: [
         const SizedBox(height: 20),
@@ -162,6 +167,19 @@ class SearchAndHeaderComponent extends StatelessWidget {
             screen: PendingAdminLoansScreen(
               loans: pendingAdminLoans,
               onLoanProcessed: onReloadChats,
+            ),
+          ),
+           if (pendingWithdraw.isNotEmpty)
+          _buildLoanBanner(
+            context: context,
+            title:
+                'Withdraw requests ${pendingWithdraw.length == 1 ? '' : ''}',
+            count: pendingWithdraw.length,
+            icon: Icons.pending_actions,
+            color: primaryDark,
+            screen: PendingWithdrawScreen(
+              withdraws: pendingWithdraw,
+              onWithdrawProcessed: onReloadChats,
             ),
           ),
         if (pendingUserLoans.isNotEmpty)

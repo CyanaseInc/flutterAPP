@@ -67,13 +67,16 @@ class _GroupFinancePageState extends State<GroupFinancePage> {
       if (response['success'] == true) {
         final data = response['data'] ?? {};
         final groupStats = data['group_stats'] ?? {};
+
         final contributions = groupStats['contributions'] ?? {};
+        final loansData = data['loans_data'] ?? {};
+        final investmentsData = data['investments_data'] ?? {};
 
         setState(() {
           _currencySymbol = currency;
           _groupStat = groupStats;
-          _loansData = data['loans'] ?? {};
-          _investmentsData = data['investments'] ?? {};
+          _loansData = loansData;
+          _investmentsData = investmentsData;
           _requirePaymentToJoin = groupStats['requirePaymentToJoin'] ?? false;
           isAdminMode = groupStats['restrict_messages_to_admins'] ?? false;
           _paymentAmount =
@@ -130,6 +133,11 @@ class _GroupFinancePageState extends State<GroupFinancePage> {
             ),
           ),
           backgroundColor: primaryTwo,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios,
+                color: white), // White back icon
+            onPressed: () => Navigator.of(context).pop(),
+          ),
           iconTheme: IconThemeData(color: white),
           bottom: const TabBar(
             labelColor: Colors.white,
@@ -166,6 +174,7 @@ class _GroupFinancePageState extends State<GroupFinancePage> {
                       InvestmentsTab(
                         groupId: widget.groupId,
                         investmentsData: _investmentsData,
+                        isAdmin: _isAdmin,
                       ),
                       LoansTab(
                         groupId: widget.groupId,

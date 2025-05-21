@@ -1,12 +1,10 @@
 import 'package:cyanase/helpers/loader.dart';
-import 'package:cyanase/helpers/web_db.dart';
-import 'package:cyanase/screens/pay/flutterwave.dart';
+//import 'package:cyanase/screens/pay/flutterwave.dart';
 import 'package:flutter/material.dart';
 import 'package:cyanase/theme/theme.dart';
 import 'package:cyanase/helpers/database_helper.dart';
 import 'package:cyanase/helpers/get_currency.dart';
 import 'package:cyanase/helpers/api_helper.dart';
-import 'dart:math';
 import 'package:flutter/services.dart';
 
 class DepositHelper extends StatefulWidget {
@@ -16,16 +14,21 @@ class DepositHelper extends StatefulWidget {
   final String? selectedFundManager;
   final int? selectedOptionId;
   final String? detailText;
-  final int groupId;
-  const DepositHelper(
-      {super.key,
-      this.selectedFundClass,
-      this.selectedOption,
-      this.selectedFundManager,
-      this.selectedOptionId,
-      this.detailText,
-      this.depositCategory,
-      required this.groupId});
+  final int? groupId;
+  final int? loanId;
+  final int? goalId;
+  const DepositHelper({
+    super.key,
+    this.selectedFundClass,
+    this.selectedOption,
+    this.selectedFundManager,
+    this.selectedOptionId,
+    this.detailText,
+    this.depositCategory,
+    this.groupId,
+    this.loanId,
+    this.goalId,
+  });
 
   @override
   _DepositScreenState createState() => _DepositScreenState();
@@ -38,6 +41,8 @@ class _DepositScreenState extends State<DepositHelper> {
   String phonenumber = '';
   bool _isSubmitting = false;
   double? depositAmount = 0;
+  final TextEditingController _bankAmountController = TextEditingController();
+  bool _isCopying = false;
 
   @override
   void initState() {
@@ -88,6 +93,14 @@ class _DepositScreenState extends State<DepositHelper> {
         return await ApiService.investDeposit(token, requestData);
       case 'group_deposit':
         return await ApiService.groupDeposit(token, requestData);
+      case 'group_goal_deposit':
+        return await ApiService.goalContribute(token, requestData);
+      case 'pay_loan':
+        return await ApiService.payLoan(token, requestData);
+      case 'group_top_up':
+        return await ApiService.groupTopUp(token, requestData);
+      case 'group_investment_interest':
+        return await ApiService.addInterest(token, requestData);
       default:
         throw Exception('Invalid deposit category: ${widget.depositCategory}');
     }
@@ -95,12 +108,43 @@ class _DepositScreenState extends State<DepositHelper> {
 
   double _calculateTotalAmount(double amount) {
     final fee = ((1 / 100) * amount).toStringAsFixed(2);
-
     return double.parse(fee) + amount;
   }
 
+  void _copyBankDetails() async {
+    const bankDetails = '''
+Bank Name: Cyanase Bank
+Account Name: Cyanase Investments
+Account Number: 1234567890
+Bank Code: CYA123
+SWIFT Code: CYANUS33
+    ''';
+    await Clipboard.setData(ClipboardData(text: bankDetails.trim()));
+    setState(() {
+      _isCopying = true;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Bank details copied to clipboard!')),
+    );
+    await Future.delayed(const Duration(seconds: 1));
+    setState(() {
+      _isCopying = false;
+    });
+  }
+
   void submitDepositor() async {
-    if (depositAmount == null || depositAmount! <= 0 || phonenumber.isEmpty) {
+    if (_selectedMethod == 'Bank Transfer' &&
+        (_bankAmountController.text.isEmpty ||
+            double.tryParse(_bankAmountController.text) == null ||
+            double.parse(_bankAmountController.text) <= 0)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a valid deposit amount')),
+      );
+      return;
+    }
+
+    if (_selectedMethod == 'Mobile Money' &&
+        (depositAmount == null || depositAmount! <= 0 || phonenumber.isEmpty)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
             content: Text('Please enter valid amount and phone number')),
@@ -113,89 +157,107 @@ class _DepositScreenState extends State<DepositHelper> {
     });
 
     try {
-      final dbHelper = DatabaseHelper();
-      final db = await dbHelper.database;
-      final userProfile = await db.query('profile', limit: 1);
-      final token = userProfile.first['token'] as String;
-      final userCountry = userProfile.first['country'] as String;
-      final currency = CurrencyHelper.getCurrencyCode(userCountry);
+      if (_selectedMethod == 'Bank Transfer') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+                'Please make the deposit using the provided bank details and send proof of payment to support@cyanase.com'),
+            duration: Duration(seconds: 5),
+          ),
+        );
+        _pageController.nextPage(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+        );
+      } else {
+        final dbHelper = DatabaseHelper();
+        final db = await dbHelper.database;
+        final userProfile = await db.query('profile', limit: 1);
+        final token = userProfile.first['token'] as String;
+        final userCountry = userProfile.first['country'] as String;
+        final currency = CurrencyHelper.getCurrencyCode(userCountry);
 
-      final requestData = {
-        "payment_means": _selectedMethod == 'Online' ? 'online' : 'online',
-        "deposit_category": widget.depositCategory,
-        "deposit_amount": depositAmount!.toStringAsFixed(2),
-        "currency": currency,
-        "investment_id": widget.selectedOptionId?.toString() ?? "",
-        "investment_option": widget.selectedOption ?? "",
-        "account_type": "basic",
-        "reference": _generateReference(),
-        "reference_id": _generateReferenceId(),
-        "phone_number": phonenumber,
-        "type": widget.depositCategory,
-      };
-
-      final paymentData = {
-        "account_no": "REL6AEDF95B5A",
-        "reference": requestData['reference'],
-        "msisdn": requestData['phone_number'],
-        "currency": requestData['currency'],
-        "amount": _calculateTotalAmount(depositAmount!).toStringAsFixed(2),
-        "description": "Payment Request",
-        "tx_ref":
-            "CYANASE-${widget.depositCategory}-${DateTime.now().millisecondsSinceEpoch}",
-        "type": "${widget.depositCategory}_deposit",
-      };
-
-      final requestPayment =
-          await ApiService.requestPayment(token, paymentData);
-
-      if (requestPayment['success'] == true) {
-        await Future.delayed(const Duration(seconds: 25));
-        final authPayment =
-            await ApiService.getTransaction(token, requestPayment);
-        final internalRef = authPayment['transaction']['internal_reference'];
-
-        final myData = {
-          "group_id": widget.groupId,
-          "msisdn": phonenumber,
-          "internal_reference": internalRef,
-          "amount": depositAmount,
-          "charge_amount":
-              _calculateTotalAmount(depositAmount!).toStringAsFixed(2),
+        final requestData = {
+          "payment_means": _selectedMethod == 'Online' ? 'online' : 'online',
+          "deposit_category": widget.depositCategory,
+          "deposit_amount": depositAmount!.toStringAsFixed(2),
+          "currency": currency,
+          "investment_id": widget.selectedOptionId?.toString() ?? "",
+          "investment_option": widget.selectedOption ?? "",
+          "account_type": "basic",
+          "reference": _generateReference(),
+          "reference_id": _generateReferenceId(),
+          "phone_number": phonenumber,
+          "type": widget.depositCategory,
         };
 
-        if (authPayment['success'] == true) {
-          final response = await _processDeposit(
-            token: token,
-            requestData: myData,
-          );
-          print('my reponse is $response');
-          if (response['success'] == true) {
-            _pageController.nextPage(
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeInOut,
+        final paymentData = {
+          "account_no": "REL6AEDF95B5A",
+          "reference": requestData['reference'],
+          "msisdn": requestData['phone_number'],
+          "currency": requestData['currency'],
+          "amount": _calculateTotalAmount(depositAmount!).toStringAsFixed(2),
+          "description": "Payment Request",
+          "tx_ref":
+              "CYANASE-${widget.depositCategory}-${DateTime.now().millisecondsSinceEpoch}",
+          "type": "${widget.depositCategory}_deposit",
+        };
+
+        final requestPayment =
+            await ApiService.requestPayment(token, paymentData);
+
+        if (requestPayment['success'] == true) {
+          await Future.delayed(const Duration(seconds: 25));
+          final authPayment =
+              await ApiService.getTransaction(token, requestPayment);
+
+          final internalRef = authPayment['transaction']['internal_reference'];
+
+          final myData = {
+            "group_id": widget.groupId,
+            "msisdn": phonenumber,
+            "internal_reference": internalRef,
+            "amount": depositAmount,
+            "charge_amount":
+                _calculateTotalAmount(depositAmount!).toStringAsFixed(2),
+            "goal_id": widget.goalId,
+            "loan_id": widget.loanId,
+            "investment_id": widget.selectedOptionId,
+          };
+
+          if (authPayment['success'] == true) {
+            final response = await _processDeposit(
+              token: token,
+              requestData: myData,
             );
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(response['message'])),
-            );
+
+            if (response['success'] == true) {
+              _pageController.nextPage(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
+              );
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(response['message'])),
+              );
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(response['message'])),
+              );
+            }
           } else {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(response['message'])),
+              SnackBar(content: Text(authPayment['message'])),
             );
           }
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(authPayment['message'])),
+            SnackBar(content: Text('Payment request failed')),
           );
         }
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(requestPayment['message'])),
-        );
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to submit deposit: ${e.toString()}')),
+        SnackBar(content: Text('Failed to submit deposit')),
       );
       print('Failed to submit deposit: ${e.toString()}');
     } finally {
@@ -278,7 +340,7 @@ class _DepositScreenState extends State<DepositHelper> {
             padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
             child: Row(
               children: [
-                Icon(icon, size: 30),
+                Icon(icon, size: 30, color: primaryTwo),
                 const SizedBox(width: 10),
                 Text(
                   method,
@@ -370,6 +432,9 @@ class _DepositScreenState extends State<DepositHelper> {
                             foregroundColor: primaryLight,
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 20, vertical: 10),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
                           ),
                           child: _isSubmitting
                               ? const SizedBox(
@@ -394,15 +459,131 @@ class _DepositScreenState extends State<DepositHelper> {
         return SingleChildScrollView(
           child: ConstrainedBox(
             constraints: BoxConstraints(minHeight: constraints.maxHeight),
-            child: const IntrinsicHeight(
+            child: IntrinsicHeight(
               child: Center(
-                  child: FlutterPay(
-                amount: 0,
-                name: '',
-                data: '',
-                email: '',
-                currency: '',
-              )),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Deposit via Bank Transfer',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: primaryTwo,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      const Text(
+                        'Use the bank details below to make your deposit. After payment, please send proof of payment to support@cyanase.com.',
+                        textAlign: TextAlign.left,
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: Colors.grey,
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: primaryLight,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.grey.withOpacity(0.2),
+                              spreadRadius: 2,
+                              blurRadius: 5,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text(
+                                  'Bank Details',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: primaryTwo,
+                                  ),
+                                ),
+                                GestureDetector(
+                                  onTap: _copyBankDetails,
+                                  child: AnimatedContainer(
+                                    duration: const Duration(milliseconds: 300),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: _isCopying
+                                          ? Colors.green.withOpacity(0.2)
+                                          : primaryTwo.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          _isCopying ? Icons.check : Icons.copy,
+                                          size: 16,
+                                          color: primaryTwo,
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          _isCopying ? 'Copied' : 'Copy',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: primaryTwo,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            _buildBankDetailRow(
+                                'Bank Name', 'Diamond Trust bank'),
+                            _buildBankDetailRow('Account Name',
+                                'Cyanase technology \nand investment ltd'),
+                            _buildBankDetailRow('Account Number', '0190514001'),
+                            _buildBankDetailRow('SWIFT Code', 'DTKEUGKAXXX'),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.info_outline,
+                                color: Colors.blue, size: 20),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'After making the deposit, email the proof of payment to support@cyanase.com with your reference: ${_generateReference()}',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.blue,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
           ),
         );
@@ -410,27 +591,65 @@ class _DepositScreenState extends State<DepositHelper> {
     );
   }
 
+  Widget _buildBankDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 14,
+              color: Colors.grey,
+            ),
+          ),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              color: primaryTwo,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _textField(String label) {
     return Container(
       padding: const EdgeInsets.all(10.0),
       child: TextFormField(
-        keyboardType: TextInputType.numberWithOptions(decimal: true),
+        controller:
+            _selectedMethod == 'Bank Transfer' ? _bankAmountController : null,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
         inputFormatters: [
           FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
         ],
         onChanged: (value) {
-          setState(() {
-            depositAmount =
-                value.isNotEmpty ? double.tryParse(value) ?? 0.0 : null;
-          });
+          if (_selectedMethod == 'Mobile Money') {
+            setState(() {
+              depositAmount =
+                  value.isNotEmpty ? double.tryParse(value) ?? 0.0 : null;
+            });
+          }
         },
         decoration: InputDecoration(
           labelText: label,
-          enabledBorder: const UnderlineInputBorder(
-            borderSide: BorderSide(color: primaryColor),
+          filled: true,
+          fillColor: Colors.grey.withOpacity(0.1),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: BorderSide.none,
           ),
-          focusedBorder: const UnderlineInputBorder(
-            borderSide: BorderSide(color: primaryLight),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: BorderSide(color: Colors.grey.withOpacity(0.3)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(8),
+            borderSide: const BorderSide(color: primaryTwo),
           ),
         ),
       ),
@@ -458,6 +677,14 @@ class _DepositScreenState extends State<DepositHelper> {
             onPressed: () {
               Navigator.pop(context);
             },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: primaryTwo,
+              foregroundColor: primaryLight,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
             child: const Text('Finish'),
           ),
         ],

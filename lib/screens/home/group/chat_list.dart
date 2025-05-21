@@ -30,7 +30,9 @@ class ChatListState extends State<ChatList>
   List<Map<String, dynamic>> _adminGroups = [];
   List<Map<String, dynamic>> _pendingAdminLoans = []; // Added for admin loans
   List<Map<String, dynamic>> _pendingUserLoans =
-      []; // Added for user pending loans
+      []; 
+      List<Map<String, dynamic>> _pendingWithdraw =
+      [];// Added for user pending loans
   List<Map<String, dynamic>> _ongoingUserLoans =
       []; // Added for user active loans
   AnimationController? _animationController;
@@ -91,6 +93,7 @@ class ChatListState extends State<ChatList>
   }
 
   Future<void> _getGroup() async {
+
     try {
       final db = await _dbHelper.database;
       final userProfile = await db.query('profile', limit: 1);
@@ -142,6 +145,7 @@ class ChatListState extends State<ChatList>
       int totalPending = 0;
       List<Map<String, dynamic>> pendingAdminLoans = [];
       List<Map<String, dynamic>> pendingUserLoans = [];
+      List<Map<String, dynamic>>  pendingWithdraw = [];
       List<Map<String, dynamic>> ongoingUserLoans = [];
 
       for (final groupData in groups) {
@@ -278,8 +282,11 @@ class ChatListState extends State<ChatList>
               (groupData['pending_loan_requests'] as List<dynamic>? ?? [])
                   .cast<Map<String, dynamic>>();
           final userPendingLoans =
-              (groupData['user_pending_loans'] as List<dynamic>? ?? [])
+              (groupData['user_pending_loans'] as List<dynamic>? ?? []);
+              final adminPendingWithdraws =
+              (groupData['pending_withdraw_requests'] as List<dynamic>? ?? [])
                   .cast<Map<String, dynamic>>();
+                  
           final userActiveLoans =
               (groupData['user_active_loans'] as List<dynamic>? ?? [])
                   .cast<Map<String, dynamic>>();
@@ -313,7 +320,17 @@ class ChatListState extends State<ChatList>
               'created_at': loan['created_at'] as String?,
             });
           }
-
+for (final withdraw in adminPendingWithdraws) {
+             pendingWithdraw.add({
+              'group_id': groupId,
+              'group_name': groupName,
+              'withdraw_id': withdraw['withdraw_id'] as int?,
+              'amount': withdraw['amount'] as double?,
+                'full_name': withdraw['full_name'] as String?,
+                'total_savings': withdraw['total_savings'] as double?,
+              'created_at': withdraw['created_at'] as String?,
+            });
+          }
           for (final loan in userActiveLoans) {
             ongoingUserLoans.add({
               'group_id': groupId,
@@ -385,6 +402,7 @@ class ChatListState extends State<ChatList>
         _adminGroups = adminGroups;
         _pendingAdminLoans = pendingAdminLoans;
         _pendingUserLoans = pendingUserLoans;
+        _pendingWithdraw = pendingWithdraw;
         _ongoingUserLoans = ongoingUserLoans;
       });
 
@@ -401,6 +419,7 @@ class ChatListState extends State<ChatList>
         _adminGroups = [];
         _pendingAdminLoans = [];
         _pendingUserLoans = [];
+        _pendingWithdraw =[];
         _ongoingUserLoans = [];
       });
     }
@@ -421,6 +440,7 @@ class ChatListState extends State<ChatList>
             pendingAdminLoans: _pendingAdminLoans,
             pendingUserLoans: _pendingUserLoans,
             ongoingUserLoans: _ongoingUserLoans,
+            pendingWithdraw: _pendingWithdraw, // Provide an appropriate value here
           ),
           Expanded(
             child: ChatListComponent(

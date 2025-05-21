@@ -89,6 +89,8 @@ class DatabaseHelper {
         email TEXT,
         last_seen TEXT,
         status TEXT,
+        auto_save BOOLEAN NOT NULL DEFAULT FALSE,
+        goals_alert BOOLEAN NOT NULL DEFAULT FALSE,
         created_at TEXT NOT NULL,
         privacy_settings TEXT
       )

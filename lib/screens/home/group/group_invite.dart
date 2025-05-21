@@ -1,4 +1,5 @@
 import 'package:cyanase/helpers/loader.dart';
+import 'package:cyanase/helpers/pay_subscriptions.dart';
 import 'package:cyanase/screens/auth/login_with_phone.dart';
 import 'package:flutter/material.dart';
 import 'package:cyanase/theme/theme.dart';
@@ -66,8 +67,7 @@ class _GroupInviteScreenState extends State<GroupInviteScreen> {
 
       if (response['success'] == true) {
         final data = response['data'] as Map<String, dynamic>? ?? {};
-        final contributions =
-            data['contributions'] as Map<String, dynamic>? ?? {};
+        final createdBy = data['created_by'] as Map<String, dynamic>? ?? {};
 
         setState(() {
           _currencySymbol = currency;
@@ -76,11 +76,10 @@ class _GroupInviteScreenState extends State<GroupInviteScreen> {
           _description = data['group_description'] as String? ??
               'Group description goes here';
           _profilePic = data['profile_pic'] as String?;
-          _memberCount = (data['members']
-                  as Map<String, dynamic>?)?['total_count'] as int? ??
-              0;
-          _totalBalance = _formatCurrency(
-              (contributions['group_total'] as num?)?.toDouble() ?? 0.0);
+          final membersMap = _totalBalance = _formatCurrency(
+              (createdBy['group_total'] as num?)?.toDouble() ?? 0.0);
+          _memberCount = data['members']?['total_count'] ?? 0;
+
           _groupInitials = _getInitials(_groupName);
           _isLoading = false;
         });
@@ -160,9 +159,14 @@ class _GroupInviteScreenState extends State<GroupInviteScreen> {
           style: TextStyle(fontSize: 20, color: white),
         ),
         backgroundColor: primaryTwo,
+        leading: IconButton(
+          icon:
+              const Icon(Icons.arrow_back_ios, color: white), // White back icon
+          onPressed: () => Navigator.of(context).pop(),
+        ),
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: primaryTwo))
+          ? const Center(child: Loader())
           : SingleChildScrollView(
               child: Column(
                 children: [
@@ -220,16 +224,13 @@ class _GroupInviteScreenState extends State<GroupInviteScreen> {
                           ? const SizedBox(
                               width: 20,
                               height: 20,
-                              child: CircularProgressIndicator(
-                                color: white,
-                                strokeWidth: 2,
-                              ),
+                              child: Loader(),
                             )
                           : const Text(
                               'Join Group',
                               style: TextStyle(
-                                fontSize: 16,
-                                color: white,
+                                fontSize: 15,
+                                color: primaryColor,
                               ),
                             ),
                     ),
@@ -275,7 +276,7 @@ class _GroupInviteScreenState extends State<GroupInviteScreen> {
       setState(() => _isJoining = true);
       await _requestToJoin(context, groupId);
     } catch (e) {
-      print('Join error: $e');
+      
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to join group: $e')),
@@ -293,9 +294,6 @@ class _GroupInviteScreenState extends State<GroupInviteScreen> {
         _groupDetails['requirePaymentToJoin'] as bool? ?? false;
     final paymentAmount = _groupDetails['pay_amount'] as double? ?? 0.0;
 
-    print(
-        'Validating payment: requiresPayment=$requiresPayment, amount=$paymentAmount, hasPaid=$_hasPaid');
-
     if (!requiresPayment || _hasPaid) {
       print('No payment needed');
       return true;
@@ -308,122 +306,126 @@ class _GroupInviteScreenState extends State<GroupInviteScreen> {
   Future<bool> _showPaymentBottomSheet(
       BuildContext context, int groupId, double paymentAmount) async {
     bool paymentSuccessful = false;
-    bool _isPaying = false; // Separate state for payment
 
+    // Show initial confirmation bottom sheet
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => StatefulBuilder(
-        builder: (context, setModalState) => Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
+      builder: (context) => Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Text(
                 'Payment Required',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: primaryTwo,
-                    ),
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w700,
+                  color: primaryTwo,
+                  letterSpacing: -0.5,
+                ),
               ),
-              const SizedBox(height: 16),
-              Text(
-                'Joining "$_groupName" requires a payment of $_currencySymbol${paymentAmount.toStringAsFixed(2)}.',
-                style: Theme.of(context).textTheme.bodyLarge,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Joining $_groupName requires a one-time payment of $_currencySymbol${paymentAmount.toStringAsFixed(2)}.',
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.grey[800],
+                height: 1.5,
               ),
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: primaryTwo,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: primaryTwo,
+                      foregroundColor: white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      onPressed: _isPaying
-                          ? null
-                          : () async {
-                              setModalState(() => _isPaying = true);
-                              try {
-                                final db = await _dbHelper.database;
-                                final userProfile =
-                                    await db.query('profile', limit: 1);
-                                if (userProfile.isEmpty) {
-                                  throw Exception('User profile not found');
-                                }
-                                await db.insert('group_deposits', {
-                                  'group_id': widget.groupId,
-                                  'user_id':
-                                      userProfile.first['user_id'] ?? 'unknown',
-                                  'deposit_amount': paymentAmount,
-                                  'status': 'completed',
-                                  'created_at':
-                                      DateTime.now().toIso8601String(),
-                                });
-                                print(
-                                    'Payment recorded: group_id=${widget.groupId}, amount=$paymentAmount');
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 24, vertical: 14),
+                      elevation: 2,
+                    ),
+                    onPressed: () async {
+                      Navigator.pop(context); // Close confirmation sheet
+                      // Show PayHelper bottom sheet
+                      paymentSuccessful = await showModalBottomSheet<bool>(
+                        context: context,
+                        isScrollControlled: true,
+                        shape: const RoundedRectangleBorder(
+                          borderRadius:
+                              BorderRadius.vertical(top: Radius.circular(20)),
+                        ),
+                        builder: (context) => DraggableScrollableSheet(
+                          initialChildSize: 0.6,
+                          minChildSize: 0.4,
+                          maxChildSize: 0.9,
+                          expand: false,
+                          builder: (context, scrollController) =>
+                              SingleChildScrollView(
+                            controller: scrollController,
+                            child: PayHelper(
+                              amount: paymentAmount.toStringAsFixed(2),
+                              groupId: groupId,
+                              onBack: () => Navigator.pop(context),
+                              paymentType: 'group_join_pay',
+                              userId: 'self', // Fetch dynamically if needed
+                              onPaymentSuccess: () async {
                                 setState(() => _hasPaid = true);
-                                paymentSuccessful = true;
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                          'Payment of $_currencySymbol$paymentAmount successful!'),
-                                    ),
-                                  );
-                                }
-                              } catch (e) {
-                                print('Payment error: $e');
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                        content: Text('Payment failed: $e')),
-                                  );
-                                }
-                              } finally {
-                                setModalState(() => _isPaying = false);
-                              }
-                            },
-                      child: _isPaying
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: Loader(),
-                            )
-                          : const Text(
-                              'Pay and Join',
-                              style: TextStyle(color: white),
+                                Navigator.pop(
+                                    context); // Close payment bottom sheet
+                                await _initiateJoinProcess(
+                                    context, groupId); // Auto-join
+                              },
                             ),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: primaryTwo),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
+                          ),
                         ),
-                      ),
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text(
-                        'Cancel',
-                        style: TextStyle(color: primaryTwo),
+                      ).then((value) => value ?? false);
+                    },
+                    child: const Text(
+                      'Pay and Join',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
-                ],
-              ),
-              const SizedBox(height: 16),
-            ],
-          ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: Colors.grey[400]!),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 24, vertical: 14),
+                    ),
+                    onPressed: () => Navigator.pop(context),
+                    child: Text(
+                      'Cancel',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.grey[600],
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+          ],
         ),
       ),
     );

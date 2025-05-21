@@ -1,3 +1,4 @@
+import 'package:cyanase/helpers/endpoints.dart';
 import 'package:cyanase/screens/home/goal/add_goal.dart';
 import 'package:flutter/material.dart';
 import 'package:cyanase/theme/theme.dart';
@@ -265,25 +266,77 @@ class GoalCard extends StatelessWidget {
   void _showDepositBottomSheet(BuildContext context) {
     showModalBottomSheet(
       context: context,
-      isScrollControlled: true, // Allow the bottom sheet to expand
-      backgroundColor:
-          Colors.transparent, // Transparent background for the sheet
-      builder: (context) => Container(
-        decoration: BoxDecoration(
-          color: Colors.white, // Default background color
-          borderRadius: BorderRadius.vertical(
-            top: Radius.circular(20), // Rounded corners at the top
-          ),
-        ),
-        child: DepositHelper(
-          depositCategory: "goals",
-          selectedFundClass: "default_class", // Provide default value
-          selectedOption: "default_option", // Provide default value
-          selectedFundManager: "default_manager", // Provide default value
-          selectedOptionId: 0, // Provide default value
-          detailText: "Default detail text",
-          groupId: 0, // Provide default value
-        ),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        minChildSize: 0.4,
+        maxChildSize: 0.95,
+        expand: false,
+        builder: (context, scrollController) {
+          return Container(
+            padding: EdgeInsets.only(
+              top: 12,
+              left: 16,
+              right: 16,
+              bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+            ),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(
+                top: Radius.circular(24),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black26,
+                  blurRadius: 10,
+                  spreadRadius: 2,
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Drag handle
+                Container(
+                  width: 40,
+                  height: 4,
+                  margin: EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                // Scrollable content with constrained height
+                Expanded(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      return SingleChildScrollView(
+                        controller: scrollController,
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            minHeight: constraints.maxHeight,
+                          ),
+                          child: IntrinsicHeight(
+                            child: DepositHelper(
+                              depositCategory: "goals",
+                              selectedFundClass: "default_class",
+                              selectedOption: "default_option",
+                              selectedFundManager: "default_manager",
+                              selectedOptionId: 0,
+                              detailText: "Default detail text",
+                              groupId: 0,
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -302,7 +355,11 @@ class GoalCard extends StatelessWidget {
         goalAmount > 0 ? (totalDeposits / goalAmount).clamp(0.0, 1.0) : 0.0;
     final reminderSet = goalData['reminder_set'] as bool? ?? false;
 
-    final goalPicture = goalData['goal_picture'] as String?;
+    final goalPicture = goalData['goal_picture'] != null
+        ? (goalData['goal_picture'].toString().startsWith('http')
+            ? goalData['goal_picture']
+            : ApiEndpoints.server + goalData['goal_picture'])
+        : null;
     final hasImage = goalPicture != null && goalPicture.isNotEmpty;
 
     // Create a NumberFormat instance for formatting numbers with commas

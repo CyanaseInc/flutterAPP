@@ -1,3 +1,4 @@
+import 'package:cyanase/screens/home/group/settings/allow_withdraw.dart';
 import 'package:flutter/material.dart';
 import 'package:cyanase/theme/theme.dart';
 import 'settings/message_setting.dart';
@@ -12,8 +13,11 @@ class GroupSettings extends StatefulWidget {
   final Map<String, dynamic> initialLoanSettings;
   final Function(bool, double) onPaymentSettingChanged;
   final bool isAdminMode;
+  final bool initialIsWithdraw;
   final bool initialRequireSubscription;
   final double initialSubscriptionAmount;
+  final Function(bool)? onWithdrawSettingChanged; // New callback for withdraw changes
+
   const GroupSettings({
     Key? key,
     required this.groupId,
@@ -24,6 +28,8 @@ class GroupSettings extends StatefulWidget {
     required this.initialPaymentAmount,
     required this.initialLoanSettings,
     required this.onPaymentSettingChanged,
+    required this.initialIsWithdraw,
+    this.onWithdrawSettingChanged, // Make optional if not always needed
   }) : super(key: key);
 
   @override
@@ -32,18 +38,30 @@ class GroupSettings extends StatefulWidget {
 
 class _GroupSettingsState extends State<GroupSettings> {
   late bool _allowMessageSending;
+  late bool _allowWithdraw;
   late bool _requirePaymentToJoin;
   late bool _requireSubscription;
   late double _paymentAmount;
   late double _subscriptionAmount;
+
   @override
   void initState() {
     super.initState();
     _allowMessageSending = widget.isAdminMode;
+    _allowWithdraw = widget.initialIsWithdraw;
     _requirePaymentToJoin = widget.initialRequirePayment;
     _requireSubscription = widget.initialRequireSubscription;
     _paymentAmount = widget.initialPaymentAmount;
     _subscriptionAmount = widget.initialSubscriptionAmount;
+  }
+
+  Future<void> _handleWithdrawToggleChange(bool value) async {
+    setState(() {
+      _allowWithdraw = value;
+    });
+    if (widget.onWithdrawSettingChanged != null) {
+      await widget.onWithdrawSettingChanged!(value);
+    }
   }
 
   @override
@@ -67,6 +85,12 @@ class _GroupSettingsState extends State<GroupSettings> {
             onChanged: (value) => setState(() => _allowMessageSending = value),
           ),
           const SizedBox(height: 8),
+          WithdrawSetting(
+            groupId: widget.groupId,
+            allowWithdraw: _allowWithdraw,
+            onChanged: _handleWithdrawToggleChange,
+          ),
+          const SizedBox(height: 8),
           LoanSettings(
             groupId: widget.groupId,
             initialLoanSettings: widget.initialLoanSettings,
@@ -74,14 +98,14 @@ class _GroupSettingsState extends State<GroupSettings> {
           const SizedBox(height: 8),
           SubscriptionSetting(
             requireSubscription: _requireSubscription,
-            paymentAmount: _paymentAmount,
+            paymentAmount: _subscriptionAmount,
             groupId: widget.groupId,
-            paymentFrequency: 'Monthly', // Example value, replace as needed
+            paymentFrequency: 'Monthly',
             onPaymentFrequencyChanged: (frequency) {
               // Handle frequency change logic here
             },
             onPaymentToggleChanged: _handleSubscriptionToggleChange,
-            onPaymentAmountChanged: _handleSubsriptiontAmountChange,
+            onPaymentAmountChanged: _handleSubscriptionAmountChange,
           ),
           const SizedBox(height: 8),
           PaymentSetting(
@@ -118,8 +142,8 @@ class _GroupSettingsState extends State<GroupSettings> {
     await widget.onPaymentSettingChanged(_requirePaymentToJoin, amount);
   }
 
-  Future<void> _handleSubsriptiontAmountChange(double amount) async {
-    setState(() => _paymentAmount = amount);
+  Future<void> _handleSubscriptionAmountChange(double amount) async {
+    setState(() => _subscriptionAmount = amount);
     await widget.onPaymentSettingChanged(_requireSubscription, amount);
   }
 }

@@ -156,13 +156,8 @@ class _WithdrawState extends State<Withdraw> {
                 buildPortfolioStep(),
                 WithdrawHelper(
                   withdrawType: 'portfolio',
-                  withdrawId: selectedPortfolio ?? '',
-                  phonenumber: phonenumber,
-                  onMethodSelected: (method) {
-                    setState(() {
-                      withdrawMethod = method;
-                    });
-                  },
+                  withdrawDetails:" Investment",
+                  
                 ),
                 _buildSuccessScreen(),
               ],

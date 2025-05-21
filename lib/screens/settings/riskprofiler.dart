@@ -106,9 +106,18 @@ class _RiskProfilerFormState extends State<RiskProfilerForm> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text("Risk Profiler"),
-        centerTitle: true,
-        elevation: 0,
+        title: Text(
+          "Risk Profiler",
+          style: TextStyle(
+            color: white, // Custom color
+            fontSize: 24,
+          ),
+        ),
+        backgroundColor: primaryTwo,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back_ios, color: white),
+          onPressed: () => Navigator.pop(context),
+        ),
         iconTheme: IconThemeData(
           color: white, // Change the back arrow color to white
         ),

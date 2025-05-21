@@ -114,8 +114,7 @@ class _NetworthCardState extends State<NetworthCard> {
   @override
   void initState() {
     super.initState();
-    print(
-        "InitState: currency = ${widget.currency}, networthLocal = ${widget.networthLocal}");
+    
     currency = widget.currency;
     networthLocal = widget.networthLocal;
     networthForeign = widget.networthForeign;

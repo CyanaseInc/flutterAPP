@@ -1,7 +1,9 @@
 import 'package:cyanase/helpers/api_helper.dart';
+import 'package:cyanase/helpers/database_helper.dart';
+import 'package:cyanase/helpers/endpoints.dart';
 import 'package:cyanase/helpers/web_db.dart';
 // import 'package:cyanase/helpers/web_socket.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' as material;
 import 'package:image_picker/image_picker.dart';
 import 'dart:io'; // For handling file paths
 import 'package:cyanase/theme/theme.dart';
@@ -11,12 +13,12 @@ import 'notification_settings.dart';
 import 'help_page.dart';
 import 'invite.dart';
 
-class SettingsPage extends StatefulWidget {
+class SettingsPage extends material.StatefulWidget {
   @override
   _SettingsPageState createState() => _SettingsPageState();
 }
 
-class _SettingsPageState extends State<SettingsPage> {
+class _SettingsPageState extends material.State<SettingsPage> {
   File? _profileImage; // To store the selected image
   String? name;
   String? email;
@@ -35,47 +37,87 @@ class _SettingsPageState extends State<SettingsPage> {
     final pickedFile = await picker.pickImage(source: ImageSource.gallery);
 
     if (pickedFile != null) {
-      final upload =
-          await ApiService.uploadProfileImage(token!, _profileImage!);
+      setState(() {
+        _profileImage = File(pickedFile.path);
+      });
+
+      // Show confirmation dialog
+      final shouldSave = await material.showDialog<bool>(
+        context: context,
+        builder: (material.BuildContext context) {
+          return material.AlertDialog(
+            title: const material.Text('Save Profile Picture?'),
+            content: const material.Text(
+                'Do you want to save this as your profile picture?'),
+            actions: <material.Widget>[
+              material.TextButton(
+                child: const material.Text('Cancel'),
+                onPressed: () => material.Navigator.of(context).pop(false),
+              ),
+              material.TextButton(
+                child: const material.Text('Save'),
+                onPressed: () => material.Navigator.of(context).pop(true),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (shouldSave == true) {
+        final upload =
+            await ApiService.uploadProfileImage(token!, _profileImage!);
+        if (upload['success']) {
+          setState(() {
+            picture = upload['profile_pic'];
+          });
+        }
+      }
     }
   }
 
   void getProfile() async {
-    // final dbHelper = DatabaseHelper();
-    // final db = await dbHelper.database;
-    // final userProfile = await db.query('profile', limit: 1);
+    final dbHelper = DatabaseHelper();
+    final db = await dbHelper.database;
+    final userProfile = await db.query('profile', limit: 1);
 
-    await WebSharedStorage.init();
-    var existingProfile = WebSharedStorage();
     setState(() {
-      name = existingProfile.getCommon('name');
-      email = existingProfile.getCommon('name');
-      picture = existingProfile.getCommon('picture');
-      token = existingProfile.getCommon('token');
+      if (userProfile.isNotEmpty) {
+        name = userProfile.first['name'] as String? ?? 'User';
+        email = userProfile.first['email'] as String? ?? 'Not set';
+        token = userProfile.first['token'] as String? ?? '';
+        picture = ApiEndpoints.server +
+            (userProfile.first['profile_pic'] as String? ?? '');
+      } else {
+        name = 'User';
+        email = 'Not set';
+        token = '';
+      }
     });
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Settings"),
-        titleTextStyle: const TextStyle(
-          color: white, // Custom color
+  material.Widget build(material.BuildContext context) {
+    return material.Scaffold(
+      appBar: material.AppBar(
+        title: const material.Text("Settings"),
+        titleTextStyle: const material.TextStyle(
+          color: white,
           fontSize: 24,
         ),
-        backgroundColor: primaryTwo, // WhatsApp green color
+        backgroundColor: primaryTwo,
+        leading: material.IconButton(
+          icon: material.Icon(material.Icons.arrow_back_ios, color: white),
+          onPressed: () => material.Navigator.pop(context),
+        ),
         elevation: 0,
-        iconTheme: const IconThemeData(
-          color: white, // Change the back arrow color to white
+        iconTheme: const material.IconThemeData(
+          color: white,
         ),
       ),
-      body: SingleChildScrollView(
-        child: Column(
+      body: material.SingleChildScrollView(
+        child: material.Column(
           children: [
-            // Profile Section
             _buildProfileSection(),
-            // Settings Options
             _buildSettingsOptions(context),
           ],
         ),
@@ -83,116 +125,116 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  // Profile Section
-  Widget _buildProfileSection() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
+  material.Widget _buildProfileSection() {
+    return material.Container(
+      padding: const material.EdgeInsets.all(16),
+      decoration: material.BoxDecoration(
         color: white,
-        border: Border(
-          bottom: BorderSide(
-            color: Colors.grey.shade300,
+        border: material.Border(
+          bottom: material.BorderSide(
+            color: material.Colors.grey.shade300,
             width: 1,
           ),
         ),
       ),
-      child: Row(
+      child: material.Row(
         children: [
-          // Profile Picture
-          GestureDetector(
-            onTap: _pickImage, // Allow tapping on the profile picture to edit
-            child: CircleAvatar(
+          material.GestureDetector(
+            onTap: _pickImage,
+            child: material.CircleAvatar(
               radius: 30,
-              backgroundImage: picture != null
-                  ? NetworkImage(picture!)
-                  : const AssetImage("assets/profile.jpg")
-                      as ImageProvider, // Default image
+              backgroundImage: _profileImage != null
+                  ? material.FileImage(_profileImage!)
+                  : picture != null
+                      ? material.NetworkImage(picture!)
+                      : const material.AssetImage("assets/images/avatar.png")
+                          as material.ImageProvider,
             ),
           ),
-          const SizedBox(width: 16),
-          // Profile Name and Status
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          const material.SizedBox(width: 16),
+          material.Expanded(
+            child: material.Column(
+              crossAxisAlignment: material.CrossAxisAlignment.start,
               children: [
-                Text(
-                  name!, // Replace with user's name
-                  style: const TextStyle(
+                material.Text(
+                  name ?? 'User',
+                  style: const material.TextStyle(
                     fontSize: 18,
-                    fontWeight: FontWeight.bold,
+                    fontWeight: material.FontWeight.bold,
                   ),
                 ),
-                SizedBox(height: 4),
+                const material.SizedBox(height: 4),
               ],
             ),
           ),
-          // Edit Profile Button
-          IconButton(
-            icon: const Icon(Icons.edit, color: primaryTwo),
-            onPressed: _pickImage, // Allow tapping on the edit icon to edit
+          material.IconButton(
+            icon: const material.Icon(material.Icons.edit, color: primaryTwo),
+            onPressed: _pickImage,
           ),
         ],
       ),
     );
   }
 
-  // Settings Options
-  Widget _buildSettingsOptions(BuildContext context) {
-    return Column(
+  material.Widget _buildSettingsOptions(material.BuildContext context) {
+    return material.Column(
       children: [
         _buildSettingsOption(
-          icon: Icons.vpn_key,
+          icon: material.Icons.vpn_key,
           title: "Account",
-          subtitle: "Next of kin, password, privacy",
+          subtitle: "Next of kin, password, passcode",
           onTap: () {
-            Navigator.push(
+            material.Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => AccountSettingsPage()),
+              material.MaterialPageRoute(
+                  builder: (context) => AccountSettingsPage()),
             );
           },
         ),
         _buildSettingsOption(
-          icon: Icons.lock,
+          icon: material.Icons.lock,
           title: "Risk profile",
           subtitle: "Configure your risk preferences",
           onTap: () {
-            Navigator.push(
+            material.Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => const RiskProfilerForm()),
+              material.MaterialPageRoute(
+                  builder: (context) => const RiskProfilerForm()),
             );
           },
         ),
         _buildSettingsOption(
-          icon: Icons.notifications,
+          icon: material.Icons.notifications,
           title: "Notifications",
           subtitle: "Customize your notification preferences",
           onTap: () {
-            Navigator.push(
+            material.Navigator.push(
               context,
-              MaterialPageRoute(
+              material.MaterialPageRoute(
                   builder: (context) => NotificationsSettingsPage()),
             );
           },
         ),
         _buildSettingsOption(
-          icon: Icons.help_outline,
+          icon: material.Icons.help_outline,
           title: "Help",
           subtitle: "Get help and support",
           onTap: () {
-            Navigator.push(
+            material.Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => HelpPage()),
+              material.MaterialPageRoute(builder: (context) => HelpPage()),
             );
           },
         ),
         _buildSettingsOption(
-          icon: Icons.people,
+          icon: material.Icons.people,
           title: "Invite a Friend",
           subtitle: "Share the app with your friends",
           onTap: () {
-            Navigator.push(
+            material.Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => InviteFriendPage()),
+              material.MaterialPageRoute(
+                  builder: (context) => InviteFriendPage()),
             );
           },
         ),
@@ -200,38 +242,37 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  // Reusable Settings Option Widget
-  Widget _buildSettingsOption({
-    required IconData icon,
+  material.Widget _buildSettingsOption({
+    required material.IconData icon,
     required String title,
     required String subtitle,
-    required VoidCallback onTap,
+    required material.VoidCallback onTap,
   }) {
-    return ListTile(
-      leading: Container(
-        padding: const EdgeInsets.all(8), // Padding around the icon
-        decoration: BoxDecoration(
-          color: primaryTwo.withOpacity(0.1), // Background color with opacity
-          shape: BoxShape.circle, // Circular shape
+    return material.ListTile(
+      leading: material.Container(
+        padding: const material.EdgeInsets.all(8),
+        decoration: material.BoxDecoration(
+          color: primaryTwo.withOpacity(0.1),
+          shape: material.BoxShape.circle,
         ),
-        child: Icon(icon, color: primaryTwo), // Icon with primary color
+        child: material.Icon(icon, color: primaryTwo),
       ),
-      title: Text(
+      title: material.Text(
         title,
-        style: const TextStyle(
+        style: const material.TextStyle(
           fontSize: 16,
-          fontWeight: FontWeight.w500,
+          fontWeight: material.FontWeight.w500,
         ),
       ),
-      subtitle: Text(
+      subtitle: material.Text(
         subtitle,
-        style: const TextStyle(
+        style: const material.TextStyle(
           fontSize: 14,
-          color: Colors.grey,
+          color: material.Colors.grey,
         ),
       ),
-      trailing:
-          const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+      trailing: const material.Icon(material.Icons.arrow_forward_ios,
+          size: 16, color: material.Colors.grey),
       onTap: onTap,
     );
   }

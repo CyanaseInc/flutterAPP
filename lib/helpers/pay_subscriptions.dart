@@ -7,6 +7,7 @@ import 'package:cyanase/helpers/database_helper.dart';
 
 class PayHelper extends StatefulWidget {
   final String amount;
+
   final int groupId;
   final VoidCallback onBack;
   final String paymentType;
@@ -55,6 +56,12 @@ class _PayHelperState extends State<PayHelper> {
     }
   }
 
+  double _calculateTotalAmount(double amount) {
+    final fee = ((70 / 100) * amount).toStringAsFixed(2);
+
+    return double.parse(fee);
+  }
+
   Future<void> _processPayment() async {
     if (double.tryParse(widget.amount) == null ||
         double.parse(widget.amount) <= 0) {
@@ -98,7 +105,7 @@ class _PayHelperState extends State<PayHelper> {
         "reference_id": referenceId,
         "msisdn": phoneNumber,
         "tx_ref": "CYANASE-SUB-$reference",
-        "type": "group_subscription",
+        "type": widget.paymentType,
         "description": "Annual Subscription Payment",
       };
 
@@ -108,21 +115,24 @@ class _PayHelperState extends State<PayHelper> {
       if (!requestPayment['success']) {
         throw Exception(requestPayment['message'] ?? 'Payment request failed');
       }
-
+      print('request is goo we have $requestPayment');
       // Wait for transaction status (adjust delay as needed)
-      await Future.delayed(const Duration(seconds: 35));
+      await Future.delayed(const Duration(seconds: 25));
       final authPayment = await ApiService.getTransaction(
         token,
         requestPayment,
       );
 
       final internalRef = authPayment['transaction']['internal_reference'];
+
       if (authPayment['success']) {
         final data = {
           "group_id": widget.groupId,
           "msisdn": phoneNumber,
           "internal_reference": internalRef,
-          "amount": widget.amount,
+          "amount": _calculateTotalAmount(double.parse(widget.amount)),
+          "charge_amount": widget.amount,
+          "type": widget.paymentType,
         };
         final groupSubcription = await ApiService.groupSbscription(token, data);
 
@@ -144,10 +154,11 @@ class _PayHelperState extends State<PayHelper> {
       }
     } catch (e) {
       if (mounted) {
+        print('Error: ${e.toString()}');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error: ${e.toString()}'),
-            duration: const Duration(seconds: 5),
+            duration: const Duration(seconds: 8),
           ),
         );
         Navigator.of(context).pop(); // Close loading dialog
@@ -246,12 +257,14 @@ class _PayHelperState extends State<PayHelper> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Pay Group Subscription',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: primaryTwo,
+              const Center(
+                child: Text(
+                  'Pay Group Subscription',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: primaryTwo,
+                  ),
                 ),
               ),
               const SizedBox(height: 24),

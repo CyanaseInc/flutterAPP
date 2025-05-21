@@ -1,12 +1,13 @@
+import 'package:cyanase/helpers/deposit.dart';
 import 'package:flutter/material.dart';
 import 'package:cyanase/theme/theme.dart';
 import 'add_group_goal.dart';
 import 'edit_group_goal_screen.dart';
 import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:vibration/vibration.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
-import 'package:cyanase/helpers/database_helper.dart';
+// import 'package:http/http.dart' as http;
+// import 'dart:convert';
+// import 'package:cyanase/helpers/database_helper.dart';
 
 class Contributor {
   final String name;
@@ -146,6 +147,7 @@ class GroupSavingGoalsSection extends StatefulWidget {
       myContributions; // Kept for compatibility, not used in balance summary
   final bool showAllGoals;
   final String currencySymbol;
+  final bool isAdmin;
 
   const GroupSavingGoalsSection({
     Key? key,
@@ -157,6 +159,7 @@ class GroupSavingGoalsSection extends StatefulWidget {
     required this.totalBalance,
     required this.myContributions,
     this.showAllGoals = false,
+    required this.isAdmin,
     required this.currencySymbol,
   }) : super(key: key);
 
@@ -327,9 +330,9 @@ class _GroupSavingGoalsSectionState extends State<GroupSavingGoalsSection> {
     );
     // Format with currency symbol
     final displayGroupTotal =
-        "${widget.currencySymbol}${groupTotal.toStringAsFixed(2)}";
+        "${widget.currencySymbol}${groupTotal.toStringAsFixed(2).replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')}";
     final displayMyTotal =
-        "${widget.currencySymbol}${myTotal.toStringAsFixed(2)}";
+        "${widget.currencySymbol}${myTotal.toStringAsFixed(2).replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')}";
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -350,10 +353,11 @@ class _GroupSavingGoalsSectionState extends State<GroupSavingGoalsSection> {
           Column(
             children: [
               Text(
-                'Group Total',
+                'Group Total Goal',
                 style: TextStyle(
                   color: Colors.grey[600],
                   fontSize: 14,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
               const SizedBox(height: 4),
@@ -379,6 +383,7 @@ class _GroupSavingGoalsSectionState extends State<GroupSavingGoalsSection> {
                 style: TextStyle(
                   color: Colors.grey[600],
                   fontSize: 14,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
               const SizedBox(height: 4),
@@ -424,6 +429,7 @@ class _GroupSavingGoalsSectionState extends State<GroupSavingGoalsSection> {
           onContributionAdded: widget.onGoalAdded,
           onGoalUpdated: widget.onGoalUpdated,
           onGoalDeleted: widget.onGoalDeleted,
+          isAdmin: widget.isAdmin,
           onEditResult: _handleGoalEditedOrDeleted,
         );
       },
@@ -437,26 +443,26 @@ class _GroupSavingGoalsSectionState extends State<GroupSavingGoalsSection> {
         child: TextButton(
           onPressed: () {
             Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => Scaffold(
-                  appBar: AppBar(
-                    title: const Text('All Group Goals'),
+                context,
+                MaterialPageRoute(
+                  builder: (context) => Scaffold(
+                    appBar: AppBar(
+                      title: const Text('All Group Goals'),
+                    ),
+                    body: GroupSavingGoalsSection(
+                      groupGoals: _groupGoals,
+                      groupId: widget.groupId,
+                      totalBalance: widget.totalBalance,
+                      myContributions: widget.myContributions,
+                      showAllGoals: true,
+                      currencySymbol: widget.currencySymbol,
+                      isAdmin: widget.isAdmin,
+                      onGoalAdded: widget.onGoalAdded,
+                      onGoalUpdated: widget.onGoalUpdated,
+                      onGoalDeleted: widget.onGoalDeleted,
+                    ),
                   ),
-                  body: GroupSavingGoalsSection(
-                    groupGoals: _groupGoals,
-                    groupId: widget.groupId,
-                    totalBalance: widget.totalBalance,
-                    myContributions: widget.myContributions,
-                    showAllGoals: true,
-                    currencySymbol: widget.currencySymbol,
-                    onGoalAdded: widget.onGoalAdded,
-                    onGoalUpdated: widget.onGoalUpdated,
-                    onGoalDeleted: widget.onGoalDeleted,
-                  ),
-                ),
-              ),
-            );
+                ));
           },
           child: Text(
             'See All (${_groupGoals.length})',
@@ -479,6 +485,7 @@ class GroupSavingGoalsCard extends StatefulWidget {
   final Function(GroupSavingGoal)? onGoalUpdated;
   final Function(int)? onGoalDeleted;
   final Function(dynamic)? onEditResult;
+  final bool isAdmin; // Add this line
 
   const GroupSavingGoalsCard({
     Key? key,
@@ -486,6 +493,7 @@ class GroupSavingGoalsCard extends StatefulWidget {
     required this.groupId,
     required this.currencySymbol,
     this.onContributionAdded,
+    required this.isAdmin, // Add this
     this.onGoalUpdated,
     this.onGoalDeleted,
     this.onEditResult,
@@ -589,7 +597,7 @@ class _GroupSavingGoalsCardState extends State<GroupSavingGoalsCard> {
                   Flexible(
                     child: Text(
                       'Contributors to "${widget.groupGoal.goalName}"',
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
                         color: primaryTwo,
@@ -683,8 +691,8 @@ class _GroupSavingGoalsCardState extends State<GroupSavingGoalsCard> {
                 ),
               ),
               trailing: Text(
-                '${widget.currencySymbol}${contributor.amount.toStringAsFixed(0)}',
-                style: TextStyle(
+                '${widget.currencySymbol}${contributor.amount.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')}',
+                style: const TextStyle(
                   fontWeight: FontWeight.w600,
                   color: primaryTwo,
                 ),
@@ -715,6 +723,7 @@ class _GroupSavingGoalsCardState extends State<GroupSavingGoalsCard> {
 
   void _showContributionDialog() {
     final amountController = TextEditingController();
+    print("Goal ID: ${widget.groupGoal.goalId}");
     showDialog(
       context: context,
       builder: (context) => Dialog(
@@ -722,129 +731,29 @@ class _GroupSavingGoalsCardState extends State<GroupSavingGoalsCard> {
           borderRadius: BorderRadius.circular(16),
         ),
         child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Add Contribution',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: primaryTwo,
+          padding: const EdgeInsets.all(12.0),
+          child: SizedBox(
+            height: 450, // Increased to accommodate Cancel button
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Expanded(
+                  child: DepositHelper(
+                    groupId: widget.groupId,
+                    depositCategory: 'group_goal_deposit',
+                    goalId: widget.groupGoal.goalId,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: amountController,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  labelText: 'Amount (${widget.currencySymbol})',
-                  border: const OutlineInputBorder(),
-                  prefixText: '${widget.currencySymbol} ',
-                ),
-              ),
-              const SizedBox(height: 20),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
+                const SizedBox(height: 10),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
                     child: const Text('Cancel'),
                   ),
-                  ElevatedButton(
-                    onPressed: () async {
-                      final amount = double.tryParse(amountController.text);
-                      if (amount != null && amount > 0) {
-                        try {
-                          final dbHelper = DatabaseHelper();
-                          final db = await dbHelper.database;
-                          final userProfile =
-                              await db.query('profile', limit: 1);
-                          if (userProfile.isEmpty) {
-                            throw Exception('User profile not found');
-                          }
-                          final token = userProfile.first['token'] as String;
-                          final userId = userProfile.first['id'] as String?;
-                          final userName =
-                              userProfile.first['full_name'] as String? ??
-                                  'You';
-
-                          final response = await http.post(
-                            Uri.parse(
-                                'http://192.168.254.220:8000/api/v1/en/contribute/'),
-                            headers: {
-                              'Authorization': 'Bearer $token',
-                              'Content-Type': 'application/json',
-                            },
-                            body: jsonEncode({
-                              'group_id': widget.groupId,
-                              'goal_id': widget.groupGoal.goalId,
-                              'amount': amount,
-                              'member_id': userId,
-                            }),
-                          );
-
-                          final responseData = jsonDecode(response.body);
-                          if (responseData['success'] == true) {
-                            final updatedGoal = widget.groupGoal.copyWith(
-                              currentAmount:
-                                  widget.groupGoal.currentAmount + amount,
-                              myContributions:
-                                  widget.groupGoal.myContributions + amount,
-                              contributors: [
-                                ...widget.groupGoal.contributors,
-                                Contributor(
-                                  name: userName,
-                                  amount: amount,
-                                  date: DateTime.now(),
-                                ),
-                              ],
-                            );
-
-                            widget.onGoalUpdated?.call(updatedGoal);
-                            widget.onContributionAdded?.call();
-
-                            if (!mounted) return;
-                            Navigator.pop(context);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content:
-                                    Text('Contribution added successfully'),
-                                backgroundColor: Colors.green,
-                              ),
-                            );
-                          } else {
-                            throw Exception(responseData['message'] ??
-                                'Failed to add contribution');
-                          }
-                        } catch (e) {
-                          if (!mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Error: ${e.toString()}'),
-                              backgroundColor: Colors.red,
-                            ),
-                          );
-                        }
-                      } else {
-                        if (!mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Please enter a valid amount'),
-                            backgroundColor: Colors.red,
-                          ),
-                        );
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: primaryTwo,
-                    ),
-                    child: const Text('Submit'),
-                  ),
-                ],
-              ),
-            ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -869,6 +778,8 @@ class _GroupSavingGoalsCardState extends State<GroupSavingGoalsCard> {
           goalId: widget.groupGoal.goalId!,
           goalName: widget.groupGoal.goalName,
           currentAmount: widget.groupGoal.currentAmount,
+          isAdmin: widget.isAdmin,
+          groupId: widget.groupId,
         ),
       ),
     );
@@ -949,8 +860,26 @@ class _GroupSavingGoalsCardState extends State<GroupSavingGoalsCard> {
                 splashRadius: 20,
               ),
             IconButton(
-              onPressed: _editGoal,
-              icon: Icon(Icons.edit, color: primaryTwo, size: 24),
+              onPressed: () {
+                if (widget.isAdmin) {
+                  _editGoal();
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Only admins can edit goals'),
+                      behavior: SnackBarBehavior.floating,
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              },
+              icon: Icon(
+                Icons.edit,
+                color: widget.isAdmin
+                    ? primaryTwo
+                    : Colors.grey, // Grey out if not admin
+                size: 24,
+              ),
               splashRadius: 20,
             ),
           ],
@@ -1011,7 +940,7 @@ class _GroupSavingGoalsCardState extends State<GroupSavingGoalsCard> {
               ),
             ),
             Text(
-              "${widget.currencySymbol}${widget.groupGoal.currentAmount.toStringAsFixed(0)} / ${widget.currencySymbol}${widget.groupGoal.goalAmount.toStringAsFixed(0)}",
+              "${widget.currencySymbol}${widget.groupGoal.currentAmount.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')} / ${widget.currencySymbol}${widget.groupGoal.goalAmount.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')}",
               style: const TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
@@ -1022,7 +951,7 @@ class _GroupSavingGoalsCardState extends State<GroupSavingGoalsCard> {
         ),
         const SizedBox(height: 8),
         Text(
-          "My Contributions: ${widget.currencySymbol}${widget.groupGoal.myContributions.toStringAsFixed(0)}",
+          "My Contributions: ${widget.currencySymbol}${widget.groupGoal.myContributions.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')}",
           style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w600,

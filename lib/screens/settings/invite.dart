@@ -6,135 +6,132 @@ import 'package:cyanase/theme/theme.dart';
 class InviteFriendPage extends StatelessWidget {
   final String inviteCode = "CYANASE123"; // Example invite code
 
+  const InviteFriendPage({Key? key}) : super(key: key);
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: white,
+      backgroundColor: Colors.grey[100], // Subtle background for depth
       appBar: AppBar(
         title: const Text(
           'Invite a Friend',
           style: TextStyle(
-            color: Colors.black,
-            fontWeight: FontWeight.bold,
-            fontSize: 22,
+            fontWeight: FontWeight.w600,
+            fontSize: 20,
+            color: Colors.black87,
           ),
         ),
-        backgroundColor: white,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.black),
+        backgroundColor: Colors.grey[100],
+        elevation: 0, // Remove shadow for a cleaner look
+        iconTheme: const IconThemeData(color: Colors.black87),
       ),
       body: SingleChildScrollView(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Hero Section
-              Container(
-                margin: const EdgeInsets.only(bottom: 24),
-                decoration: BoxDecoration(
-                  color: primaryTwoLight.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black12,
-                      blurRadius: 8,
-                      offset: Offset(0, 4),
-                    )
-                  ],
+              Card(
+                elevation: 3,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
                 ),
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(16),
                   child: Image.asset(
-                    'assets/images/invite_friend.png', // Add your illustration asset
-                    height: 220,
+                    'assets/images/invite_friend.png', // Ensure asset exists
+                    height: 200,
                     width: double.infinity,
                     fit: BoxFit.cover,
                   ),
                 ),
               ),
+              const SizedBox(height: 24),
 
               // Title & Description
               const Text(
                 'Invite Your Friends',
                 style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black,
+                  fontSize: 26,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.black87,
                 ),
               ),
               const SizedBox(height: 8),
-              const Text(
+              Text(
                 'Share the love and earn rewards together!',
                 style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey,
+                  fontSize: 15,
+                  color: Colors.grey[600],
+                  height: 1.5,
                 ),
-                textAlign: TextAlign.center,
+                textAlign: TextAlign.start,
               ),
               const SizedBox(height: 32),
 
               // Invite Code Section
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(vertical: 20, horizontal: 28),
-                decoration: BoxDecoration(
-                  color: primaryTwoLight.withOpacity(0.1),
+              Card(
+                elevation: 3,
+                shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black12,
-                      blurRadius: 10,
-                      offset: Offset(0, 2),
-                    )
-                  ],
                 ),
-                child: Column(
-                  children: [
-                    const Text(
-                      'Your Invite Code',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.grey,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      inviteCode,
-                      style: const TextStyle(
-                        fontSize: 30,
-                        fontWeight: FontWeight.bold,
-                        color: primaryTwo,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    ElevatedButton(
-                      onPressed: () {
-                        Clipboard.setData(ClipboardData(text: inviteCode));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Invite code copied to clipboard!'),
-                          ),
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: primaryTwo,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 24, vertical: 14),
-                        elevation: 2,
-                      ),
-                      child: const Text(
-                        'Copy Invite Code',
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    children: [
+                      Text(
+                        'Your Invite Code',
                         style: TextStyle(
-                          fontSize: 16,
-                          color: white,
+                          fontSize: 15,
+                          color: Colors.grey[600],
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 12),
+                      Text(
+                        inviteCode,
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.w700,
+                          color: primaryTwo,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: () {
+                          Clipboard.setData(ClipboardData(text: inviteCode));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: const Text(
+                                  'Invite code copied to clipboard!'),
+                              backgroundColor: primaryTwo,
+                              behavior: SnackBarBehavior.floating,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: primaryTwo,
+                          foregroundColor: white,
+                          minimumSize: const Size(double.infinity, 48),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          elevation: 2,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          textStyle: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        child: const Text('Copy Invite Code'),
+                      ),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(height: 32),
@@ -143,9 +140,9 @@ class InviteFriendPage extends StatelessWidget {
               const Text(
                 'Share via',
                 style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
                 ),
               ),
               const SizedBox(height: 16),
@@ -158,65 +155,61 @@ class InviteFriendPage extends StatelessWidget {
                   _buildShareIcon('email', context),
                 ],
               ),
-              const SizedBox(height: 40),
+              const SizedBox(height: 32),
 
               // Rewards Section
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: primaryTwoLight.withOpacity(0.1),
+              Card(
+                elevation: 3,
+                shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black12,
-                      blurRadius: 10,
-                      offset: Offset(0, 4),
-                    )
-                  ],
                 ),
-                child: Column(
-                  children: [
-                    const Text(
-                      'Earn Rewards',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'For every friend who joins using your invite code, you both earn exclusive rewards!',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 20),
-                    ElevatedButton(
-                      onPressed: () {
-                        Share.share(
-                            'Join me on Cyanase! Use my invite code: $inviteCode');
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: primaryTwo,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 24, vertical: 14),
-                        elevation: 2,
-                      ),
-                      child: const Text(
-                        'Share Invite Link',
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    children: [
+                      const Text(
+                        'Earn Rewards',
                         style: TextStyle(
-                          fontSize: 16,
-                          color: white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black87,
                         ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 12),
+                      Text(
+                        'For every friend who joins using your invite code, you both earn exclusive rewards!',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey[600],
+                          height: 1.5,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: () {
+                          Share.share(
+                            'Join me on Cyanase! Use my invite code: $inviteCode',
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: primaryTwo,
+                          foregroundColor: white,
+                          minimumSize: const Size(double.infinity, 48),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          elevation: 2,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          textStyle: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        child: const Text('Share Invite Link'),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -228,14 +221,30 @@ class InviteFriendPage extends StatelessWidget {
 
   // Helper function to build share icons
   Widget _buildShareIcon(String iconName, BuildContext context) {
-    return IconButton(
-      icon: Image.asset(
-        'assets/icons/$iconName.png', // Add respective icon assets
-        height: 50,
-      ),
-      onPressed: () {
-        Share.share('Join me on Cyanase! Use my invite code: CYANASE123');
+    return InkWell(
+      onTap: () {
+        Share.share('Join me on Cyanase! Use my invite code: $inviteCode');
       },
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Image.asset(
+          'assets/icons/$iconName.png', // Ensure icon assets exist
+          height: 40,
+          width: 40,
+        ),
+      ),
     );
   }
 }

@@ -1,3 +1,4 @@
+import 'package:cyanase/helpers/deposit.dart';
 import 'package:cyanase/helpers/loader.dart';
 import 'package:flutter/material.dart';
 import 'package:cyanase/theme/theme.dart';
@@ -24,40 +25,6 @@ class _OngoingLoansScreenState extends State<OngoingLoansScreen> {
   final TextEditingController _paymentController = TextEditingController();
   final Map<int, bool> _loadingStates = {};
 
-  Future<bool> payLoan({
-    required int loanId,
-    required int groupId,
-    required double amount,
-  }) async {
-    try {
-      final db = await _dbHelper.database;
-      final userProfile = await db.query('profile', limit: 1);
-      if (userProfile.isEmpty) {
-        throw Exception('User profile not found');
-      }
-      final token = userProfile.first['token'] as String;
-
-      final response = await ApiService.recordLoanPayment(
-        token: token,
-        loanId: loanId,
-        groupId: groupId,
-        amount: amount,
-      );
-
-      if (!response['success']) {
-        throw Exception(response['message'] ?? 'Payment failed');
-      }
-
-      return true;
-    } catch (e) {
-      print('PayLoan Error: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to record payment: $e')),
-      );
-      return false;
-    }
-  }
-
   @override
   void dispose() {
     _paymentController.dispose();
@@ -69,16 +36,15 @@ class _OngoingLoansScreenState extends State<OngoingLoansScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          'Ongoing Loans',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-            color: Colors.white,
-          ),
+          'On going loans',
+          style: TextStyle(fontSize: 20, color: white),
         ),
         backgroundColor: primaryTwo,
-        elevation: 0,
-        centerTitle: true,
+        leading: IconButton(
+          icon:
+              const Icon(Icons.arrow_back_ios, color: white), // White back icon
+          onPressed: () => Navigator.of(context).pop(),
+        ),
       ),
       body: widget.loans.isEmpty
           ? _buildEmptyState()
@@ -215,6 +181,36 @@ class _OngoingLoansScreenState extends State<OngoingLoansScreen> {
     );
   }
 
+  Future<void> _handleLoanPayment(Map<String, dynamic> loan) async {
+    // Show loading popup
+
+    final loanID = loan['loan_id'];
+    final groupID = loan['group_id'];
+
+    await showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) => AlertDialog(
+        content: SizedBox(
+          height: 350,
+          child: DepositHelper(
+            depositCategory: 'pay_loan',
+            loanId: loanID,
+            groupId: groupID,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop(); // Closes the dialog
+            },
+            child: Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _viewLoanDetails(
       BuildContext context, Map<String, dynamic> loan, int index) {
     final amount = loan['amount']?.toDouble() ?? 0.0;
@@ -299,67 +295,12 @@ class _OngoingLoansScreenState extends State<OngoingLoansScreen> {
                       .format(loanBalance),
                 ),
                 const SizedBox(height: 24),
-                TextField(
-                  controller: _paymentController,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: 'Payment Amount (UGX)',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    filled: true,
-                    fillColor: Colors.grey[100],
-                  ),
-                ),
-                const SizedBox(height: 16),
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
                     onPressed: _loadingStates[loan['loan_id']] == true
                         ? null
-                        : () async {
-                            final paymentAmount =
-                                double.tryParse(_paymentController.text);
-                            if (paymentAmount == null || paymentAmount <= 0) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                    content: Text(
-                                        'Please enter a valid payment amount')),
-                              );
-                              return;
-                            }
-
-                            setState(() {
-                              _loadingStates[loan['loan_id']] = true;
-                            });
-
-                            final success = await payLoan(
-                              loanId: loan['loan_id'] as int,
-                              groupId: loan['group_id'] as int,
-                              amount: paymentAmount,
-                            );
-
-                            setState(() {
-                              _loadingStates[loan['loan_id']] = false;
-                            });
-
-                            if (success) {
-                              _paymentController.clear();
-                              widget.onLoanUpdated();
-                              Navigator.pop(context);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                    content:
-                                        Text('Payment recorded successfully')),
-                              );
-                            } else {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                    content: Text(
-                                        'Payment failed, please try again')),
-                              );
-                            }
-                          },
+                        : () => _handleLoanPayment(loan),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: primaryColor,
                       foregroundColor: Colors.white,
@@ -383,7 +324,7 @@ class _OngoingLoansScreenState extends State<OngoingLoansScreen> {
                             ),
                           ),
                   ),
-                ),
+                )
               ],
             ),
           ),

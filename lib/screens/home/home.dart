@@ -1,3 +1,4 @@
+import 'package:cyanase/helpers/endpoints.dart';
 import 'package:cyanase/helpers/loader.dart';
 import 'package:cyanase/helpers/web_db.dart';
 import 'package:flutter/material.dart';
@@ -11,6 +12,10 @@ import '../settings/settings.dart';
 import '../auth/login_with_passcode.dart';
 import '../auth/set_three_code.dart';
 import 'package:cyanase/helpers/database_helper.dart';
+import 'package:flutter_contacts/flutter_contacts.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class HomeScreen extends StatefulWidget {
   final bool? passcode;
@@ -49,12 +54,170 @@ class _HomeScreenState extends State<HomeScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initApp();
     });
-    getLocalStorage();
   }
 
   Future<void> _initApp() async {
     if (widget.passcode == false || widget.passcode == null) {
       _showPasscodeCreationModal();
+    }
+    await _checkAndSyncContacts();
+  }
+
+  Future<void> _checkAndSyncContacts() async {
+    try {
+      final dbHelper = DatabaseHelper();
+      final db = await dbHelper.database;
+      final contacts = await db.query('contacts');
+      if (contacts.isEmpty && mounted) {
+        setState(() {
+          _isSyncingContacts = true;
+          _syncProgress = 0.0;
+        });
+        await _syncContacts();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to check contacts: $e'),
+            action: SnackBarAction(
+              label: 'Retry',
+              onPressed: _checkAndSyncContacts,
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _syncContacts() async {
+    try {
+      setState(() {
+        _syncProgress = 0.2;
+      });
+      final contacts = await fetchAndHashContacts();
+      setState(() {
+        _syncProgress = 0.5;
+      });
+      final registeredContacts = await getRegisteredContacts(contacts);
+      setState(() {
+        _syncProgress = 1.0;
+      });
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (mounted) {
+        setState(() {
+          _isSyncingContacts = false;
+          _syncProgress = 0.0;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Contacts synced successfully!')),
+        );
+      }
+    } catch (e) {
+      print('Sync error: $e');
+      if (mounted) {
+        setState(() {
+          _isSyncingContacts = false;
+          _syncProgress = 0.0;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to sync contacts: $e'),
+            action: SnackBarAction(
+              label: 'Retry',
+              onPressed: _syncContacts,
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  String normalizePhoneNumber(String phoneNumber, String regionCode) {
+    try {
+      phoneNumber = phoneNumber.replaceAll(RegExp(r'[^0-9+]'), '');
+      if (!phoneNumber.startsWith('+')) {
+        phoneNumber = '+256${phoneNumber.replaceFirst(RegExp(r'^0'), '')}';
+      }
+      if (!phoneNumber.startsWith('+256')) {
+        throw Exception("Invalid country code for Uganda: $phoneNumber");
+      }
+      if (phoneNumber.length != 12) {
+        throw Exception("Invalid phone number length: $phoneNumber");
+      }
+      final digits = phoneNumber.substring(4);
+      if (!RegExp(r'^\d+$').hasMatch(digits)) {
+        throw Exception("Invalid phone number format: $phoneNumber");
+      }
+      return phoneNumber;
+    } catch (e) {
+      return phoneNumber;
+    }
+  }
+
+  Future<List<Map<String, String>>> fetchAndHashContacts() async {
+    List<Map<String, String>> contactsWithHashes = [];
+    PermissionStatus permissionStatus = await Permission.contacts.request();
+    if (permissionStatus != PermissionStatus.granted) {
+      throw Exception("Permission to access contacts denied");
+    }
+    final contacts = await FlutterContacts.getContacts(
+      withProperties: true,
+      withPhoto: false,
+    );
+    for (var contact in contacts) {
+      if (contact.phones.isNotEmpty) {
+        for (var phone in contact.phones) {
+          try {
+            String normalizedNumber = normalizePhoneNumber(phone.number, 'UG');
+            contactsWithHashes.add({
+              'name': contact.displayName ?? 'Unknown',
+              'phone': phone.number,
+              'normalizedPhone': normalizedNumber,
+            });
+          } catch (e) {
+            print('Error processing ${contact.displayName}: $e');
+          }
+        }
+      }
+    }
+    return contactsWithHashes;
+  }
+
+  Future<List<Map<String, dynamic>>> getRegisteredContacts(
+      List<Map<String, dynamic>> contacts) async {
+    final String apiUrl = "https://fund.cyanase.app/app/get_my_contacts.php";
+    List<String> phoneNumbers =
+        contacts.map((contact) => contact['phone'] as String).toList();
+    final response = await http.post(
+      Uri.parse(apiUrl),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"phoneNumbers": phoneNumbers}),
+    );
+    if (response.statusCode == 200) {
+      List<dynamic> registeredNumbersWithIds =
+          jsonDecode(response.body)["registeredContacts"];
+      List<Map<String, dynamic>> registeredContacts = contacts
+          .where((contact) => registeredNumbersWithIds
+              .any((registered) => registered['phoneno'] == contact['phone']))
+          .map((contact) {
+        var registered = registeredNumbersWithIds.firstWhere(
+            (registered) => registered['phoneno'] == contact['phone']);
+        return {
+          'id': int.parse(registered['id'].toString()),
+          'user_id': registered['id'].toString(),
+          'name': contact['name'],
+          'phone': contact['phone'],
+          'profilePic': contact['profilePic'] ?? '',
+          'is_registered': true,
+        };
+      }).toList();
+      final dbHelper = DatabaseHelper();
+      await dbHelper.insertContacts(registeredContacts);
+      return registeredContacts;
+    } else {
+      throw Exception(
+          "Failed to fetch registered contacts: ${response.statusCode}");
     }
   }
 
@@ -66,11 +229,11 @@ class _HomeScreenState extends State<HomeScreen>
           _isSearching = false;
           break;
         case 1:
-          _currentTabTitle = 'Saving Groups';
+          _currentTabTitle = 'Saving groups';
           _isSearching = false;
           break;
         case 2:
-          _currentTabTitle = 'My Goals';
+          _currentTabTitle = 'My goals';
           _isSearching = false;
           break;
         default:
@@ -80,17 +243,17 @@ class _HomeScreenState extends State<HomeScreen>
     });
   }
 
-  void getLocalStorage() async {
-    try {
-      await WebSharedStorage.init();
-      var existingProfile = WebSharedStorage();
-      setState(() {
-        picture1 = existingProfile.getCommon('picture');
-      });
-    } catch (e) {
-      print('Error getting local storage: $e');
-    }
-  }
+  // void getLocalStorage() async {
+  //   try {
+  //     await WebSharedStorage.init();
+  //     var existingProfile = WebSharedStorage();
+  //     setState(() {
+  //       picture1 =
+  //     });
+  //   } catch (e) {
+  //     print('Error getting local storage: $e');
+  //   }
+  // }
 
   void _showPasscodeCreationModal() {
     showModalBottomSheet(
@@ -413,7 +576,9 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Widget _profile() {
-    final picture = widget.picture ?? picture1;
+    final picture = widget.picture != null
+        ? ApiEndpoints.server + widget.picture!
+        : "assets/images/avatar.png";
     return IconButton(
       onPressed: () => Navigator.push(
         context,
@@ -424,9 +589,9 @@ class _HomeScreenState extends State<HomeScreen>
       padding: const EdgeInsets.all(8.0),
       icon: CircleAvatar(
         radius: 20,
-        backgroundImage: picture != null && picture.isNotEmpty
-            ? NetworkImage(picture)
-            : const AssetImage("assets/images/avatar.png") as ImageProvider,
+        backgroundImage: widget.picture != null
+            ? NetworkImage(picture) as ImageProvider
+            : const AssetImage("assets/images/avatar.png"),
       ),
     );
   }

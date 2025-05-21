@@ -1,3 +1,4 @@
+import 'package:cyanase/helpers/loader.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
@@ -6,6 +7,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:cyanase/helpers/endpoints.dart';
 import 'package:cyanase/theme/theme.dart';
+import 'dart:io' show Platform;
 
 class InviteScreen extends StatefulWidget {
   final String groupName;
@@ -71,12 +73,36 @@ class _InviteScreenState extends State<InviteScreen> {
   }
 
   Future<void> _shareViaWhatsApp(String link) async {
-    final url = Uri.parse("https://wa.me/?text=${Uri.encodeComponent(link)}");
-    if (await canLaunchUrl(url)) {
-      await launchUrl(url, mode: LaunchMode.externalApplication);
+    String whatsappUrl;
+    if (Platform.isIOS) {
+      whatsappUrl = "https://wa.me/?text=${Uri.encodeComponent(link)}";
     } else {
+      whatsappUrl = "whatsapp://send?text=${Uri.encodeComponent(link)}";
+    }
+
+    final uri = Uri.parse(whatsappUrl);
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        // Fallback to share_plus
+        await Share.share(
+          link,
+          subject: 'Join ${widget.groupName}',
+          sharePositionOrigin: Rect.fromLTWH(
+              0,
+              0,
+              MediaQuery.of(context).size.width,
+              MediaQuery.of(context).size.height / 2),
+        );
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text("Could not open WhatsApp, using system share")),
+        );
+      }
+    } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("WhatsApp not installed")),
+        SnackBar(content: Text("Error sharing to WhatsApp: $e")),
       );
     }
   }
@@ -214,7 +240,7 @@ class _InviteScreenState extends State<InviteScreen> {
               color: _isResetting ? Colors.grey : Colors.red,
               enabled: !_isResetting && widget.onResetLink != null,
             ),
-            if (_isResetting) const LinearProgressIndicator(),
+            if (_isResetting) const Loader(),
           ],
         ),
       ),

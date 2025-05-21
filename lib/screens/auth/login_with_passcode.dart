@@ -102,12 +102,15 @@ class _NumericLoginScreenState extends State<NumericLoginScreen> {
 
         // Extract profile details
         final profile = user['profile'];
+        final picture = profile['profile_picture'];
+
         final userCountry = profile['country'];
         final phoneNumber = profile['phoneno'];
         final isVerified = profile['is_verified'] ?? false;
-        final mypasscode =
-            profile['passcode'] as String?; // Cast to String? for safety
-
+        final mypasscode = profile['passcode'] as String?;
+        // Cast to String? for safety
+        final autoSave = profile['auto_save'] ?? false;
+        final goalsAlert = profile['goals_alert'] ?? false;
         setState(() {
           // Always set email
           _passcode = (mypasscode != null &&
@@ -131,7 +134,10 @@ class _NumericLoginScreenState extends State<NumericLoginScreen> {
                 'phone_number': phoneNumber,
                 'token': token,
                 'name': userName,
+                'profile_pic': picture,
                 'created_at': DateTime.now().toIso8601String(),
+                'auto_save': autoSave,
+                'goals_alert': goalsAlert,
               },
             );
           } else {
@@ -145,7 +151,10 @@ class _NumericLoginScreenState extends State<NumericLoginScreen> {
                 'token': token,
                 'phone_number': phoneNumber,
                 'name': userName,
+                'profile_pic': picture,
                 'created_at': DateTime.now().toIso8601String(),
+                'auto_save': autoSave,
+                'goals_alert': goalsAlert,
               },
             );
           }
@@ -154,7 +163,8 @@ class _NumericLoginScreenState extends State<NumericLoginScreen> {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => HomeScreen(passcode: _passcode, name: name),
+              builder: (context) =>
+                  HomeScreen(passcode: _passcode, name: name, picture: picture),
             ),
           );
         } else {
@@ -177,7 +187,7 @@ class _NumericLoginScreenState extends State<NumericLoginScreen> {
       // Show a red SnackBar for errors
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error: ${e.toString()}'),
+          content: Text('Check your network connection'),
           backgroundColor: Colors.red, // Red SnackBar for errors
         ),
       );

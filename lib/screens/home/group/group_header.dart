@@ -1,4 +1,6 @@
+import 'package:cyanase/helpers/deposit.dart';
 import 'package:cyanase/helpers/loader.dart';
+import 'package:cyanase/helpers/withdraw_helper.dart';
 import 'package:flutter/material.dart';
 import 'get_group_loan.dart';
 import 'group_deposit_info_button.dart';
@@ -11,6 +13,7 @@ import 'add_member.dart';
 import 'package:cyanase/helpers/api_helper.dart';
 import 'package:cyanase/helpers/database_helper.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:intl/intl.dart';
 
 class GroupHeader extends StatefulWidget {
   final String groupName;
@@ -20,6 +23,8 @@ class GroupHeader extends StatefulWidget {
   final String totalBalance;
   final String myContributions;
   final Map<String, dynamic> initialLoanSettings;
+  final bool isAdmin;
+  final bool allowWithdraw; // New parameter
 
   const GroupHeader({
     Key? key,
@@ -30,6 +35,8 @@ class GroupHeader extends StatefulWidget {
     required this.totalBalance,
     required this.myContributions,
     required this.initialLoanSettings,
+    required this.isAdmin,
+    required this.allowWithdraw,
   }) : super(key: key);
 
   @override
@@ -46,8 +53,6 @@ class _GroupHeaderState extends State<GroupHeader> {
   void initState() {
     super.initState();
     _currentProfilePicUrl = widget.profilePic;
-
-    // Access allow_loans (note the plural)
     try {
       _allowLoan = widget.initialLoanSettings['allow_loans'] ?? false;
     } catch (e) {
@@ -193,25 +198,46 @@ class _GroupHeaderState extends State<GroupHeader> {
       context: context,
       position: const RelativeRect.fromLTRB(100, 100, 0, 0),
       items: [
+        if (widget.allowWithdraw) // Show Withdraw option only if allowed
+          const PopupMenuItem(
+            value: 'Withdraw',
+            child: Text('Withdraw'),
+          ),
         const PopupMenuItem(
-          value: 'Withdraw',
-          child: Text('Withdraw'),
-        ),
-        const PopupMenuItem(
-          value: 'Add Interest',
-          child: Text('Add Interest'),
+          value: 'Top_up',
+          child: Text('Top-up'),
         ),
       ],
     ).then((value) {
       if (value != null) {
+        if (!widget.isAdmin) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Only admins can perform this action'),
+            ),
+          );
+          return;
+        }
         if (value == 'Withdraw') {
+          if (!widget.allowWithdraw) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Withdrawals are not allowed for this group'),
+              ),
+            );
+            return;
+          }
           showDialog(
             context: context,
             builder: (BuildContext context) {
               return AlertDialog(
-                title: const Text('Withdraw Funds'),
                 content: SingleChildScrollView(
-                  child: WithdrawButton(),
+                  child: WithdrawHelper(
+                    withdrawType: 'Group_deposit_withdraw',
+                    withdrawDetails:
+                        "Group withdraws are done by admins alone. Because deposits are auto invested on a unit trust, they might experience delays of up to 3 days or less",
+                    groupId: widget.groupId,
+                  ),
                 ),
                 actions: [
                   TextButton(
@@ -224,8 +250,28 @@ class _GroupHeaderState extends State<GroupHeader> {
               );
             },
           );
-        } else if (value == 'Add Interest') {
-          // Handle add interest action here
+        } else if (value == 'Top_up') {
+          showDialog(
+            context: context,
+            barrierDismissible: true,
+            builder: (context) => AlertDialog(
+              content: SizedBox(
+                height: 350,
+                child: DepositHelper(
+                  depositCategory: 'group_top_up',
+                  groupId: widget.groupId,
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                  },
+                  child: Text('Cancel'),
+                ),
+              ],
+            ),
+          );
         }
       }
     });
@@ -254,9 +300,7 @@ class _GroupHeaderState extends State<GroupHeader> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return Center(
-        child: Loader(),
-      );
+      return const Center(child: Loader());
     }
 
     return Container(
@@ -344,7 +388,7 @@ class _GroupHeaderState extends State<GroupHeader> {
                     Expanded(
                       child: Center(
                         child: Text(
-                          'TOTAL BALANCE',
+                          'TOTAL GROUP BALANCE',
                           style: TextStyle(
                             fontSize: 14,
                             color: Colors.grey[600],
@@ -370,7 +414,8 @@ class _GroupHeaderState extends State<GroupHeader> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  widget.totalBalance,
+                  NumberFormat('#,###').format(double.parse(
+                      widget.totalBalance.replaceAll(RegExp(r'[^0-9.]'), ''))),
                   style: TextStyle(
                     fontSize: 35,
                     fontWeight: FontWeight.bold,
@@ -379,14 +424,16 @@ class _GroupHeaderState extends State<GroupHeader> {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  'MY CONTRIBUTIONS',
+                  'MY BALANCE',
                   style: TextStyle(
                     fontSize: 14,
                     color: Colors.grey[600],
                   ),
                 ),
                 Text(
-                  widget.myContributions,
+                  NumberFormat('#,###').format(double.parse(widget
+                      .myContributions
+                      .replaceAll(RegExp(r'[^0-9.]'), ''))),
                   style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
@@ -430,7 +477,29 @@ class _GroupHeaderState extends State<GroupHeader> {
                         ),
                       ),
                     ),
-              WithdrawButton(),
+              widget.allowWithdraw
+                  ? WithdrawButton(
+                      groupId: widget.groupId,
+                      withdrawType: 'group_user_withdraw',
+                    )
+                  : Opacity(
+                      opacity: 0.5,
+                      child: GestureDetector(
+                        onTap: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                  'Withdrawals are disabled for this group'),
+                            ),
+                          );
+                        },
+                        child: AbsorbPointer(
+                            child: WithdrawButton(
+                          groupId: widget.groupId,
+                          withdrawType: 'group_user_withdraw',
+                        )),
+                      ),
+                    ),
             ],
           ),
         ],

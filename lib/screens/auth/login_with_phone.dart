@@ -46,10 +46,10 @@ class LoginScreen extends StatefulWidget {
   });
 
   @override
-  _LoginScreenState createState() => _LoginScreenState();
+  LoginScreenState createState() => LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
   String username = '';
   String password = '';
@@ -81,7 +81,6 @@ class _LoginScreenState extends State<LoginScreen> {
         _showPasscodeOption = profiles.isNotEmpty;
       });
     } catch (e) {
-      print('Error checking database: $e');
       setState(() {
         _showPasscodeOption = false;
       });
@@ -121,23 +120,27 @@ class _LoginScreenState extends State<LoginScreen> {
       if (loginResponse.containsKey('token') &&
           loginResponse.containsKey('user_id') &&
           loginResponse.containsKey('user')) {
-        final token = loginResponse['token'];
-        final userId = loginResponse['user_id'];
-        final user = loginResponse['user'];
-        final email = user['email'];
+        final token = loginResponse['token'] as String;
+        final userId = loginResponse['user_id'] as int;
+        final user = loginResponse['user'] as Map<String, dynamic>;
+        final email = user['email'] as String;
 
-        final profile = user['profile'];
-        final picture = profile['profile_picture'];
-        final firstName = user["first_name"];
-        final lastName = user['last_name'];
-        final userCountry = profile['country'];
-        final phoneNumber = profile['phoneno'];
-        final isVerified = profile['is_verified'] ?? false;
+        final profile = user['profile'] as Map<String, dynamic>;
+        final picture = profile['profile_picture'] as String;
+        final firstName = user["first_name"] as String;
+        final lastName = user['last_name'] as String;
+        final userCountry = profile['country'] as String;
+        final phoneNumber = profile['phoneno'] as String;
+        final isVerified = profile['is_verified'] as bool? ?? false;
         final mypasscode = profile['passcode'] as String?;
         final userName = '$firstName $lastName'.trim();
+        final autoSave = profile['auto_save'] as bool? ?? false;
+        final goalAlert = profile['goals_alert'] as bool? ?? false;
         setState(() {
           _email = email;
-          _passcode = (mypasscode != null && mypasscode.isNotEmpty);
+          _passcode = (mypasscode != null &&
+              mypasscode.isNotEmpty &&
+              mypasscode.startsWith('pbkdf2_sha256'));
         });
 
         if (isVerified) {
@@ -167,7 +170,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 'phone_number': phoneNumber,
                 'token': token,
                 'name': userName,
+                'profile_pic': picture,
                 'created_at': DateTime.now().toIso8601String(),
+                'auto_save': autoSave,
+                'goals_alert': goalAlert,
               },
             );
           }
@@ -191,7 +197,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 'phone_number': phoneNumber,
                 'token': token,
                 'name': userName,
+                'profile_pic': picture,
                 'created_at': DateTime.now().toIso8601String(),
+                'auto_save': autoSave,
+                'goals_alert': goalAlert,
               },
               where: 'id = ?',
               whereArgs: [userId],
@@ -213,7 +222,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 'token': token,
                 'phone_number': phoneNumber,
                 'name': userName,
+                'profile_pic': picture,
                 'created_at': DateTime.now().toIso8601String(),
+                'auto_save': autoSave,
+                'goals_alert': goalAlert,
               },
             );
 
@@ -242,10 +254,11 @@ class _LoginScreenState extends State<LoginScreen> {
             context,
             MaterialPageRoute(
               builder: (context) => HomeScreen(
-                  passcode: _passcode,
-                  email: _email,
-                  name: name,
-                  picture: picture),
+                passcode: _passcode,
+                email: _email,
+                name: userName,
+                picture: picture,
+              ),
             ),
           );
         } else {
@@ -258,7 +271,6 @@ class _LoginScreenState extends State<LoginScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: $e')),
       );
-      print('Error during login process: $e');
     } finally {
       setState(() {
         _isLoading = false;

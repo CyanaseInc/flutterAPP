@@ -1,0 +1,51 @@
+1. support bank transfers
+2. Add advanced Algorthyms for calculating user interest
+3.late loan card
+
+
+    def calculate_user_interest(self, group_id, user_id):
+"""Calculate time-weighted user interest considering deposits and withdrawals"""
+try:
+now = datetime.now(timezone.utc)
+
+            # Get all deposits and withdrawals
+deposits = GroupDeposit.objects.filter(
+    group_id = group_id,
+    status = 'completed'
+)
+
+withdrawals = GroupWithdraw.objects.filter(
+    group_id = group_id,
+    description = 'Group_user_withdraw'
+)
+
+            # Time - weighted contribution score
+user_score = Decimal('0.00')
+total_score = Decimal('0.00')
+
+            # Combine deposits and withdrawals
+for deposit in deposits:
+    days_held = max((now - deposit.created_at).days, 1)
+weighted = deposit.deposit_amount * Decimal(days_held)
+total_score += weighted
+if deposit.member_id == user_id:
+    user_score += weighted
+
+for withdraw in withdrawals:
+    days_held = max((now - withdraw.created_at).days, 1)
+weighted = withdraw.withdraw_amount * Decimal(days_held)
+total_score -= weighted
+if withdraw.member_id == user_id:
+    user_score -= weighted
+
+            # Get total group interest
+total_interest = self.calculate_total_group_interest(group_id)
+
+if total_score > 0:
+    user_share = (user_score / total_score) * total_interest
+return user_share.quantize(Decimal('0.01'))
+
+return Decimal('0.00')
+
+        except Exception:
+return Decimal('0.00')

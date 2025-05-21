@@ -12,6 +12,7 @@ class LoansTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final summary = loansData['summary'] ?? {};
+    print(summary);
     final loans = List<Map<String, dynamic>>.from(loansData['loans'] ?? []);
 
     return SingleChildScrollView(
@@ -25,7 +26,7 @@ class LoansTab extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: FintechSummaryCard(
                 title: 'Ongoing Loans',
-                subtitle: 'Total loans currently being repaid',
+                subtitle: 'Total loans ongoing',
                 amount: summary['ongoing_loans']?['amount'] ?? 'UGX 0',
                 usdEquivalent:
                     summary['ongoing_loans']?['usd_equivalent'] ?? '\$0.00',
@@ -47,7 +48,25 @@ class LoansTab extends StatelessWidget {
                 color: primaryColor,
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: FintechSummaryCard(
+                title: 'Interest from loan',
+                subtitle: 'Interest earned from paid loans',
+                amount: summary['total_group_interest_from_loans']?['amount'] ??
+                    'UGX 0',
+                usdEquivalent: summary['total_group_interest_from_loans']
+                        ?['usd_equivalent'] ??
+                    '\$0.00',
+                icon: Icons.account_balance,
+                color: Colors.white,
+                borderColor: primaryTwo,
+                textColor: primaryTwo,
+                iconColor: primaryTwo,
+              ),
+            ),
+            const SizedBox(height: 16),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Text(
@@ -93,6 +112,9 @@ class FintechSummaryCard extends StatelessWidget {
   final String? usdEquivalent;
   final IconData icon;
   final Color color;
+  final Color? borderColor;
+  final Color? textColor;
+  final Color? iconColor;
 
   const FintechSummaryCard({
     required this.title,
@@ -101,6 +123,9 @@ class FintechSummaryCard extends StatelessWidget {
     this.usdEquivalent,
     required this.icon,
     required this.color,
+    this.borderColor,
+    this.textColor,
+    this.iconColor,
   });
 
   @override
@@ -109,7 +134,12 @@ class FintechSummaryCard extends StatelessWidget {
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeInOut,
       child: Card(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+          side: borderColor != null
+              ? BorderSide(color: borderColor!, width: 2)
+              : BorderSide.none,
+        ),
         elevation: 8,
         shadowColor: Colors.black.withOpacity(0.15),
         child: Container(
@@ -135,8 +165,14 @@ class FintechSummaryCard extends StatelessWidget {
               children: [
                 CircleAvatar(
                   radius: 24,
-                  backgroundColor: white.withOpacity(0.3),
-                  child: Icon(icon, color: white, size: 32),
+                  backgroundColor: iconColor != null
+                      ? iconColor!.withOpacity(0.3)
+                      : white.withOpacity(0.3),
+                  child: Icon(
+                    icon,
+                    color: iconColor ?? white,
+                    size: 32,
+                  ),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -145,10 +181,10 @@ class FintechSummaryCard extends StatelessWidget {
                     children: [
                       Text(
                         title,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w700,
-                          color: white,
+                          color: textColor ?? white,
                           letterSpacing: 0.5,
                         ),
                       ),
@@ -157,17 +193,19 @@ class FintechSummaryCard extends StatelessWidget {
                         subtitle,
                         style: TextStyle(
                           fontSize: 12,
-                          color: white.withOpacity(0.85),
+                          color: textColor != null
+                              ? textColor!.withOpacity(0.85)
+                              : white.withOpacity(0.85),
                           letterSpacing: 0.2,
                         ),
                       ),
                       const SizedBox(height: 10),
                       Text(
                         amount,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
-                          color: white,
+                          color: textColor ?? white,
                           letterSpacing: 0.5,
                         ),
                       ),
@@ -176,7 +214,9 @@ class FintechSummaryCard extends StatelessWidget {
                           usdEquivalent!,
                           style: TextStyle(
                             fontSize: 10,
-                            color: white.withOpacity(0.7),
+                            color: textColor != null
+                                ? textColor!.withOpacity(0.7)
+                                : white.withOpacity(0.7),
                             fontWeight: FontWeight.w600,
                             letterSpacing: 0.2,
                           ),
@@ -201,7 +241,6 @@ class FintechLoanCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    print('loan, $loan');
     final loanAmount = (loan['loanAmount'] as num?)?.toDouble() ?? 0.0;
     final phoneNumber = loan['phone_number'];
     final repaymentAmount =
@@ -211,10 +250,9 @@ class FintechLoanCard extends StatelessWidget {
         : 0.0;
     final daysLeft = (loan['daysLeft'] as num?)?.toInt() ?? 0;
     final progress = (loan['progress'] as num?)?.toDouble() ?? 0.0;
-    // Fallbacks for missing fields
     final createdAt = loan['created_at'] != null
         ? DateTime.tryParse(loan['created_at'] as String) ?? DateTime.now()
-        : DateTime.now().subtract(Duration(days: daysLeft + 60)); // Estimate
+        : DateTime.now().subtract(Duration(days: daysLeft + 60));
     final repaymentPeriod = (loan['repayment_period'] as num?)?.toInt() ?? 60;
     final dueDate = createdAt.add(Duration(days: repaymentPeriod));
     final amountPaid = loan['amount_paid'] != null
@@ -262,7 +300,7 @@ class FintechLoanCard extends StatelessWidget {
               ),
             ),
             subtitle: Text(
-              '${phoneNumber}',
+              '$phoneNumber',
               style: TextStyle(
                 fontSize: 12,
                 color: Colors.grey[600],
@@ -378,4 +416,12 @@ class FintechLoanCard extends StatelessWidget {
       ],
     );
   }
+}
+
+double parseCurrencyAmount(String amountStr) {
+  final cleanAmount = amountStr
+      .replaceAll(RegExp(r'[A-Z]{3}\s*'), '')
+      .replaceAll(' ', '')
+      .replaceAll(',', '');
+  return double.parse(cleanAmount);
 }

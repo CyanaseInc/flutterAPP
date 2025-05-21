@@ -1,8 +1,15 @@
+import 'package:cyanase/helpers/withdraw_helper.dart';
 import 'package:flutter/material.dart';
 import 'package:cyanase/theme/theme.dart';
 
 class WithdrawButton extends StatelessWidget {
-  const WithdrawButton({Key? key}) : super(key: key);
+  final int groupId; // <- Make sure to pass groupId
+  final String withdrawType;
+  const WithdrawButton({
+    Key? key,
+    required this.groupId,
+    required this.withdrawType,
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -10,7 +17,10 @@ class WithdrawButton extends StatelessWidget {
       onPressed: () {
         showDialog(
           context: context,
-          builder: (context) => const WithdrawModal(),
+          builder: (context) => WithdrawModal(
+            groupId: groupId,
+            withdrawType: withdrawType,
+          ),
         );
       },
       style: OutlinedButton.styleFrom(
@@ -23,14 +33,23 @@ class WithdrawButton extends StatelessWidget {
       child: const Text(
         'Withdraw',
         style: TextStyle(
-            color: primaryTwo, fontSize: 12, fontWeight: FontWeight.bold),
+          color: primaryTwo,
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
+        ),
       ),
     );
   }
 }
 
 class WithdrawModal extends StatefulWidget {
-  const WithdrawModal({Key? key}) : super(key: key);
+  final int groupId;
+  final String withdrawType;
+  const WithdrawModal({
+    Key? key,
+    required this.groupId,
+    required this.withdrawType,
+  }) : super(key: key);
 
   @override
   _WithdrawModalState createState() => _WithdrawModalState();
@@ -62,7 +81,7 @@ class _WithdrawModalState extends State<WithdrawModal> {
 
   void _submitWithdraw() {
     Navigator.of(context).pop();
-    // Handle withdrawal submission logic here
+    // TODO: Handle withdrawal submission logic here
   }
 
   @override
@@ -74,63 +93,19 @@ class _WithdrawModalState extends State<WithdrawModal> {
       title: const Text(
         "Withdraw Funds",
         style: TextStyle(
-            fontSize: 18, fontWeight: FontWeight.bold, color: primaryTwo),
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+          color: primaryTwo,
+        ),
       ),
-      content: _buildStepContent(),
-      actions: _buildStepActions(),
+      content: SizedBox(
+        height: 400, // Adjust as needed
+        child: WithdrawHelper(
+          withdrawDetails: "Withdraws are instant",
+          withdrawType: widget.withdrawType,
+          groupId: widget.groupId,
+        ),
+      ),
     );
-  }
-
-  Widget _buildStepContent() {
-    switch (_currentStep) {
-      case 0:
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Step 1: Choose Withdrawal Channel',
-            ),
-            DropdownButton<String>(
-              value: _withdrawChannel,
-              onChanged: (value) => setState(() => _withdrawChannel = value!),
-              items: const [
-                DropdownMenuItem(
-                    value: 'Mobile Money', child: Text('Mobile Money')),
-                DropdownMenuItem(value: 'Bank', child: Text('Bank')),
-              ],
-            ),
-          ],
-        );
-      case 1:
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('Step 2: Enter Withdrawal Details'),
-            TextField(
-              controller: _amountController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Enter  Amount'),
-            ),
-            TextField(
-              controller: _phoneController,
-              keyboardType: TextInputType.phone,
-              decoration:
-                  const InputDecoration(labelText: 'Enter Phone Number'),
-            ),
-          ],
-        );
-      default:
-        return Container();
-    }
-  }
-
-  List<Widget> _buildStepActions() {
-    return [
-      if (_currentStep > 0)
-        TextButton(onPressed: prevStep, child: const Text('Previous')),
-      TextButton(
-          onPressed: nextStep,
-          child: Text(_currentStep == 1 ? 'Submit' : 'Next')),
-    ];
   }
 }

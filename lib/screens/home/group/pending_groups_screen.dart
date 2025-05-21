@@ -49,7 +49,7 @@ class _PendingGroupsScreenState extends State<PendingGroupsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          'Pending Group Requests',
+          'Join Group Requests',
           style: TextStyle(color: white, fontSize: 18),
         ),
         backgroundColor: primaryTwo,

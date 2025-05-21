@@ -36,11 +36,13 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
   double _paymentAmount = 0.0;
   Map<String, dynamic> _groupDetails = {};
   String _totalBalance = '0.00';
+  String _interestEarned = '0.00';
   String _myContributions = '0.00';
   List<GroupSavingGoal> groupGoals = [];
   String _currencySymbol = '\$';
   bool _isAdmin = false;
   bool isAdminMode = false;
+  bool _allowWithdraw = false; // New state for allow_withdraw
 
   @override
   void initState() {
@@ -49,7 +51,7 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
   }
 
   Future<void> _loadGroupDetails() async {
-    setState(() => _isLoading = true); // Fixed: Set loading to true
+    setState(() => _isLoading = true);
     await _fetchGroupDetails();
     setState(() => _isLoading = false);
   }
@@ -100,11 +102,14 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
           _paymentAmount = (data['pay_amount'] as num?)?.toDouble() ?? 0.0;
           _totalBalance = _formatCurrency(
               (contributions['group_total'] as num?)?.toDouble() ?? 0.0);
+          _interestEarned = _formatCurrency(
+              (contributions['my_interest'] as num?)?.toDouble() ?? 0.0);
           _myContributions = _formatCurrency(
               (contributions['my_total'] as num?)?.toDouble() ?? 0.0);
           groupGoals = (data['goals'] as List? ?? []).map((goal) {
             return GroupSavingGoal.fromJson(goal, userId!);
           }).toList();
+          _allowWithdraw = data['is_withdraw'] ?? false; // Initialize from API
         });
       } else {
         throw Exception(response['message'] ?? 'Failed to load group details');
@@ -125,12 +130,19 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
         _myContributions = _formatCurrency(0.0);
         groupGoals = [];
         _isAdmin = false;
+        _allowWithdraw = false;
       });
     }
   }
 
   String _formatCurrency(double amount) {
     return '$_currencySymbol ${amount.toStringAsFixed(2)}';
+  }
+
+  void _updateWithdrawSetting(bool newValue) {
+    setState(() {
+      _allowWithdraw = newValue;
+    });
   }
 
   @override
@@ -150,21 +162,24 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
                   totalBalance: _totalBalance,
                   myContributions: _myContributions,
                   initialLoanSettings: _groupDetails['loan_settings'] ?? {},
+                  isAdmin: _isAdmin,
+                  allowWithdraw: _allowWithdraw,
+                  // interestEarned: _interestEarned, // Pass allowWithdraw
                 ),
                 const SizedBox(height: 10),
                 GroupSavingGoalsSection(
-                  groupGoals: groupGoals,
-                  groupId: widget.groupId,
-                  totalBalance: _totalBalance,
-                  myContributions: _myContributions,
-                  currencySymbol: '$_currencySymbol',
-                ),
+                    groupGoals: groupGoals,
+                    groupId: widget.groupId,
+                    totalBalance: _totalBalance,
+                    myContributions: _myContributions,
+                    currencySymbol: '$_currencySymbol',
+                    isAdmin: _isAdmin),
                 Container(
                   color: white,
                   margin: const EdgeInsets.only(top: 8.0),
                   child: ListTile(
                     title: const Text(
-                      'Manage group',
+                      'Group finance',
                       style: TextStyle(
                         color: Colors.black87,
                         fontSize: 16,
@@ -222,17 +237,22 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
                     initialRequireSubscription:
                         _groupDetails['requireSubscription'] ?? false,
                     initialSubscriptionAmount:
-                        _groupDetails['subscription_amount'] ?? 0.0,
+                        (_groupDetails['subscription_amount'] as num?)
+                                ?.toDouble() ??
+                            0.0,
                     initialRequirePayment: _requirePaymentToJoin,
                     initialPaymentAmount: _paymentAmount,
                     initialLoanSettings: _groupDetails['loan_settings'] ?? {},
+                    initialIsWithdraw: _allowWithdraw,
                     onPaymentSettingChanged:
-                        (newRequirePayment, newAmount) async {
+                        (bool newRequirePayment, double newAmount) async {
                       setState(() {
                         _requirePaymentToJoin = newRequirePayment;
                         _paymentAmount = newAmount;
                       });
                     },
+                    onWithdrawSettingChanged:
+                        _updateWithdrawSetting, // Callback
                   ),
                 GroupMembers(
                   groupId: widget.groupId,

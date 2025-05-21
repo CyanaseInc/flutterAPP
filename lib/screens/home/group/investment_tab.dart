@@ -3,13 +3,19 @@ import 'package:flutter/material.dart';
 import 'package:cyanase/theme/theme.dart';
 import 'package:cyanase/helpers/api_helper.dart';
 import 'package:cyanase/helpers/database_helper.dart';
+import 'package:cyanase/helpers/deposit.dart';
+import 'package:cyanase/helpers/withdraw_helper.dart';
 
 class InvestmentsTab extends StatefulWidget {
   final int groupId;
+  final bool isAdmin;
   final Map<String, dynamic> investmentsData;
 
   const InvestmentsTab(
-      {Key? key, required this.groupId, required this.investmentsData})
+      {Key? key,
+      required this.groupId,
+      required this.investmentsData,
+      required this.isAdmin})
       : super(key: key);
 
   @override
@@ -180,7 +186,7 @@ class _InvestmentsTabState extends State<InvestmentsTab> {
       builder: (dialogContext) => StatefulBuilder(
         builder: (dialogContext, dialogSetState) => AlertDialog(
           title: const Text(
-            'Pay Out Group Interest',
+            ' on th  Group Interest',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           content: Form(
@@ -317,6 +323,33 @@ class _InvestmentsTabState extends State<InvestmentsTab> {
     }
   }
 
+  void _showWithdrawForm(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(15),
+        ),
+        title: const Text(
+          "Withdraw Funds",
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: primaryTwo,
+          ),
+        ),
+        content: SizedBox(
+          height: 400, // Adjust as needed
+          child: WithdrawHelper(
+            withdrawDetails: "Withdraws are instant",
+            withdrawType: "group_subscription_withdraw",
+            groupId: widget.groupId,
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final summary = widget.investmentsData['summary'] ?? {};
@@ -351,55 +384,105 @@ class _InvestmentsTabState extends State<InvestmentsTab> {
                 ),
                 child: Padding(
                   padding: const EdgeInsets.all(20),
-                  child: Row(
+                  child: Column(
                     children: [
-                      CircleAvatar(
-                        radius: 24,
-                        backgroundColor: primaryTwo.withOpacity(0.1),
-                        child: Icon(Icons.people, color: primaryTwo, size: 28),
+                      Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 24,
+                            backgroundColor: primaryTwo.withOpacity(0.1),
+                            child:
+                                Icon(Icons.people, color: primaryTwo, size: 28),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Total Member Subscription',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: primaryTwo,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Total subscriptions by all members',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  summary['total_member_subscription']
+                                          ?['amount'] ??
+                                      'UGX 0',
+                                  style: TextStyle(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                    color: primaryTwo,
+                                  ),
+                                ),
+                                Text(
+                                  summary['total_member_subscription']
+                                          ?['usd_equivalent'] ??
+                                      '\$0.00',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey[600],
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Total Member Subscription',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: primaryTwo,
-                              ),
+                      const SizedBox(height: 16),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: ElevatedButton.icon(
+                          onPressed: () {
+                            if (!widget.isAdmin) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                      'Only admin members can withdraw from subscriptions'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            } else {
+                              _showWithdrawForm(context);
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor:
+                                !widget.isAdmin ? Colors.grey : Colors.amber,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Total subscriptions by all members',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey[600],
-                              ),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 8),
+                            elevation: 4,
+                          ),
+                          icon: Icon(Icons.money_off,
+                              color: !widget.isAdmin
+                                  ? Colors.grey[600]
+                                  : Colors.black,
+                              size: 18),
+                          label: Text(
+                            'Withdraw',
+                            style: TextStyle(
+                              color: !widget.isAdmin
+                                  ? Colors.grey[600]
+                                  : Colors.black,
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
                             ),
-                            const SizedBox(height: 8),
-                            Text(
-                              summary['total_member_subscription']?['amount'] ??
-                                  'UGX 0',
-                              style: TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                                color: primaryTwo,
-                              ),
-                            ),
-                            Text(
-                              summary['total_member_subscription']
-                                      ?['usd_equivalent'] ??
-                                  '\$0.00',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey[600],
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
                       ),
                     ],
@@ -498,9 +581,19 @@ class _InvestmentsTabState extends State<InvestmentsTab> {
               icon: Icons.group,
               color: primaryTwo,
               actionButton: ElevatedButton.icon(
-                onPressed: () => _showPayoutInterestForm(context),
+                onPressed: !widget.isAdmin
+                    ? () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content:
+                                Text('Only admin members can payout interest'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    : () => _showPayoutInterestForm(context),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.amber,
+                  backgroundColor: !widget.isAdmin ? Colors.grey : Colors.amber,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -508,11 +601,13 @@ class _InvestmentsTabState extends State<InvestmentsTab> {
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   elevation: 4,
                 ),
-                icon: const Icon(Icons.payment, color: Colors.black, size: 18),
-                label: const Text(
+                icon: Icon(Icons.payment,
+                    color: !widget.isAdmin ? Colors.grey[600] : Colors.black,
+                    size: 18),
+                label: Text(
                   'Pay Out',
                   style: TextStyle(
-                    color: Colors.black,
+                    color: !widget.isAdmin ? Colors.grey[600] : Colors.black,
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
                   ),
@@ -838,7 +933,6 @@ class ModernSummaryCard extends StatelessWidget {
 class ModernInvestmentCard extends StatelessWidget {
   final Map<String, dynamic> investment;
   final Function(String, String) onAddInterest;
-
   final Function(int, double, String) onDeleteInvestment;
 
   const ModernInvestmentCard({
@@ -846,6 +940,54 @@ class ModernInvestmentCard extends StatelessWidget {
     required this.onAddInterest,
     required this.onDeleteInvestment,
   });
+
+  void _showAddInterestForm(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Add Interest ',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 400,
+                child: DepositHelper(
+                  depositCategory: "group_investment_interest",
+                  selectedFundClass: investment['name'],
+                  selectedOption: "Interest",
+                  selectedFundManager: "Group Investment",
+                  selectedOptionId: investment['id'],
+                  detailText: "Add interest ",
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -940,7 +1082,9 @@ class ModernInvestmentCard extends StatelessWidget {
                       ),
                       const SizedBox(width: 8),
                       ElevatedButton.icon(
-                        onPressed: () => _showAddInterestForm(context),
+                        onPressed: () => _showAddInterestForm(
+                          context,
+                        ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: primaryTwo,
                           shape: RoundedRectangleBorder(
@@ -962,176 +1106,6 @@ class ModernInvestmentCard extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  void _showAddInterestForm(BuildContext context) {
-    final _formKey = GlobalKey<FormState>();
-    String? interestAmount;
-    String? password;
-    bool isLoading = false;
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (dialogContext, dialogSetState) => AlertDialog(
-          title: Text(
-            'Add Interest to ${investment['name']}',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          content: Form(
-            key: _formKey,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextFormField(
-                    decoration:
-                        InputDecoration(labelText: 'Interest Amount (UGX)'),
-                    keyboardType: TextInputType.number,
-                    validator: (value) {
-                      if (value == null || value.isEmpty) return 'Required';
-                      if (double.tryParse(value) == null)
-                        return 'Invalid number';
-                      return null;
-                    },
-                    onSaved: (value) => interestAmount = value,
-                  ),
-                  SizedBox(height: 16),
-                  TextFormField(
-                    decoration: InputDecoration(labelText: 'Password'),
-                    obscureText: true,
-                    validator: (value) {
-                      if (value == null || value.isEmpty) return 'Required';
-                      return null;
-                    },
-                    onSaved: (value) => password = value,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: isLoading ? null : () => Navigator.pop(dialogContext),
-              child: Text('Cancel'),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryTwo,
-                foregroundColor: Colors.white,
-              ),
-              onPressed: isLoading
-                  ? null
-                  : () async {
-                      if (_formKey.currentState!.validate()) {
-                        _formKey.currentState!.save();
-                        dialogSetState(() => isLoading = true);
-
-                        try {
-                          onAddInterest(interestAmount!, password!);
-                          Navigator.pop(dialogContext);
-                        } catch (e) {
-                          ScaffoldMessenger.of(dialogContext).showSnackBar(
-                            SnackBar(content: Text('Error: ${e.toString()}')),
-                          );
-                        } finally {
-                          dialogSetState(() => isLoading = false);
-                        }
-                      }
-                    },
-              child: isLoading
-                  ? SizedBox(width: 20, height: 20, child: Loader())
-                  : Text('Add'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showCashOutForm(BuildContext context) {
-    final _formKey = GlobalKey<FormState>();
-    String? password;
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(
-          'Cash Out from ${investment['name']}',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        content: Form(
-          key: _formKey,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'Cash out is pulling money away from an investment back to group cash available',
-                  style: TextStyle(fontSize: 15, color: Colors.grey),
-                ),
-                const SizedBox(height: 10),
-                TextFormField(
-                  decoration: const InputDecoration(
-                    labelText: 'Cash Out Amount (UGX)',
-                    border: UnderlineInputBorder(),
-                    focusedBorder: UnderlineInputBorder(
-                      borderSide: BorderSide(color: primaryTwo, width: 2),
-                    ),
-                  ),
-                  keyboardType: TextInputType.number,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter a cash out amount';
-                    }
-                    if (double.tryParse(value) == null) {
-                      return 'Please enter a valid number';
-                    }
-                    final investmentAmount = double.parse(
-                      investment['amount']
-                          .replaceAll('UGX ', '')
-                          .replaceAll(',', ''),
-                    );
-                    if (double.parse(value) > investmentAmount) {
-                      return 'Amount exceeds investment value';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  decoration: const InputDecoration(
-                    labelText: 'Password',
-                    border: UnderlineInputBorder(),
-                    focusedBorder: UnderlineInputBorder(
-                      borderSide: BorderSide(color: primaryTwo, width: 2),
-                    ),
-                  ),
-                  obscureText: true,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter a password';
-                    }
-                    return null;
-                  },
-                  onSaved: (value) => password = value,
-                ),
-              ],
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-        ],
       ),
     );
   }
