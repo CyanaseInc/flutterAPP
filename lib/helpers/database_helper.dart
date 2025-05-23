@@ -30,6 +30,7 @@ class DatabaseHelper {
 
   // Path and database initialization
   Future<Database> _initDatabase() async {
+    print('Initializing database...');
     // Request permissions for Android 10+
     await _requestPermissions();
 
@@ -51,11 +52,12 @@ class DatabaseHelper {
 
     // Define the database path
     final dbPath = join(appSpecificPath.path, 'app_database.db');
+    print('Database path: $dbPath');
 
     // Open the database
     return await openDatabase(
       dbPath,
-      version: 4, // Updated to version 4 for reply_to_message
+      version: 4,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -162,10 +164,11 @@ class DatabaseHelper {
         status TEXT NOT NULL,
         timestamp TEXT NOT NULL,
         reply_to_id INTEGER,
-        reply_to_message TEXT,  -- Added for reply feature
+        reply_to_message TEXT,
         forwarded BOOLEAN NOT NULL DEFAULT FALSE,
         edited BOOLEAN NOT NULL DEFAULT FALSE,
         deleted BOOLEAN NOT NULL DEFAULT FALSE,
+        temp_id TEXT,
         FOREIGN KEY (group_id) REFERENCES groups (id) ON DELETE CASCADE,
         FOREIGN KEY (sender_id) REFERENCES profile(id) ON DELETE CASCADE,
         FOREIGN KEY (media_id) REFERENCES media (id) ON DELETE SET NULL
@@ -204,6 +207,10 @@ class DatabaseHelper {
     if (oldVersion < 4) {
       await db.execute('ALTER TABLE messages ADD COLUMN reply_to_message TEXT');
     }
+
+    if (oldVersion < 5) {
+      await db.execute('ALTER TABLE messages ADD COLUMN temp_id TEXT');
+    }
   }
 
   Future<int> insertUser(Map<String, dynamic> user) async {
@@ -223,18 +230,19 @@ class DatabaseHelper {
 
   Future<int> insertMessage(Map<String, dynamic> message) async {
     final db = await database;
-
-    // Ensure the timestamp and reply fields are set
-    final Map<String, dynamic> messageWithDefaults = {
-      ...message,
-      'timestamp': message['timestamp'] ?? DateTime.now().toIso8601String(),
-      'reply_to_id': message['reply_to_id'],
-      'reply_to_message': message['reply_to_message'],
-    };
-
     return await db.insert(
       'messages',
-      messageWithDefaults,
+      {
+        'id': message['id'],
+        'group_id': message['group_id'],
+        'sender_id': message['sender_id'],
+        'message': message['message'],
+        'type': message['type'] ?? 'text',
+        'timestamp': message['timestamp'],
+        'status': message['status'] ?? 'pending',
+        'reply_to_id': message['reply_to_id'],
+        'reply_to_message': message['reply_to_message'],
+      },
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }
@@ -341,14 +349,16 @@ class DatabaseHelper {
     int offset = 0,
   }) async {
     final db = await database;
+
     final result = await db.query(
       'messages',
       where: groupId != null ? 'group_id = ? AND deleted = 0' : 'deleted = 0',
       whereArgs: groupId != null ? [groupId] : null,
       limit: limit,
       offset: offset,
-      orderBy: 'timestamp DESC', // Changed to DESC for newest first
+      orderBy: 'timestamp DESC',
     );
+
     return result;
   }
 
@@ -472,6 +482,59 @@ class DatabaseHelper {
       {'deleted': true},
       where: 'id = ?',
       whereArgs: [mediaId],
+    );
+  }
+
+  // Update message status
+  Future<void> updateMessageStatus(String messageId, String status) async {
+    final db = await database;
+    await db.update(
+      'messages',
+      {'status': status},
+      where: 'id = ?',
+      whereArgs: [messageId],
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> getPendingMessages() async {
+    final db = await database;
+    return await db.query(
+      'messages',
+      where: 'status = ?',
+      whereArgs: ['pending'],
+    );
+  }
+
+  Future<void> verifyDatabaseIntegrity() async {
+    print('Verifying database integrity...');
+    final db = await database;
+
+    // Check if tables exist
+    final tables = [
+      'profile',
+      'groups',
+      'participants',
+      'messages',
+      'media',
+      'contacts'
+    ];
+    for (var table in tables) {
+      try {
+        final result = await db.query(table, limit: 1);
+        print('Table $table exists with ${result.length} rows');
+      } catch (e) {
+        print('Error checking table $table: $e');
+      }
+    }
+  }
+
+  Future<void> updateMessageId(String tempId, String serverId) async {
+    final db = await database;
+    await db.update(
+      'messages',
+      {'id': serverId},
+      where: 'temp_id = ?',
+      whereArgs: [tempId],
     );
   }
 }

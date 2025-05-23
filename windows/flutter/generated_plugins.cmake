@@ -7,6 +7,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   audioplayers_windows
   awesome_notifications
   connectivity_plus
+  emoji_picker_flutter
   file_selector_windows
   permission_handler_windows
   record_windows

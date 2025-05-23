@@ -86,7 +86,7 @@ class _SettingsPageState extends material.State<SettingsPage> {
         email = userProfile.first['email'] as String? ?? 'Not set';
         token = userProfile.first['token'] as String? ?? '';
         picture = ApiEndpoints.server +
-            (userProfile.first['profile_pic'] as String? ?? '');
+            ('/' + (userProfile.first['profile_pic'] as String? ?? ''));
       } else {
         name = 'User';
         email = 'Not set';

@@ -12,6 +12,10 @@ import 'chat_app_bar.dart';
 import 'message_chat.dart';
 import 'chat_input.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:cyanase/helpers/websocket_service.dart';
+import 'package:cyanase/helpers/web_shared_storage.dart';
+import 'dart:io';
+import 'dart:convert';
 
 class MessageChatScreen extends StatefulWidget {
   final String name;
@@ -49,8 +53,9 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
   final AudioFunctions _audioFunctions = AudioFunctions();
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  final WebSocketService _wsService = WebSocketService.instance;
   Map<String, dynamic>? _replyingToMessage;
-  final String currentUserId = "current_user_id";
+  String? _currentUserId;
   bool _isRecording = false;
   Duration _recordingDuration = Duration.zero;
   final DatabaseHelper _dbHelper = DatabaseHelper();
@@ -72,32 +77,43 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
 
   Map<String, List<Map<String, dynamic>>> _groupedMessages = {};
 
+  bool _isTyping = false;
+  Timer? _typingTimer;
+  Map<String, String> _typingUsers =
+      {}; // Map of user_id to username who are typing
+
   @override
   void initState() {
     super.initState();
     _loadGroupMembers();
     _loadMessages();
     _scrollController.addListener(_onScroll);
+    _initializeWebSocket();
+    _getCurrentUserId();
     if (widget.allowSubscription && !widget.hasUserPaid) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _showSubscriptionReminder(context);
       });
     }
+    _controller.addListener(_onTextChanged);
   }
 
   @override
   void dispose() {
+    _wsService.dispose();
     _scrollController.dispose();
     _controller.dispose();
     _recordingTimer?.cancel();
     _audioFunctions.dispose();
+    _typingTimer?.cancel();
+    _controller.removeListener(_onTextChanged);
     super.dispose();
   }
 
   void _scrollToBottom() {
     if (_scrollController.hasClients) {
       _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent,
+        0, // Since the list is reversed, 0 is the bottom
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeOut,
       );
@@ -139,7 +155,6 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
   }
 
   Future<void> _loadMessages() async {
-    print('Loading messages for group: ${widget.groupId}');
     setState(() => _isLoading = true);
 
     try {
@@ -152,18 +167,36 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
       if (newMessages.isEmpty) {
         setState(() => _hasMoreMessages = false);
       } else {
+        // Get current user ID for comparison
+        final db = await _dbHelper.database;
+        final userProfile = await db.query('profile', limit: 1);
+        final currentUserId = userProfile.first['id'] as String?;
+
         setState(() {
-          _messages.addAll(newMessages);
-          _messages = MessageSort.sortMessagesByDate(
-              _messages); // Updated to use MessageSort
-          _groupedMessages = MessageSort.groupMessagesByDate(
-              _messages); // Updated to use MessageSort
+          // Process messages to set isMe flag and status correctly
+          final processedMessages = newMessages.map((message) {
+            final isMe = message['sender_id'].toString() == currentUserId;
+            return {
+              ...message,
+              'isMe': isMe ? 1 : 0,
+              'status': isMe ? (message['status'] ?? 'sent') : 'received',
+              'message': message['message'] ??
+                  message['content'] ??
+                  '', // Handle both message and content fields
+              'type': message['type'] ??
+                  message['message_type'] ??
+                  'text', // Handle both type and message_type fields
+            };
+          }).toList();
+
+          _messages.addAll(processedMessages);
+          _messages = MessageSort.sortMessagesByDate(_messages);
+          _groupedMessages = MessageSort.groupMessagesByDate(_messages);
           _currentPage++;
-          print('Grouped messages: ${_groupedMessages.keys}');
         });
       }
     } catch (e) {
-      print("Error loading messages: $e");
+      print('Error loading messages: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Error loading messages: $e")),
       );
@@ -246,6 +279,20 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
     });
   }
 
+  Future<void> _getCurrentUserId() async {
+    try {
+      final db = await _dbHelper.database;
+      final userProfile = await db.query('profile', limit: 1);
+      if (userProfile.isNotEmpty) {
+        setState(() {
+          _currentUserId = userProfile.first['id'] as String?;
+        });
+      }
+    } catch (e) {
+      print('Error getting current user ID: $e');
+    }
+  }
+
   void _showSubscriptionReminder(BuildContext context) {
     bool showPaymentOptions = false;
 
@@ -279,12 +326,11 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
                           amount: widget.subscriptionAmount,
                           groupId: widget.groupId ?? 0,
                           paymentType: 'group_subscription',
-                          userId: currentUserId,
+                          userId: _currentUserId ?? '',
                           onBack: Navigator.of(context).pop,
                           onPaymentSuccess: () {
                             setState(() {});
                             Navigator.of(context).pop();
-
                             widget.onMessageSent?.call();
                           },
                         )
@@ -360,76 +406,334 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
     );
   }
 
-  Future<void> _sendImageMessage(String imagePath) async {
-    try {
-      final newMessage = {
-        "id": DateTime.now().millisecondsSinceEpoch,
-        "group_id": widget.groupId,
-        "sender_id": currentUserId,
-        "message": imagePath,
-        "type": "image",
-        "timestamp": DateTime.now().toIso8601String(),
-        "media_id": null,
-        "status": "sent",
-        "isMe": 1,
-        "reply_to_id": _replyingToMessage?['id'],
-        "reply_to_message": _replyingToMessage?['message'],
+  void _initializeWebSocket() {
+    _wsService.onMessageReceived = (data) {
+      print('WebSocket received message: $data');
+      if (data['type'] == 'message') {
+        _handleNewMessage(data);
+      } else if (data['type'] == 'update_message_status') {
+        print('DEBUG: Received message status update: $data');
+        _handleMessageStatusUpdate(data);
+      } else if (data['type'] == 'message_id_update') {
+        print('DEBUG: Received message ID update: $data');
+        _handleMessageIdUpdate(data);
+      } else if (data['type'] == 'typing') {
+        _handleTypingStatus(data['data']);
+      }
+    };
+    _wsService.initialize(widget.groupId.toString());
+  }
+
+  void _handleMessageIdUpdate(Map<String, dynamic> data) {
+    final oldId = data['old_id'].toString();
+    final newId = data['new_id'].toString();
+    final groupId = data['group_id'].toString();
+    final status = data['status'];
+
+    if (groupId != widget.groupId.toString()) return;
+
+    print(
+        'DEBUG: Updating message ID from $oldId to $newId with status $status');
+    setState(() {
+      // First try to find by temp_id
+      final index = _messages.indexWhere((msg) =>
+          msg['temp_id']?.toString() == oldId || msg['id'].toString() == oldId);
+
+      if (index != -1) {
+        print('DEBUG: Found message at index $index, updating ID and status');
+        _messages[index]['id'] = newId;
+        if (status != null) {
+          _messages[index]['status'] = status;
+        }
+        _groupedMessages = MessageSort.groupMessagesByDate(_messages);
+      } else {
+        print(
+            'DEBUG: Message with ID/temp_id $oldId not found in messages list');
+        print(
+            'DEBUG: Available message IDs: ${_messages.map((m) => '${m['id']} (temp: ${m['temp_id']})').join(', ')}');
+      }
+    });
+  }
+
+  void _handleMessageStatusUpdate(Map<String, dynamic> data) {
+    print('DEBUG: Looking for message with ID: ${data['message_id']}');
+    print('DEBUG: Current messages count: ${_messages.length}');
+
+    final messageId = data['message_id'].toString();
+    final status = data['status'];
+    final groupId = data['group_id']?.toString();
+
+    if (groupId != null && groupId != widget.groupId.toString()) return;
+
+    setState(() {
+      final index = _messages.indexWhere((msg) =>
+          msg['id'].toString() == messageId ||
+          msg['temp_id']?.toString() == messageId);
+      print('DEBUG: Found message at index: $index');
+
+      if (index != -1) {
+        print('DEBUG: Updating message status to: $status');
+        _messages[index]['status'] = status;
+        _groupedMessages = MessageSort.groupMessagesByDate(_messages);
+      } else {
+        print('DEBUG: Message $messageId not found in messages list');
+        print(
+            'DEBUG: Available message IDs: ${_messages.map((m) => '${m['id']} (temp: ${m['temp_id']})').join(', ')}');
+      }
+    });
+  }
+
+  void _handleMessageStatus(Map<String, dynamic> status) {
+    print('DEBUG: Received message status update: $status'); // Debug log
+    if (!mounted) {
+      print('DEBUG: Widget not mounted, skipping status update');
+      return;
+    }
+
+    final messageId = status['message_id'].toString();
+    print('DEBUG: Looking for message with ID: $messageId');
+    print('DEBUG: Current messages count: ${_messages.length}');
+
+    final messageIndex =
+        _messages.indexWhere((msg) => msg['id'].toString() == messageId);
+    print('DEBUG: Found message at index: $messageIndex');
+
+    if (messageIndex != -1) {
+      print(
+          'DEBUG: Current message status: ${_messages[messageIndex]['status']}');
+      print('DEBUG: Updating to new status: ${status['status']}');
+
+      // Create a new list to force UI update
+      final updatedMessages = List<Map<String, dynamic>>.from(_messages);
+      updatedMessages[messageIndex] = {
+        ...updatedMessages[messageIndex],
+        'status': status['status'],
       };
 
+      // Update both lists to ensure UI rebuilds
       setState(() {
-        _messages.add(newMessage);
+        _messages = updatedMessages;
+        _groupedMessages = MessageSort.groupMessagesByDate(_messages);
+      });
+
+      print('DEBUG: Message status updated in list');
+      print('DEBUG: New message status: ${_messages[messageIndex]['status']}');
+
+      // If message is now sent, remove it from the queue
+      if (status['status'] == 'sent') {
+        _wsService.removeFromQueue(messageId);
+      }
+    } else {
+      print('DEBUG: Message $messageId not found in messages list');
+      print(
+          'DEBUG: Available message IDs: ${_messages.map((m) => m['id']).join(', ')}');
+    }
+  }
+
+  void _handleMessageUpdate(Map<String, dynamic> update) {
+    setState(() {
+      final messageId = update['message_id'].toString();
+      final messageIndex =
+          _messages.indexWhere((msg) => msg['id'].toString() == messageId);
+      if (messageIndex != -1) {
+        _messages[messageIndex] = {
+          ..._messages[messageIndex],
+          'message': update['content'],
+          'edited': true,
+          'edited_at': update['edited_at'],
+        };
+        _groupedMessages = MessageSort.groupMessagesByDate(_messages);
+      }
+    });
+  }
+
+  void _handleMessageDelete(Map<String, dynamic> delete) {
+    setState(() {
+      final messageId = delete['message_id'].toString();
+      _messages.removeWhere((msg) => msg['id'].toString() == messageId);
+      _groupedMessages = MessageSort.groupMessagesByDate(_messages);
+    });
+  }
+
+  void _sendTypingStatus(bool isTyping) async {
+    if (_currentUserId == null) return;
+
+    // Only send typing status through WebSocket, no database operations
+    final typingMessage = {
+      'type': 'typing',
+      'user_id': _currentUserId,
+      'group_id': widget.groupId.toString(),
+      'is_typing': isTyping,
+      'timestamp': DateTime.now().toIso8601String(),
+    };
+
+    try {
+      // Use the new method that doesn't save to database
+      await _wsService.sendTypingStatus(typingMessage);
+    } catch (e) {
+      print('Error sending typing status: $e');
+    }
+  }
+
+  Future<void> _sendMessage() async {
+    if (_controller.text.trim().isEmpty || _currentUserId == null) return;
+
+    try {
+      final tempId = DateTime.now().millisecondsSinceEpoch.toString();
+      print('DEBUG: Sending message with temp_id: $tempId');
+
+      // Create the message object
+      final message = {
+        'type': 'send_message',
+        'content': _controller.text.trim(),
+        'sender_id': _currentUserId,
+        'group_id': widget.groupId.toString(),
+        'message_type': 'text',
+        'temp_id': tempId,
+        'timestamp': DateTime.now().toIso8601String(),
+        'status': 'sending'
+      };
+
+      // Add message to UI immediately with 'sending' status and temp_id
+      setState(() {
+        _messages.add({
+          'id': tempId,
+          'temp_id': tempId,
+          'group_id': widget.groupId,
+          'sender_id': _currentUserId,
+          'message': message['content'],
+          'type': 'text',
+          'timestamp': message['timestamp'],
+          'status': 'sending',
+          'isMe': 1,
+          'edited': false,
+        });
         _groupedMessages = MessageSort.groupMessagesByDate(_messages);
         _replyingToMessage = null;
       });
+
+      // Send message through WebSocket service
+      await _wsService.sendMessage(message);
+
+      _controller.clear();
       _scrollToBottomIfAtBottom();
-
-      final mediaId = await _dbHelper.insertImageFile(imagePath);
-      await _dbHelper.insertMessage({...newMessage, "media_id": mediaId});
-
       widget.onMessageSent?.call();
     } catch (e) {
+      print('Error sending message: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Failed to send message: $e")),
+      );
+    }
+  }
+
+  Future<void> _sendImageMessage(String imagePath) async {
+    try {
+      if (_currentUserId == null) return;
+
+      final messageId = DateTime.now().millisecondsSinceEpoch.toString();
+      // Read the image file and convert to base64
+      final file = File(imagePath);
+      final bytes = await file.readAsBytes();
+      final base64Image = base64Encode(bytes);
+      final fileName = imagePath.split('/').last;
+
+      final message = {
+        'type': 'send_message',
+        'content': 'Image',
+        'sender_id': _currentUserId,
+        'group_id': widget.groupId.toString(),
+        'message_type': 'image',
+        'message_id': messageId,
+        'attachment_type': 'image',
+        'file_name': fileName,
+        'file_data': base64Image,
+        'timestamp': DateTime.now().toIso8601String(),
+        'status': 'sending'
+      };
+
+      // Add message to UI immediately with 'sending' status
+      setState(() {
+        _messages.add({
+          'id': messageId,
+          'group_id': widget.groupId,
+          'sender_id': _currentUserId,
+          'message': imagePath,
+          'type': 'image',
+          'timestamp': message['timestamp'],
+          'status': 'sending',
+          'isMe': 1,
+          'reply_to_id': _replyingToMessage?['id'],
+          'reply_to_message': _replyingToMessage?['message'],
+        });
+        _groupedMessages = MessageSort.groupMessagesByDate(_messages);
+        _replyingToMessage = null;
+      });
+
+      // Send message through WebSocket
+      await _wsService.sendMessage(message);
+
+      _scrollToBottomIfAtBottom();
+      widget.onMessageSent?.call();
+    } catch (e) {
+      print('Error sending image: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Failed to send image: $e")),
       );
     }
   }
 
-  Future<void> _sendMessage() async {
-    if (_controller.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Message cannot be empty")),
-      );
-      return;
-    }
-
+  Future<void> _sendAudioMessage(String path) async {
     try {
-      final messageText = _controller.text.trim();
-      final newMessage = {
-        "id": DateTime.now().millisecondsSinceEpoch,
-        "group_id": widget.groupId,
-        "sender_id": currentUserId,
-        "message": messageText,
-        "type": "text",
-        "timestamp": DateTime.now().toIso8601String(),
-        "status": "sent",
-        "isMe": 1,
-        "reply_to_id": _replyingToMessage?['id'],
-        "reply_to_message": _replyingToMessage?['message'],
+      if (_currentUserId == null) return;
+
+      final messageId = DateTime.now().millisecondsSinceEpoch.toString();
+      // Read the audio file and convert to base64
+      final file = File(path);
+      final bytes = await file.readAsBytes();
+      final base64Audio = base64Encode(bytes);
+      final fileName = path.split('/').last;
+
+      final message = {
+        'type': 'send_message',
+        'content': 'Audio message',
+        'sender_id': _currentUserId,
+        'group_id': widget.groupId.toString(),
+        'message_type': 'audio',
+        'message_id': messageId,
+        'attachment_type': 'file',
+        'file_name': fileName,
+        'file_data': base64Audio,
+        'timestamp': DateTime.now().toIso8601String(),
+        'status': 'sending'
       };
 
+      // Add message to UI immediately with 'sending' status
       setState(() {
-        _messages.add(newMessage);
+        _messages.add({
+          'id': messageId,
+          'group_id': widget.groupId,
+          'sender_id': _currentUserId,
+          'message': path,
+          'type': 'audio',
+          'timestamp': message['timestamp'],
+          'status': 'sending',
+          'isMe': 1,
+          'reply_to_id': _replyingToMessage?['id'],
+          'reply_to_message': _replyingToMessage?['message'],
+        });
         _groupedMessages = MessageSort.groupMessagesByDate(_messages);
         _replyingToMessage = null;
       });
-      _controller.clear();
-      _scrollToBottomIfAtBottom();
 
-      await _dbHelper.insertMessage(newMessage);
+      // Send message through WebSocket
+      await _wsService.sendMessage(message);
+
+      _scrollToBottomIfAtBottom();
       widget.onMessageSent?.call();
     } catch (e) {
+      print('Error sending audio: $e');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Failed to send message: $e")),
+        SnackBar(content: Text("Failed to send audio: $e")),
       );
     }
   }
@@ -470,40 +774,6 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
     });
   }
 
-  Future<void> _sendAudioMessage(String path) async {
-    try {
-      final newMessage = {
-        "id": DateTime.now().millisecondsSinceEpoch,
-        "group_id": widget.groupId,
-        "sender_id": currentUserId,
-        "message": path,
-        "type": "audio",
-        "timestamp": DateTime.now().toIso8601String(),
-        "media_id": null,
-        "status": "sent",
-        "isMe": 1,
-        "reply_to_id": _replyingToMessage?['id'],
-        "reply_to_message": _replyingToMessage?['message'],
-      };
-
-      setState(() {
-        _messages.add(newMessage);
-        _groupedMessages = MessageSort.groupMessagesByDate(_messages);
-        _replyingToMessage = null;
-      });
-      _scrollToBottomIfAtBottom();
-
-      final mediaId = await _dbHelper.insertAudioFile(path);
-      await _dbHelper.insertMessage({...newMessage, "media_id": mediaId});
-
-      widget.onMessageSent?.call();
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Failed to send audio: $e")),
-      );
-    }
-  }
-
   void _playAudio(dynamic messageId, String path) async {
     final messageIdStr = messageId.toString();
     if (_isPlayingMap[messageIdStr] ?? false) {
@@ -534,6 +804,97 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
         });
       });
       setState(() => _isPlayingMap[messageIdStr] = true);
+    }
+  }
+
+  void _scrollToMessage(String messageId) {
+    // Find the message in the flattened messages list
+    final index =
+        _messages.indexWhere((msg) => msg['id'].toString() == messageId);
+    if (index != -1) {
+      // Calculate the scroll position based on the message index
+      final scrollPosition = (_messages.length - index - 1) * 100.0;
+
+      // Get the viewport height
+      final viewportHeight = _scrollController.position.viewportDimension;
+
+      // Calculate the target position to center the message in the viewport
+      final targetPosition = scrollPosition -
+          (viewportHeight / 2) +
+          50; // 50 is half the approximate message height
+
+      // Ensure we don't scroll beyond the limits
+      final maxScroll = _scrollController.position.maxScrollExtent;
+      final minScroll = _scrollController.position.minScrollExtent;
+      final finalPosition = targetPosition.clamp(minScroll, maxScroll);
+
+      _scrollController.animateTo(
+        finalPosition,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    }
+  }
+
+  void _handleTypingStatus(Map<String, dynamic> data) {
+    setState(() {
+      if (data['is_typing'] == true) {
+        _typingUsers[data['user_id']] = data['username'] ?? 'Someone';
+      } else {
+        _typingUsers.remove(data['user_id']);
+      }
+    });
+  }
+
+  void _handleNewMessage(Map<String, dynamic> message) async {
+    try {
+      print('Received new message: $message'); // Debug log
+      // Get the current user's ID from the profile table
+      final db = await _dbHelper.database;
+      final userProfile = await db.query('profile', limit: 1);
+      final currentUserId = userProfile.first['id'] as String?;
+
+      final isMe = message['sender_id'].toString() == currentUserId;
+
+      // Only add the message if it's not from us (our messages are already added)
+      if (!isMe) {
+        setState(() {
+          _messages.add({
+            'id': message['id'] ?? message['message_id'],
+            'group_id': widget.groupId,
+            'sender_id': message['sender_id'],
+            'message': message['content'] ?? message['message'] ?? '',
+            'type': message['message_type'] ?? message['type'] ?? 'text',
+            'timestamp': message['timestamp'],
+            'status': 'received',
+            'isMe': 0,
+            'reply_to': message['reply_to'],
+            'media_url': message['media_url'],
+            'edited': message['edited'] ?? false,
+            'edited_at': message['edited_at'],
+          });
+          _groupedMessages = MessageSort.groupMessagesByDate(_messages);
+        });
+        _scrollToBottomIfAtBottom();
+      }
+    } catch (e) {
+      print('Error handling new message: $e'); // Debug log
+    }
+  }
+
+  void _onTextChanged() {
+    if (_typingTimer?.isActive ?? false) {
+      _typingTimer?.cancel();
+    }
+
+    if (_controller.text.isNotEmpty) {
+      // Only send typing status, no message status
+      _sendTypingStatus(true);
+      _typingTimer = Timer(const Duration(seconds: 2), () {
+        _sendTypingStatus(false);
+      });
+    } else {
+      _sendTypingStatus(false);
     }
   }
 
@@ -645,8 +1006,7 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
                           replyTo: message["reply_to_message"],
                           isAudio: message["type"] == "audio",
                           isImage: message["type"] == "image",
-                          isNotification: message["type"] ==
-                              "notification", // Added for notifications
+                          isNotification: message["type"] == "notification",
                           onPlayAudio: _playAudio,
                           isPlaying:
                               _isPlayingMap[message["id"].toString()] ?? false,
@@ -657,6 +1017,15 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
                               _audioPositionMap[message["id"].toString()] ??
                                   Duration.zero,
                           messageId: message["id"].toString(),
+                          onReply: (messageId, messageText) {
+                            _setReplyMessage({
+                              'id': messageId,
+                              'message': messageText,
+                              'sender_id': message["sender_id"],
+                            });
+                          },
+                          onReplyTap: _scrollToMessage,
+                          messageStatus: message["status"] ?? "sent",
                         ),
                       );
                     }).toList(),
@@ -717,6 +1086,12 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
               ),
             ),
           Positioned(
+            bottom: 80, // Adjust based on your input area height
+            left: 0,
+            right: 0,
+            child: _buildTypingIndicator(),
+          ),
+          Positioned(
             bottom: 0,
             left: 0,
             right: 0,
@@ -736,9 +1111,30 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
               replyingToMessage: _replyingToMessage?['message'],
               onCancelReply: () => setState(() => _replyingToMessage = null),
               audioFunctions: _audioFunctions,
+              currentUserId: _currentUserId,
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildTypingIndicator() {
+    if (_typingUsers.isEmpty) return const SizedBox.shrink();
+
+    final typingText = _typingUsers.length == 1
+        ? '${_typingUsers.values.first} is typing...'
+        : '${_typingUsers.length} people are typing...';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Text(
+        typingText,
+        style: TextStyle(
+          color: Colors.grey[600],
+          fontSize: 12,
+          fontStyle: FontStyle.italic,
+        ),
       ),
     );
   }

@@ -577,7 +577,7 @@ class _HomeScreenState extends State<HomeScreen>
 
   Widget _profile() {
     final picture = widget.picture != null
-        ? ApiEndpoints.server + widget.picture!
+        ? ApiEndpoints.server + '/' + widget.picture!
         : "assets/images/avatar.png";
     return IconButton(
       onPressed: () => Navigator.push(

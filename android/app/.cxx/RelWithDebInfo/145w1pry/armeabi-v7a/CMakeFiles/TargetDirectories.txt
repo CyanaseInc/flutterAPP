@@ -1,0 +1,2 @@
+C:/Users/User/Downloads/Cyanase/code/app/android/app/.cxx/RelWithDebInfo/145w1pry/armeabi-v7a/CMakeFiles/edit_cache.dir
+C:/Users/User/Downloads/Cyanase/code/app/android/app/.cxx/RelWithDebInfo/145w1pry/armeabi-v7a/CMakeFiles/rebuild_cache.dir

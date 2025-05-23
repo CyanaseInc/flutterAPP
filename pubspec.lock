@@ -61,10 +61,10 @@ packages:
     dependency: transitive
     description:
       name: asn1lib
-      sha256: "4bae5ae63e6d6dd17c4aac8086f3dec26c0236f6a0f03416c6c19d830c367cf5"
+      sha256: "0511d6be23b007e95105ae023db599aea731df604608978dada7f9faf2637623"
       url: "https://pub.dev"
     source: hosted
-    version: "1.5.8"
+    version: "1.6.4"
   async:
     dependency: transitive
     description:
@@ -357,10 +357,10 @@ packages:
     dependency: transitive
     description:
       name: dtd
-      sha256: "0284e4d02b9be48142c1adf0d14670fb56f0f333837e61d269e3ca7839d5e183"
+      sha256: "14a0360d898ded87c3d99591fc386b8a6ea5d432927bee709b22130cd25b993a"
       url: "https://pub.dev"
     source: hosted
-    version: "2.4.0"
+    version: "2.5.1"
   dwds:
     dependency: transitive
     description:
@@ -369,6 +369,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "24.3.5"
+  emoji_picker_flutter:
+    dependency: "direct main"
+    description:
+      name: emoji_picker_flutter
+      sha256: "9a44c102079891ea5877f78c70f2e3c6e9df7b7fe0a01757d31f1046eeaa016d"
+      url: "https://pub.dev"
+    source: hosted
+    version: "4.3.0"
   encrypt:
     dependency: "direct main"
     description:
@@ -417,6 +425,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "7.0.1"
+  file_picker:
+    dependency: "direct main"
+    description:
+      name: file_picker
+      sha256: "77f8e81d22d2a07d0dee2c62e1dda71dc1da73bf43bb2d45af09727406167964"
+      url: "https://pub.dev"
+    source: hosted
+    version: "10.1.9"
   file_selector_linux:
     dependency: transitive
     description:
@@ -732,10 +748,10 @@ packages:
     dependency: transitive
     description:
       name: js
-      sha256: f2c445dce49627136094980615a031419f7f3eb393237e4ecd97ac15dea343f3
+      sha256: "53385261521cc4a0c4658fd0ad07a7d14591cf8fc33abbceae306ddb974888dc"
       url: "https://pub.dev"
     source: hosted
-    version: "0.6.7"
+    version: "0.7.2"
   json_annotation:
     dependency: transitive
     description:
@@ -868,10 +884,10 @@ packages:
     dependency: transitive
     description:
       name: package_config
-      sha256: "92d4488434b520a62570293fbd33bb556c7d49230791c1b4bbd973baf6d2dc67"
+      sha256: f096c55ebb7deb7e384101542bfba8c52696c1b56fca2eb62827989ef2353bbc
       url: "https://pub.dev"
     source: hosted
-    version: "2.1.1"
+    version: "2.2.0"
   path:
     dependency: "direct main"
     description:
@@ -1345,10 +1361,10 @@ packages:
     dependency: transitive
     description:
       name: sse
-      sha256: "4389a01d5bc7ef3e90fbc645f8e7c6d8711268adb1f511e14ae9c71de47ee32b"
+      sha256: fcc97470240bb37377f298e2bd816f09fd7216c07928641c0560719f50603643
       url: "https://pub.dev"
     source: hosted
-    version: "4.1.7"
+    version: "4.1.8"
   stack_trace:
     dependency: transitive
     description:
@@ -1385,18 +1401,18 @@ packages:
     dependency: transitive
     description:
       name: syncfusion_flutter_core
-      sha256: "12735505d616320aebe39a6fc90b6608a09116378d66aee9636b0eddf7b75971"
+      sha256: f1d2b52697543e13bdefdc62d15868124a265987577f53224a7dbe176c8448f0
       url: "https://pub.dev"
     source: hosted
-    version: "28.1.38"
+    version: "28.2.12"
   syncfusion_flutter_gauges:
     dependency: "direct main"
     description:
       name: syncfusion_flutter_gauges
-      sha256: fc0af54711f071d0cf69e78868d78453ef75e3f372fb92133e40b9f612293fc5
+      sha256: "246a34dd74b6a41aed22315a1ecc773c883897450d5a0a5e7b9249c4f653b2fe"
       url: "https://pub.dev"
     source: hosted
-    version: "28.1.38"
+    version: "28.2.12"
   synchronized:
     dependency: transitive
     description:
@@ -1433,10 +1449,10 @@ packages:
     dependency: transitive
     description:
       name: unified_analytics
-      sha256: b85c6ace8bf31b3cfd358a1b727db501eb30ee71984abcb3bfbcdec45e3172da
+      sha256: c8abdcad84b55b78f860358aae90077b8f54f98169a75e16d97796a1b3c95590
       url: "https://pub.dev"
     source: hosted
-    version: "7.0.1"
+    version: "8.0.1"
   universal_io:
     dependency: transitive
     description:
@@ -1710,5 +1726,5 @@ packages:
     source: hosted
     version: "2.2.2"
 sdks:
-  dart: ">=3.7.0-0 <4.0.0"
+  dart: ">=3.7.0 <4.0.0"
   flutter: ">=3.27.0"

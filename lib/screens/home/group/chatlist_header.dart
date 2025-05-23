@@ -40,6 +40,53 @@ class SearchAndHeaderComponent extends StatelessWidget {
     required Color color,
     required Widget screen,
   }) {
+    return InkWell(
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => screen),
+      ),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(8),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.15),
+              blurRadius: 6,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: white, size: 28),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                '$count $title',
+                style: const TextStyle(
+                  color: white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: white, size: 28),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoanBannerz({
+    required BuildContext context,
+    required String title,
+    required int count,
+    required IconData icon,
+    required Widget screen,
+  }) {
     return AnimatedOpacity(
       opacity: fadeAnimation?.value ?? 1.0,
       duration: const Duration(seconds: 1),
@@ -52,7 +99,7 @@ class SearchAndHeaderComponent extends StatelessWidget {
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           decoration: BoxDecoration(
-            color: color,
+            color: primaryTwo,
             borderRadius: BorderRadius.circular(8),
             boxShadow: [
               BoxShadow(
@@ -84,62 +131,10 @@ class SearchAndHeaderComponent extends StatelessWidget {
     );
   }
 
-  Widget _buildLoanBannerz({
-    required BuildContext context,
-    required String title,
-    required int count,
-    required IconData icon,
-    required Widget screen,
-  }) {
-    return AnimatedOpacity(
-      opacity: fadeAnimation?.value ?? 1.0,
-      duration: const Duration(seconds: 1),
-      child: InkWell(
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => screen),
-        ),
-        child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            border: Border.all(color: primaryTwo, width: 1),
-            borderRadius: BorderRadius.circular(8),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.1),
-                blurRadius: 4,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              Icon(icon, color: primaryTwo, size: 28),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  '$count $title',
-                  style: TextStyle(
-                    color: primaryTwo,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              const Icon(Icons.chevron_right, color: primaryTwo, size: 28),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-     // Detailed logging for pendingWithdraw
-   
+    // Detailed logging for pendingWithdraw
+
     return Column(
       children: [
         const SizedBox(height: 20),
@@ -169,11 +164,10 @@ class SearchAndHeaderComponent extends StatelessWidget {
               onLoanProcessed: onReloadChats,
             ),
           ),
-           if (pendingWithdraw.isNotEmpty)
+        if (pendingWithdraw.isNotEmpty)
           _buildLoanBanner(
             context: context,
-            title:
-                'Withdraw requests ${pendingWithdraw.length == 1 ? '' : ''}',
+            title: 'Withdraw requests ${pendingWithdraw.length == 1 ? '' : ''}',
             count: pendingWithdraw.length,
             icon: Icons.pending_actions,
             color: primaryDark,

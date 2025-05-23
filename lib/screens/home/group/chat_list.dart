@@ -29,10 +29,9 @@ class ChatListState extends State<ChatList>
   int _pendingRequestCount = 0;
   List<Map<String, dynamic>> _adminGroups = [];
   List<Map<String, dynamic>> _pendingAdminLoans = []; // Added for admin loans
-  List<Map<String, dynamic>> _pendingUserLoans =
-      []; 
-      List<Map<String, dynamic>> _pendingWithdraw =
-      [];// Added for user pending loans
+  List<Map<String, dynamic>> _pendingUserLoans = [];
+  List<Map<String, dynamic>> _pendingWithdraw =
+      []; // Added for user pending loans
   List<Map<String, dynamic>> _ongoingUserLoans =
       []; // Added for user active loans
   AnimationController? _animationController;
@@ -93,7 +92,6 @@ class ChatListState extends State<ChatList>
   }
 
   Future<void> _getGroup() async {
-
     try {
       final db = await _dbHelper.database;
       final userProfile = await db.query('profile', limit: 1);
@@ -145,7 +143,7 @@ class ChatListState extends State<ChatList>
       int totalPending = 0;
       List<Map<String, dynamic>> pendingAdminLoans = [];
       List<Map<String, dynamic>> pendingUserLoans = [];
-      List<Map<String, dynamic>>  pendingWithdraw = [];
+      List<Map<String, dynamic>> pendingWithdraw = [];
       List<Map<String, dynamic>> ongoingUserLoans = [];
 
       for (final groupData in groups) {
@@ -283,10 +281,10 @@ class ChatListState extends State<ChatList>
                   .cast<Map<String, dynamic>>();
           final userPendingLoans =
               (groupData['user_pending_loans'] as List<dynamic>? ?? []);
-              final adminPendingWithdraws =
+          final adminPendingWithdraws =
               (groupData['pending_withdraw_requests'] as List<dynamic>? ?? [])
                   .cast<Map<String, dynamic>>();
-                  
+
           final userActiveLoans =
               (groupData['user_active_loans'] as List<dynamic>? ?? [])
                   .cast<Map<String, dynamic>>();
@@ -320,14 +318,14 @@ class ChatListState extends State<ChatList>
               'created_at': loan['created_at'] as String?,
             });
           }
-for (final withdraw in adminPendingWithdraws) {
-             pendingWithdraw.add({
+          for (final withdraw in adminPendingWithdraws) {
+            pendingWithdraw.add({
               'group_id': groupId,
               'group_name': groupName,
               'withdraw_id': withdraw['withdraw_id'] as int?,
               'amount': withdraw['amount'] as double?,
-                'full_name': withdraw['full_name'] as String?,
-                'total_savings': withdraw['total_savings'] as double?,
+              'full_name': withdraw['full_name'] as String?,
+              'total_savings': withdraw['total_savings'] as double?,
               'created_at': withdraw['created_at'] as String?,
             });
           }
@@ -419,7 +417,7 @@ for (final withdraw in adminPendingWithdraws) {
         _adminGroups = [];
         _pendingAdminLoans = [];
         _pendingUserLoans = [];
-        _pendingWithdraw =[];
+        _pendingWithdraw = [];
         _ongoingUserLoans = [];
       });
     }
@@ -440,7 +438,8 @@ for (final withdraw in adminPendingWithdraws) {
             pendingAdminLoans: _pendingAdminLoans,
             pendingUserLoans: _pendingUserLoans,
             ongoingUserLoans: _ongoingUserLoans,
-            pendingWithdraw: _pendingWithdraw, // Provide an appropriate value here
+            pendingWithdraw:
+                _pendingWithdraw, // Provide an appropriate value here
           ),
           Expanded(
             child: ChatListComponent(
@@ -478,12 +477,16 @@ for (final withdraw in adminPendingWithdraws) {
   }
 
   Future<List<Map<String, dynamic>>> _loadChats() async {
+    print('Loading chats...');
     final groups = await _dbHelper.getGroups();
+
     List<Map<String, dynamic>> chats = [];
 
     for (var group in groups) {
       final isApproved = await _isUserApproved(group['id']);
-      if (!isApproved) continue;
+      if (!isApproved) {
+        continue;
+      }
 
       final groupMessages = await _dbHelper.getMessages(
         groupId: group['id'],
@@ -500,7 +503,10 @@ for (final withdraw in adminPendingWithdraws) {
       );
 
       if (lastMessage != null) {
-        switch (lastMessage['type']) {
+        final messageType = lastMessage['type'] as String? ?? 'text';
+        final messageText = lastMessage['message'] as String? ?? '';
+
+        switch (messageType) {
           case 'image':
             lastMessagePreview = Row(
               children: const [
@@ -525,7 +531,7 @@ for (final withdraw in adminPendingWithdraws) {
                 const Icon(Icons.info, color: Colors.grey, size: 16),
                 const SizedBox(width: 4),
                 Text(
-                  _truncateMessage(lastMessage['message']),
+                  _truncateMessage(messageText),
                   style: const TextStyle(
                       color: Colors.grey, fontStyle: FontStyle.italic),
                 ),
@@ -534,7 +540,7 @@ for (final withdraw in adminPendingWithdraws) {
             break;
           default:
             lastMessagePreview = Text(
-              _truncateMessage(lastMessage['message']),
+              _truncateMessage(messageText),
               style: const TextStyle(color: Colors.grey),
             );
             break;
@@ -542,48 +548,38 @@ for (final withdraw in adminPendingWithdraws) {
       }
 
       final timestamp = lastMessage != null
-          ? lastMessage['timestamp']
-          : group['created_at'] ?? DateTime.now().toIso8601String();
+          ? lastMessage['timestamp'] as String? ??
+              DateTime.now().toIso8601String()
+          : group['created_at'] as String? ?? DateTime.now().toIso8601String();
 
       chats.add({
         'id': group['id'],
-        'name': _toSentenceCase(group['name'] ?? ''),
-        'description': group['description'],
-        'profilePic': group['profile_pic'],
+        'name': _toSentenceCase(group['name'] as String? ?? ''),
+        'description': group['description'] as String? ?? '',
+        'profilePic': group['profile_pic'] as String? ?? '',
         'lastMessage': lastMessagePreview,
         'time': lastMessage != null
-            ? _formatTime(lastMessage['timestamp'])
+            ? _formatTime(lastMessage['timestamp'] as String? ??
+                DateTime.now().toIso8601String())
             : 'Just now',
         'timestamp': timestamp,
         'unreadCount': unreadCount,
         'isGroup': true,
         'hasMessages': lastMessage != null,
         'restrict_messages_to_admins':
-            group['restrict_messages_to_admins'] == 0 ? false : true,
-        'amAdmin': group['amAdmin'] == 0 ? false : true,
-        'allows_subscription': group['allows_subscription'] == 1, // Add field
+            group['restrict_messages_to_admins'] == 1,
+        'amAdmin': group['amAdmin'] == 1,
+        'allows_subscription': group['allows_subscription'] == 1,
         'has_user_paid': group['has_user_paid'] == 1,
-        'subscription_amount': group['subscription_amount'] ?? 0.0,
+        'subscription_amount': _parseDouble(group['subscription_amount']),
       });
     }
 
+    // Sort chats by timestamp, most recent first
     chats.sort((a, b) {
-      final bool aHasMessages = a['hasMessages'];
-      final bool bHasMessages = b['hasMessages'];
-
-      if (aHasMessages && bHasMessages) {
-        final DateTime timeA = DateTime.parse(a['timestamp']);
-        final DateTime timeB = DateTime.parse(b['timestamp']);
-        return timeB.compareTo(timeA);
-      } else if (aHasMessages) {
-        return -1;
-      } else if (bHasMessages) {
-        return 1;
-      } else {
-        final DateTime timeA = DateTime.parse(a['timestamp']);
-        final DateTime timeB = DateTime.parse(b['timestamp']);
-        return timeB.compareTo(timeA);
-      }
+      final DateTime timeA = DateTime.parse(a['timestamp']);
+      final DateTime timeB = DateTime.parse(b['timestamp']);
+      return timeB.compareTo(timeA); // Descending order (most recent first)
     });
 
     return chats;
@@ -609,6 +605,19 @@ for (final withdraw in adminPendingWithdraws) {
   String _toSentenceCase(String input) {
     if (input.isEmpty) return input;
     return input[0].toUpperCase() + input.substring(1).toLowerCase();
+  }
+
+  double _parseDouble(dynamic value) {
+    if (value == null) return 0.0;
+    if (value is num) return value.toDouble();
+    if (value is String) {
+      try {
+        return double.parse(value);
+      } catch (e) {
+        return 0.0;
+      }
+    }
+    return 0.0;
   }
 }
 
@@ -670,11 +679,24 @@ class ChatListComponent extends StatelessWidget {
         return FutureBuilder<List<Map<String, dynamic>>>(
           future: loadChats(),
           builder: (context, futureSnapshot) {
-            if (!futureSnapshot.hasData) {
+            if (futureSnapshot.connectionState == ConnectionState.waiting) {
               return const Center(child: Loader());
             }
 
+            if (futureSnapshot.hasError) {
+              return Center(
+                child: Text('Error loading chats: ${futureSnapshot.error}'),
+              );
+            }
+
+            if (!futureSnapshot.hasData || futureSnapshot.data == null) {
+              return const Center(
+                child: Text('No chats available'),
+              );
+            }
+
             final chats = futureSnapshot.data!;
+
             final displayChats = filteredChats.isEmpty && chats.isNotEmpty
                 ? chats
                 : filteredChats;
@@ -805,7 +827,8 @@ class ChatListComponent extends StatelessWidget {
                             onMessageSent: onReloadChats,
                             allowSubscription: chat["allows_subscription"],
                             hasUserPaid: chat["has_user_paid"],
-                            subscriptionAmount: chat["subscription_amount"],
+                            subscriptionAmount:
+                                chat["subscription_amount"].toString(),
                           );
                         },
                       ),

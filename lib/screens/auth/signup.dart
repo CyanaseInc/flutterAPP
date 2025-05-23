@@ -377,7 +377,13 @@ class _SignupScreenState extends State<SignupScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Signup'),
+        backgroundColor: primaryTwo,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back_ios, color: white),
+          onPressed: () => Navigator.pop(context),
+        ),
       ),
+      backgroundColor: primaryTwo,
       body: Stack(
         children: [
           // Main content

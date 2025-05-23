@@ -3,5 +3,5 @@ C:\Users\User\Downloads\Cyanase\code\api>c # Restart ADB in TCP/IP mode
 restarting in TCP mode port: 5555
 PS C:\Users\User\Downloads\Cyanase\code\api> adb connect 10.156.124.53
 connected to 10.156.124.53:5555
-wsl -d Ubuntu
-netsh interface portproxy show all
+
+~$ ip addr | grep inet

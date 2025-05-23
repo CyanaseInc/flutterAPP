@@ -3,6 +3,7 @@ import 'package:record/record.dart';
 import './functions/audio_function.dart';
 import './functions/image_functions.dart';
 import 'package:cyanase/theme/theme.dart';
+import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 
 class InputArea extends StatefulWidget {
   final TextEditingController controller;
@@ -18,27 +19,29 @@ class InputArea extends StatefulWidget {
   final String? replyingToMessage;
   final VoidCallback? onCancelReply;
   final AudioFunctions audioFunctions;
-  final bool isAdminOnlyMode; // New parameter
-  final bool isCurrentUserAdmin; // New parameter
+  final bool isAdminOnlyMode;
+  final bool isCurrentUserAdmin;
+  final String? currentUserId;
 
-  const InputArea(
-      {super.key,
-      required this.controller,
-      required this.isRecording,
-      required this.recordingDuration,
-      required this.onSendMessage,
-      required this.onStartRecording,
-      required this.onStopRecording,
-      required this.onCancelRecording,
-      required this.onSendImageMessage,
-      required this.onSendAudioMessage,
-      this.replyToId,
-      this.replyingToMessage,
-      this.onCancelReply,
-      required this.audioFunctions,
-      required this.isAdminOnlyMode, // Default to false (normal mode)
-      required this.isCurrentUserAdmin // Default to false (regular user)
-      });
+  const InputArea({
+    super.key,
+    required this.controller,
+    required this.isRecording,
+    required this.recordingDuration,
+    required this.onSendMessage,
+    required this.onStartRecording,
+    required this.onStopRecording,
+    required this.onCancelRecording,
+    required this.onSendImageMessage,
+    required this.onSendAudioMessage,
+    this.replyToId,
+    this.replyingToMessage,
+    this.onCancelReply,
+    required this.audioFunctions,
+    required this.isAdminOnlyMode,
+    required this.isCurrentUserAdmin,
+    this.currentUserId,
+  });
 
   @override
   _InputAreaState createState() => _InputAreaState();
@@ -46,6 +49,10 @@ class InputArea extends StatefulWidget {
 
 class _InputAreaState extends State<InputArea> {
   bool _isTyping = false;
+  final FocusNode _focusNode = FocusNode();
+  double _textFieldHeight = 40.0;
+  final double _maxHeight = 120.0;
+  bool _showEmojiPicker = false;
 
   @override
   void initState() {
@@ -56,6 +63,7 @@ class _InputAreaState extends State<InputArea> {
   @override
   void dispose() {
     widget.controller.removeListener(_onTextChanged);
+    _focusNode.dispose();
     super.dispose();
   }
 
@@ -70,194 +78,381 @@ class _InputAreaState extends State<InputArea> {
   }
 
   bool get _canSendMessages {
-    // If not in admin-only mode, anyone can send
     if (!widget.isAdminOnlyMode) return true;
-
-    // In admin-only mode, only admins can send
     return widget.isCurrentUserAdmin;
+  }
+
+  void _onEmojiSelected(Category? category, Emoji emoji) {
+    final text = widget.controller.text;
+    final textSelection = widget.controller.selection;
+    final newText = text.replaceRange(
+      textSelection.start >= 0 ? textSelection.start : 0,
+      textSelection.end >= 0 ? textSelection.end : 0,
+      emoji.emoji,
+    );
+    final emojiLength = emoji.emoji.length;
+    widget.controller.value = TextEditingValue(
+      text: newText,
+      selection: TextSelection.collapsed(
+        offset:
+            (textSelection.start >= 0 ? textSelection.start : 0) + emojiLength,
+      ),
+    );
+  }
+
+  void _toggleEmojiPicker() {
+    setState(() {
+      _showEmojiPicker = !_showEmojiPicker;
+      if (_showEmojiPicker) {
+        _focusNode.unfocus();
+      } else {
+        _focusNode.requestFocus();
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: white,
-      padding: const EdgeInsets.all(8),
-      child: Column(
-        children: [
-          if (widget.replyingToMessage != null)
-            Container(
-              padding: const EdgeInsets.all(8),
-              margin: const EdgeInsets.only(bottom: 4),
-              decoration: BoxDecoration(
-                color: Colors.grey[200],
-                borderRadius: BorderRadius.circular(8),
-                border: Border(left: BorderSide(color: primaryColor, width: 2)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.reply, color: primaryColor),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      widget.replyingToMessage!,
-                      style: const TextStyle(
-                        color: Colors.black54,
-                        fontSize: 14,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close, color: primaryColor),
-                    onPressed: widget.onCancelReply,
-                  ),
-                ],
-              ),
-            ),
-          if (widget.replyingToMessage != null) const SizedBox(height: 4),
-
-          // Add admin restriction notice
-          if (widget.isAdminOnlyMode && !widget.isCurrentUserAdmin)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: Row(
-                children: [
-                  const Icon(Icons.admin_panel_settings,
-                      size: 16, color: Colors.red),
-                  const SizedBox(width: 4),
-                  Text(
-                    'Only admins can send messages',
-                    style: TextStyle(
-                      color: Colors.red,
-                      fontSize: 12,
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-          Row(
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          color: white,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              if (widget.isRecording)
-                Expanded(
-                  child: GestureDetector(
-                    onHorizontalDragEnd: (details) {
-                      if (details.primaryVelocity! < -200) {
-                        widget.onCancelRecording();
-                      }
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: Colors.grey[200],
-                        borderRadius: BorderRadius.circular(25),
-                      ),
-                      child: Row(
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.delete, color: Colors.red),
-                            onPressed: widget.onCancelRecording,
-                          ),
-                          const SizedBox(width: 8),
-                          const Icon(Icons.mic, color: Colors.red),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              "Recording... ${widget.recordingDuration.inSeconds}s",
-                              style: const TextStyle(
-                                color: Colors.black54,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.send, color: Colors.green),
-                            onPressed: widget.onStopRecording,
-                          ),
-                        ],
-                      ),
-                    ),
+              if (widget.replyingToMessage != null)
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  margin: const EdgeInsets.only(bottom: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[200],
+                    borderRadius: BorderRadius.circular(12),
+                    border:
+                        Border(left: BorderSide(color: primaryColor, width: 2)),
                   ),
-                )
-              else
-                Expanded(
                   child: Row(
                     children: [
-                      Expanded(
-                        child: TextField(
-                          controller: widget.controller,
-                          decoration: InputDecoration(
-                            hintText: "Type a message...",
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(25),
-                            ),
-                            contentPadding:
-                                const EdgeInsets.symmetric(horizontal: 16),
-                            enabled: _canSendMessages, // Disable if not allowed
-                          ),
-                          maxLines: null,
-                          keyboardType: TextInputType.multiline,
-                          readOnly:
-                              !_canSendMessages, // Make read-only if not allowed
-                        ),
-                      ),
+                      const Icon(Icons.reply, color: primaryColor),
                       const SizedBox(width: 8),
-                      IconButton(
-                        icon: const Icon(Icons.image, color: primaryColor),
-                        onPressed: _canSendMessages
-                            ? () async {
-                                try {
-                                  final imageFile = await ImageFunctions()
-                                      .pickImageFromGallery();
-                                  if (imageFile != null) {
-                                    final imagePath = await ImageFunctions()
-                                        .saveImageToStorage(imageFile);
-                                    widget.onSendImageMessage(imagePath);
-                                  }
-                                } catch (e) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                        content:
-                                            Text('Error picking image: $e')),
-                                  );
-                                }
-                              }
-                            : null, // Disable if not allowed
+                      Expanded(
+                        child: Row(
+                          children: [
+                            if (widget.replyingToMessage!.startsWith('/')) ...[
+                              // Check if it's an audio or image file
+                              if (widget.replyingToMessage!.endsWith('.m4a') ||
+                                  widget.replyingToMessage!.endsWith('.mp3'))
+                                const Icon(Icons.mic,
+                                    color: Colors.grey, size: 16)
+                              else if (widget.replyingToMessage!
+                                      .endsWith('.jpg') ||
+                                  widget.replyingToMessage!.endsWith('.png') ||
+                                  widget.replyingToMessage!.endsWith('.jpeg'))
+                                const Icon(Icons.image,
+                                    color: Colors.grey, size: 16)
+                              else
+                                const Icon(Icons.attach_file,
+                                    color: Colors.grey, size: 16),
+                              const SizedBox(width: 4),
+                              Text(
+                                widget.replyingToMessage!.endsWith('.m4a') ||
+                                        widget.replyingToMessage!
+                                            .endsWith('.mp3')
+                                    ? "Audio"
+                                    : widget.replyingToMessage!
+                                                .endsWith('.jpg') ||
+                                            widget.replyingToMessage!
+                                                .endsWith('.png') ||
+                                            widget.replyingToMessage!
+                                                .endsWith('.jpeg')
+                                        ? "Image"
+                                        : "File",
+                                style: const TextStyle(
+                                  color: Colors.black54,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ] else
+                              Text(
+                                widget.replyingToMessage!,
+                                style: const TextStyle(
+                                  color: Colors.black54,
+                                  fontSize: 14,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                          ],
+                        ),
                       ),
                       IconButton(
-                        icon: Icon(
-                          _isTyping ? Icons.send : Icons.mic,
-                          color: _isTyping ? Colors.green : primaryColor,
-                        ),
-                        onPressed: _canSendMessages
-                            ? () async {
-                                if (_isTyping) {
-                                  widget.onSendMessage();
-                                } else {
-                                  if (await _checkAudioPermission()) {
-                                    widget.onStartRecording();
-                                  } else {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text(
-                                            'Microphone permission required'),
-                                      ),
-                                    );
-                                  }
-                                }
-                              }
-                            : null, // Disable if not allowed
+                        icon: const Icon(Icons.close, color: primaryColor),
+                        onPressed: widget.onCancelReply,
                       ),
                     ],
                   ),
                 ),
+              if (widget.replyingToMessage != null) const SizedBox(height: 4),
+
+              // Add admin restriction notice
+              if (widget.isAdminOnlyMode && !widget.isCurrentUserAdmin)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.admin_panel_settings,
+                          size: 16, color: Colors.red),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Only admins can send messages',
+                        style: TextStyle(
+                          color: Colors.red,
+                          fontSize: 13.5,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  if (widget.isRecording)
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[200],
+                          borderRadius: BorderRadius.circular(25),
+                        ),
+                        child: Row(
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.delete, color: Colors.red),
+                              onPressed: widget.onCancelRecording,
+                            ),
+                            const SizedBox(width: 8),
+                            const Icon(Icons.mic, color: Colors.red),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                "Recording... ${widget.recordingDuration.inSeconds}s",
+                                style: const TextStyle(
+                                  color: Colors.black54,
+                                  fontSize: 15.5,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.send, color: primaryTwo),
+                              onPressed: widget.onStopRecording,
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  else
+                    Expanded(
+                      child: Container(
+                        constraints: BoxConstraints(
+                          maxHeight: _maxHeight,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[100],
+                          borderRadius: BorderRadius.circular(25),
+                          border: Border.all(color: Colors.grey[300]!),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            IconButton(
+                              icon: Icon(
+                                _showEmojiPicker
+                                    ? Icons.keyboard
+                                    : Icons.emoji_emotions,
+                                color: primaryColor,
+                              ),
+                              onPressed: _toggleEmojiPicker,
+                            ),
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () {
+                                  if (!_showEmojiPicker) {
+                                    _focusNode.requestFocus();
+                                  }
+                                },
+                                child: TextField(
+                                  controller: widget.controller,
+                                  focusNode: _focusNode,
+                                  maxLines: null,
+                                  minLines: 1,
+                                  textCapitalization:
+                                      TextCapitalization.sentences,
+                                  keyboardType: TextInputType.multiline,
+                                  style: const TextStyle(fontSize: 16.5),
+                                  decoration: InputDecoration(
+                                    hintText: "Type a message...",
+                                    border: InputBorder.none,
+                                    contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 20,
+                                      vertical: 14,
+                                    ),
+                                    enabled: _canSendMessages &&
+                                        widget.currentUserId != null,
+                                  ),
+                                  onChanged: (text) {
+                                    setState(() {
+                                      _textFieldHeight = text.isEmpty
+                                          ? 40.0
+                                          : (_textFieldHeight + 20.0)
+                                              .clamp(40.0, _maxHeight);
+                                    });
+                                  },
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.attach_file,
+                                  color: primaryColor),
+                              onPressed: (_canSendMessages &&
+                                      widget.currentUserId != null)
+                                  ? () {
+                                      showModalBottomSheet(
+                                        context: context,
+                                        builder: (BuildContext context) {
+                                          return Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                vertical: 20),
+                                            child: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                ListTile(
+                                                  leading: const Icon(
+                                                      Icons.image,
+                                                      color: primaryColor),
+                                                  title: const Text('Image'),
+                                                  onTap: () async {
+                                                    Navigator.pop(context);
+                                                    try {
+                                                      final imageFile =
+                                                          await ImageFunctions()
+                                                              .pickImageFromGallery();
+                                                      if (imageFile != null) {
+                                                        final imagePath =
+                                                            await ImageFunctions()
+                                                                .saveImageToStorage(
+                                                                    imageFile);
+                                                        widget
+                                                            .onSendImageMessage(
+                                                                imagePath);
+                                                      }
+                                                    } catch (e) {
+                                                      ScaffoldMessenger.of(
+                                                              context)
+                                                          .showSnackBar(
+                                                        SnackBar(
+                                                            content: Text(
+                                                                'Error picking image: $e')),
+                                                      );
+                                                    }
+                                                  },
+                                                ),
+                                                ListTile(
+                                                  leading: const Icon(
+                                                      Icons.insert_drive_file,
+                                                      color: primaryColor),
+                                                  title: const Text('Document'),
+                                                  onTap: () async {
+                                                    Navigator.pop(context);
+                                                    try {
+                                                      final file =
+                                                          await ImageFunctions()
+                                                              .pickDocument();
+                                                      if (file != null) {
+                                                        final filePath =
+                                                            await ImageFunctions()
+                                                                .saveFileToStorage(
+                                                                    file);
+                                                        widget
+                                                            .onSendImageMessage(
+                                                                filePath);
+                                                      }
+                                                    } catch (e) {
+                                                      ScaffoldMessenger.of(
+                                                              context)
+                                                          .showSnackBar(
+                                                        SnackBar(
+                                                            content: Text(
+                                                                'Error picking file: $e')),
+                                                      );
+                                                    }
+                                                  },
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                        },
+                                      );
+                                    }
+                                  : null,
+                            ),
+                            IconButton(
+                              icon: Icon(
+                                _isTyping ? Icons.send : Icons.mic,
+                                color: _isTyping ? primaryTwo : primaryColor,
+                              ),
+                              onPressed: (_canSendMessages &&
+                                      widget.currentUserId != null)
+                                  ? () async {
+                                      if (_isTyping) {
+                                        widget.onSendMessage();
+                                      } else {
+                                        if (await _checkAudioPermission()) {
+                                          widget.onStartRecording();
+                                        } else {
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(
+                                            const SnackBar(
+                                              content: Text(
+                                                  'Microphone permission required'),
+                                            ),
+                                          );
+                                        }
+                                      }
+                                    }
+                                  : null,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ],
           ),
-        ],
-      ),
+        ),
+        if (_showEmojiPicker)
+          Container(
+            height: 250,
+            child: EmojiPicker(
+              onEmojiSelected: _onEmojiSelected,
+              config: Config(
+                height: 250,
+                checkPlatformCompatibility: true,
+                emojiViewConfig: EmojiViewConfig(
+                  columns: 7,
+                  emojiSizeMax: 32,
+                  verticalSpacing: 0,
+                  horizontalSpacing: 0,
+                  gridPadding: EdgeInsets.zero,
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
