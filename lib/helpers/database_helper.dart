@@ -207,10 +207,6 @@ class DatabaseHelper {
     if (oldVersion < 4) {
       await db.execute('ALTER TABLE messages ADD COLUMN reply_to_message TEXT');
     }
-
-    if (oldVersion < 5) {
-      await db.execute('ALTER TABLE messages ADD COLUMN temp_id TEXT');
-    }
   }
 
   Future<int> insertUser(Map<String, dynamic> user) async {
@@ -234,6 +230,7 @@ class DatabaseHelper {
       'messages',
       {
         'id': message['id'],
+        'temp_id': message['temp_id'],
         'group_id': message['group_id'],
         'sender_id': message['sender_id'],
         'message': message['message'],
@@ -242,6 +239,10 @@ class DatabaseHelper {
         'status': message['status'] ?? 'pending',
         'reply_to_id': message['reply_to_id'],
         'reply_to_message': message['reply_to_message'],
+        'isMe': message['isMe'] ?? 0,
+        'media_id': message['media_id'],
+        'edited': message['edited'] ?? false,
+        'deleted': message['deleted'] ?? false,
       },
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
@@ -350,14 +351,14 @@ class DatabaseHelper {
   }) async {
     final db = await database;
 
-    final result = await db.query(
-      'messages',
-      where: groupId != null ? 'group_id = ? AND deleted = 0' : 'deleted = 0',
-      whereArgs: groupId != null ? [groupId] : null,
-      limit: limit,
-      offset: offset,
-      orderBy: 'timestamp DESC',
-    );
+    final result = await db.rawQuery('''
+      SELECT m.*, media.file_path as media_path, media.type as media_type
+      FROM messages m
+      LEFT JOIN media ON m.media_id = media.id
+      WHERE ${groupId != null ? 'm.group_id = ? AND m.deleted = 0' : 'm.deleted = 0'}
+      ORDER BY m.timestamp DESC
+      LIMIT ? OFFSET ?
+    ''', groupId != null ? [groupId, limit, offset] : [limit, offset]);
 
     return result;
   }
@@ -535,6 +536,27 @@ class DatabaseHelper {
       {'id': serverId},
       where: 'temp_id = ?',
       whereArgs: [tempId],
+    );
+  }
+
+  Future<void> updateMessageMediaId(String messageId, int mediaId) async {
+    final db = await database;
+    await db.update(
+      'messages',
+      {'media_id': mediaId},
+      where: 'id = ?',
+      whereArgs: [messageId],
+    );
+  }
+
+  Future<void> updateMessageLocalPath(
+      String messageId, String localPath) async {
+    final db = await database;
+    await db.update(
+      'messages',
+      {'message': localPath},
+      where: 'id = ?',
+      whereArgs: [messageId],
     );
   }
 }

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:cyanase/helpers/loader.dart';
 import 'package:cyanase/helpers/pay_subscriptions.dart';
 import 'package:cyanase/screens/home/group/functions/sort_message_ui_function.dart';
+import 'package:cyanase/screens/home/group/widgets/audio_player_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:cyanase/theme/theme.dart';
 import 'package:cyanase/helpers/database_helper.dart';
@@ -16,6 +17,9 @@ import 'package:cyanase/helpers/websocket_service.dart';
 import 'package:cyanase/helpers/web_shared_storage.dart';
 import 'dart:io';
 import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
+import 'package:cyanase/helpers/api_endpoints.dart';
 
 class MessageChatScreen extends StatefulWidget {
   final String name;
@@ -82,6 +86,8 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
   Map<String, String> _typingUsers =
       {}; // Map of user_id to username who are typing
 
+  String? _token;
+
   @override
   void initState() {
     super.initState();
@@ -90,6 +96,7 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
     _scrollController.addListener(_onScroll);
     _initializeWebSocket();
     _getCurrentUserId();
+    _getToken();
     if (widget.allowSubscription && !widget.hasUserPaid) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _showSubscriptionReminder(context);
@@ -180,12 +187,11 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
               ...message,
               'isMe': isMe ? 1 : 0,
               'status': isMe ? (message['status'] ?? 'sent') : 'received',
-              'message': message['message'] ??
+              'message': message['media_path'] ??
+                  message['message'] ??
                   message['content'] ??
-                  '', // Handle both message and content fields
-              'type': message['type'] ??
-                  message['message_type'] ??
-                  'text', // Handle both type and message_type fields
+                  '',
+              'type': message['type'] ?? message['message_type'] ?? 'text',
             };
           }).toList();
 
@@ -290,6 +296,20 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
       }
     } catch (e) {
       print('Error getting current user ID: $e');
+    }
+  }
+
+  Future<void> _getToken() async {
+    try {
+      final db = await _dbHelper.database;
+      final userProfile = await db.query('profile', limit: 1);
+      if (userProfile.isNotEmpty) {
+        setState(() {
+          _token = userProfile.first['token'] as String?;
+        });
+      }
+    } catch (e) {
+      print('Error getting token: $e');
     }
   }
 
@@ -408,14 +428,11 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
 
   void _initializeWebSocket() {
     _wsService.onMessageReceived = (data) {
-      print('WebSocket received message: $data');
       if (data['type'] == 'message') {
         _handleNewMessage(data);
       } else if (data['type'] == 'update_message_status') {
-        print('DEBUG: Received message status update: $data');
         _handleMessageStatusUpdate(data);
       } else if (data['type'] == 'message_id_update') {
-        print('DEBUG: Received message ID update: $data');
         _handleMessageIdUpdate(data);
       } else if (data['type'] == 'typing') {
         _handleTypingStatus(data['data']);
@@ -432,33 +449,22 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
 
     if (groupId != widget.groupId.toString()) return;
 
-    print(
-        'DEBUG: Updating message ID from $oldId to $newId with status $status');
     setState(() {
       // First try to find by temp_id
       final index = _messages.indexWhere((msg) =>
           msg['temp_id']?.toString() == oldId || msg['id'].toString() == oldId);
 
       if (index != -1) {
-        print('DEBUG: Found message at index $index, updating ID and status');
         _messages[index]['id'] = newId;
         if (status != null) {
           _messages[index]['status'] = status;
         }
         _groupedMessages = MessageSort.groupMessagesByDate(_messages);
-      } else {
-        print(
-            'DEBUG: Message with ID/temp_id $oldId not found in messages list');
-        print(
-            'DEBUG: Available message IDs: ${_messages.map((m) => '${m['id']} (temp: ${m['temp_id']})').join(', ')}');
       }
     });
   }
 
   void _handleMessageStatusUpdate(Map<String, dynamic> data) {
-    print('DEBUG: Looking for message with ID: ${data['message_id']}');
-    print('DEBUG: Current messages count: ${_messages.length}');
-
     final messageId = data['message_id'].toString();
     final status = data['status'];
     final groupId = data['group_id']?.toString();
@@ -469,40 +475,25 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
       final index = _messages.indexWhere((msg) =>
           msg['id'].toString() == messageId ||
           msg['temp_id']?.toString() == messageId);
-      print('DEBUG: Found message at index: $index');
 
       if (index != -1) {
-        print('DEBUG: Updating message status to: $status');
         _messages[index]['status'] = status;
         _groupedMessages = MessageSort.groupMessagesByDate(_messages);
-      } else {
-        print('DEBUG: Message $messageId not found in messages list');
-        print(
-            'DEBUG: Available message IDs: ${_messages.map((m) => '${m['id']} (temp: ${m['temp_id']})').join(', ')}');
       }
     });
   }
 
   void _handleMessageStatus(Map<String, dynamic> status) {
-    print('DEBUG: Received message status update: $status'); // Debug log
     if (!mounted) {
-      print('DEBUG: Widget not mounted, skipping status update');
       return;
     }
 
     final messageId = status['message_id'].toString();
-    print('DEBUG: Looking for message with ID: $messageId');
-    print('DEBUG: Current messages count: ${_messages.length}');
 
     final messageIndex =
         _messages.indexWhere((msg) => msg['id'].toString() == messageId);
-    print('DEBUG: Found message at index: $messageIndex');
 
     if (messageIndex != -1) {
-      print(
-          'DEBUG: Current message status: ${_messages[messageIndex]['status']}');
-      print('DEBUG: Updating to new status: ${status['status']}');
-
       // Create a new list to force UI update
       final updatedMessages = List<Map<String, dynamic>>.from(_messages);
       updatedMessages[messageIndex] = {
@@ -516,18 +507,11 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
         _groupedMessages = MessageSort.groupMessagesByDate(_messages);
       });
 
-      print('DEBUG: Message status updated in list');
-      print('DEBUG: New message status: ${_messages[messageIndex]['status']}');
-
       // If message is now sent, remove it from the queue
       if (status['status'] == 'sent') {
         _wsService.removeFromQueue(messageId);
       }
-    } else {
-      print('DEBUG: Message $messageId not found in messages list');
-      print(
-          'DEBUG: Available message IDs: ${_messages.map((m) => m['id']).join(', ')}');
-    }
+    } else {}
   }
 
   void _handleMessageUpdate(Map<String, dynamic> update) {
@@ -628,54 +612,102 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
 
   Future<void> _sendImageMessage(String imagePath) async {
     try {
-      if (_currentUserId == null) return;
+      print('DEBUG 1: Starting _sendImageMessage with path: $imagePath');
+      print('DEBUG 1.1: widget.groupId = ${widget.groupId}');
 
-      final messageId = DateTime.now().millisecondsSinceEpoch.toString();
-      // Read the image file and convert to base64
-      final file = File(imagePath);
-      final bytes = await file.readAsBytes();
+      if (_currentUserId == null) {
+        print('DEBUG 2: _currentUserId is null, aborting');
+        return;
+      }
+
+      if (widget.groupId == null) {
+        print('DEBUG 2.1: widget.groupId is null, aborting');
+        return;
+      }
+
+      final tempId = DateTime.now().millisecondsSinceEpoch.toString();
+      final fileName = 'image_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      print('DEBUG 3: Generated tempId: $tempId and fileName: $fileName');
+
+      // Create a copy in the app's documents directory
+      print('DEBUG 4: Setting up local storage');
+      final appDir = await getApplicationDocumentsDirectory();
+      final mediaDir = Directory('${appDir.path}/media');
+      if (!await mediaDir.exists()) {
+        print('DEBUG 5: Creating media directory');
+        await mediaDir.create(recursive: true);
+      }
+
+      final localPath = '${mediaDir.path}/$fileName';
+      print('DEBUG 6: Copying file to local path: $localPath');
+      await File(imagePath).copy(localPath);
+      print('DEBUG 7: File copied successfully to local storage');
+
+      // Read file as base64
+      print('DEBUG 8: Reading file as base64');
+      final bytes = await File(imagePath).readAsBytes();
       final base64Image = base64Encode(bytes);
-      final fileName = imagePath.split('/').last;
+      print('DEBUG 9: File converted to base64');
 
-      final message = {
+      // Insert into media table
+      print('DEBUG 10: Inserting into media table');
+      final mediaId = await _dbHelper.insertImageFile(localPath);
+      print('DEBUG 11: Media ID from database: $mediaId');
+
+      // Store message in database
+      print('DEBUG 12: Storing message in database');
+      final groupId = widget.groupId!;
+      print('DEBUG 12.1: Using groupId: $groupId');
+
+      await _dbHelper.insertMessage({
+        'id': tempId,
+        'temp_id': tempId,
+        'group_id': groupId,
+        'sender_id': _currentUserId,
+        'message': localPath,
+        'type': 'image',
+        'media_id': mediaId,
+        'timestamp': DateTime.now().toIso8601String(),
+        'status': 'sending',
+        'isMe': 1,
+        'reply_to_id': _replyingToMessage?['id'],
+        'reply_to_message': _replyingToMessage?['message'],
+      });
+      print('DEBUG 13: Message stored in database');
+
+      // Send through WebSocket
+      print('DEBUG 14: Sending message through WebSocket');
+      final wsMessage = {
         'type': 'send_message',
         'content': 'Image',
         'sender_id': _currentUserId,
-        'group_id': widget.groupId.toString(),
+        'group_id': groupId,
+        'conversation_id': groupId.toString(),
         'message_type': 'image',
-        'message_id': messageId,
-        'attachment_type': 'image',
-        'file_name': fileName,
+        'temp_id': tempId,
         'file_data': base64Image,
+        'file_name': fileName,
+        'attachment_type': 'image',
         'timestamp': DateTime.now().toIso8601String(),
         'status': 'sending'
       };
+      print(
+          'DEBUG 14.1: WebSocket message prepared with group_id: ${wsMessage['group_id']}');
+      print(
+          'DEBUG 14.2: WebSocket message has file_data: ${wsMessage['file_data'] != null}');
+      await _wsService.sendMessage(wsMessage);
+      print('DEBUG 15: WebSocket message sent');
 
-      // Add message to UI immediately with 'sending' status
-      setState(() {
-        _messages.add({
-          'id': messageId,
-          'group_id': widget.groupId,
-          'sender_id': _currentUserId,
-          'message': imagePath,
-          'type': 'image',
-          'timestamp': message['timestamp'],
-          'status': 'sending',
-          'isMe': 1,
-          'reply_to_id': _replyingToMessage?['id'],
-          'reply_to_message': _replyingToMessage?['message'],
-        });
-        _groupedMessages = MessageSort.groupMessagesByDate(_messages);
-        _replyingToMessage = null;
-      });
-
-      // Send message through WebSocket
-      await _wsService.sendMessage(message);
-
+      // Reload messages from database
+      print('DEBUG 16: Reloading messages');
+      await _loadMessages();
+      _replyingToMessage = null;
       _scrollToBottomIfAtBottom();
       widget.onMessageSent?.call();
+      print('DEBUG 17: Image message process completed successfully');
     } catch (e) {
-      print('Error sending image: $e');
+      print('ERROR in _sendImageMessage: $e');
+      print('ERROR stack trace: ${StackTrace.current}');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Failed to send image: $e")),
       );
@@ -684,54 +716,93 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
 
   Future<void> _sendAudioMessage(String path) async {
     try {
-      if (_currentUserId == null) return;
+      print('DEBUG 1: Starting _sendAudioMessage with path: $path');
 
-      final messageId = DateTime.now().millisecondsSinceEpoch.toString();
-      // Read the audio file and convert to base64
-      final file = File(path);
-      final bytes = await file.readAsBytes();
+      if (_currentUserId == null) {
+        print('DEBUG 2: _currentUserId is null, aborting');
+        return;
+      }
+
+      final tempId = DateTime.now().millisecondsSinceEpoch.toString();
+      final fileName = 'audio_${DateTime.now().millisecondsSinceEpoch}.m4a';
+      print('DEBUG 3: Generated tempId: $tempId and fileName: $fileName');
+
+      // Create a copy in the app's documents directory
+      print('DEBUG 4: Setting up local storage');
+      final appDir = await getApplicationDocumentsDirectory();
+      final mediaDir = Directory('${appDir.path}/media');
+      if (!await mediaDir.exists()) {
+        print('DEBUG 5: Creating media directory');
+        await mediaDir.create(recursive: true);
+      }
+
+      final localPath = '${mediaDir.path}/$fileName';
+      print('DEBUG 6: Copying file to local path: $localPath');
+      await File(path).copy(localPath);
+      print('DEBUG 7: File copied successfully to local storage');
+
+      // Read file as base64
+      print('DEBUG 8: Reading file as base64');
+      final bytes = await File(path).readAsBytes();
       final base64Audio = base64Encode(bytes);
-      final fileName = path.split('/').last;
+      print('DEBUG 9: File converted to base64');
 
-      final message = {
+      // Insert into media table
+      print('DEBUG 10: Inserting into media table');
+      final mediaId = await _dbHelper.insertAudioFile(localPath);
+      print('DEBUG 11: Media ID from database: $mediaId');
+
+      // Store message in database
+      print('DEBUG 12: Storing message in database');
+      await _dbHelper.insertMessage({
+        'id': tempId,
+        'temp_id': tempId,
+        'group_id': widget.groupId,
+        'sender_id': _currentUserId,
+        'message': localPath,
+        'type': 'audio',
+        'media_id': mediaId,
+        'timestamp': DateTime.now().toIso8601String(),
+        'status': 'sending',
+        'isMe': 1,
+        'reply_to_id': _replyingToMessage?['id'],
+        'reply_to_message': _replyingToMessage?['message'],
+      });
+      print('DEBUG 13: Message stored in database');
+
+      // Send through WebSocket
+      print('DEBUG 14: Sending message through WebSocket');
+      final wsMessage = {
         'type': 'send_message',
         'content': 'Audio message',
         'sender_id': _currentUserId,
-        'group_id': widget.groupId.toString(),
+        'group_id': widget.groupId,
+        'conversation_id': widget.groupId.toString(),
         'message_type': 'audio',
-        'message_id': messageId,
-        'attachment_type': 'file',
-        'file_name': fileName,
+        'temp_id': tempId,
         'file_data': base64Audio,
+        'file_name': fileName,
+        'attachment_type': 'audio',
         'timestamp': DateTime.now().toIso8601String(),
         'status': 'sending'
       };
+      print(
+          'DEBUG 14.1: WebSocket message prepared with group_id: ${wsMessage['group_id']}');
+      print(
+          'DEBUG 14.2: WebSocket message has file_data: ${wsMessage['file_data'] != null}');
+      await _wsService.sendMessage(wsMessage);
+      print('DEBUG 15: WebSocket message sent');
 
-      // Add message to UI immediately with 'sending' status
-      setState(() {
-        _messages.add({
-          'id': messageId,
-          'group_id': widget.groupId,
-          'sender_id': _currentUserId,
-          'message': path,
-          'type': 'audio',
-          'timestamp': message['timestamp'],
-          'status': 'sending',
-          'isMe': 1,
-          'reply_to_id': _replyingToMessage?['id'],
-          'reply_to_message': _replyingToMessage?['message'],
-        });
-        _groupedMessages = MessageSort.groupMessagesByDate(_messages);
-        _replyingToMessage = null;
-      });
-
-      // Send message through WebSocket
-      await _wsService.sendMessage(message);
-
+      // Reload messages from database
+      print('DEBUG 16: Reloading messages');
+      await _loadMessages();
+      _replyingToMessage = null;
       _scrollToBottomIfAtBottom();
       widget.onMessageSent?.call();
+      print('DEBUG 17: Audio message process completed successfully');
     } catch (e) {
-      print('Error sending audio: $e');
+      print('ERROR in _sendAudioMessage: $e');
+      print('ERROR stack trace: ${StackTrace.current}');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Failed to send audio: $e")),
       );
@@ -848,54 +919,208 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
 
   void _handleNewMessage(Map<String, dynamic> message) async {
     try {
-      print('Received new message: $message'); // Debug log
-      // Get the current user's ID from the profile table
+      print('DEBUG 1: Handling new message: ${message['type']}');
       final db = await _dbHelper.database;
       final userProfile = await db.query('profile', limit: 1);
       final currentUserId = userProfile.first['id'] as String?;
 
       final isMe = message['sender_id'].toString() == currentUserId;
+      print('DEBUG 2: Message isMe: $isMe');
 
-      // Only add the message if it's not from us (our messages are already added)
+      // Only handle non-sent messages
       if (!isMe) {
-        setState(() {
-          _messages.add({
-            'id': message['id'] ?? message['message_id'],
-            'group_id': widget.groupId,
-            'sender_id': message['sender_id'],
-            'message': message['content'] ?? message['message'] ?? '',
-            'type': message['message_type'] ?? message['type'] ?? 'text',
-            'timestamp': message['timestamp'],
-            'status': 'received',
-            'isMe': 0,
-            'reply_to': message['reply_to'],
-            'media_url': message['media_url'],
-            'edited': message['edited'] ?? false,
-            'edited_at': message['edited_at'],
-          });
-          _groupedMessages = MessageSort.groupMessagesByDate(_messages);
+        print('DEBUG 3: Processing non-sent message');
+        print(
+            'DEBUG 3.1: Message has attachment_url: ${message['attachment_url'] != null}');
+        print(
+            'DEBUG 3.2: Message has file_data: ${message['file_data'] != null}');
+
+        // If message has file data and is a media type, save it locally
+        if (message['file_data'] != null &&
+            (message['message_type'] == 'image' ||
+                message['message_type'] == 'audio')) {
+          print('DEBUG 4: Message has file data, saving media');
+          await _saveMediaFromBase64(
+            message['id'].toString(),
+            message['file_data'],
+            message['file_name'],
+            message['message_type'],
+          );
+        }
+
+        // Store message in database
+        print('DEBUG 5: Storing message in database');
+        await _dbHelper.insertMessage({
+          'id': message['id'] ?? message['message_id'],
+          'group_id': widget.groupId,
+          'sender_id': message['sender_id'],
+          'message': message['content'] ?? message['message'] ?? '',
+          'type': message['message_type'] ?? message['type'] ?? 'text',
+          'timestamp': message['timestamp'],
+          'status': 'received',
+          'isMe': 0,
+          'attachment_url': message['attachment_url'],
+          'attachment_type': message['attachment_type'],
+          'reply_to_id': message['reply_to'],
+          'reply_to_message': message['reply_to_message'],
         });
-        _scrollToBottomIfAtBottom();
+        print('DEBUG 6: Message stored in database');
+
+        // Reload messages from database
+        print('DEBUG 7: Reloading messages');
+        await _loadMessages();
       }
     } catch (e) {
-      print('Error handling new message: $e'); // Debug log
+      print('ERROR in _handleNewMessage: $e');
+      print('ERROR stack trace: ${StackTrace.current}');
     }
   }
 
-  void _onTextChanged() {
-    if (_typingTimer?.isActive ?? false) {
-      _typingTimer?.cancel();
+  Future<void> _saveMediaFromBase64(
+    String messageId,
+    String base64Data,
+    String fileName,
+    String type,
+  ) async {
+    try {
+      print('DEBUG 1: Starting to save media from base64');
+
+      // Create media directory if it doesn't exist
+      final appDir = await getApplicationDocumentsDirectory();
+      final mediaDir = Directory('${appDir.path}/media');
+      if (!await mediaDir.exists()) {
+        print('DEBUG 2: Creating media directory');
+        await mediaDir.create(recursive: true);
+      }
+
+      // Decode base64 and save file
+      print('DEBUG 3: Decoding base64 data');
+      final bytes = base64Decode(base64Data);
+      final localPath = '${mediaDir.path}/$fileName';
+
+      print('DEBUG 4: Saving file to: $localPath');
+      await File(localPath).writeAsBytes(bytes);
+      print('DEBUG 5: File saved successfully');
+
+      // Insert into media table
+      print('DEBUG 6: Inserting into media table');
+      final mediaId = type == 'image'
+          ? await _dbHelper.insertImageFile(localPath)
+          : await _dbHelper.insertAudioFile(localPath);
+      print('DEBUG 7: Media ID from database: $mediaId');
+
+      // Update message with local path and media_id
+      print('DEBUG 8: Updating message with media info');
+      await _dbHelper.updateMessageMediaId(messageId, mediaId);
+      await _dbHelper.updateMessageLocalPath(messageId, localPath);
+      print('DEBUG 9: Message updated successfully');
+
+      // Reload messages to show downloaded media
+      print('DEBUG 10: Reloading messages');
+      await _loadMessages();
+      print('DEBUG 11: Media handling completed successfully');
+    } catch (e) {
+      print('ERROR in _saveMediaFromBase64: $e');
+      print('ERROR stack trace: ${StackTrace.current}');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Failed to save media: $e")),
+      );
+    }
+  }
+
+  Widget _buildMessageContent(Map<String, dynamic> message) {
+    print('DEBUG 1: Building message content for type: ${message['type']}');
+    print('DEBUG 2: Message has media_id: ${message['media_id'] != null}');
+    print(
+        'DEBUG 3: Message has attachment_url: ${message['attachment_url'] != null}');
+    print('DEBUG 4: Message local path: ${message['message']}');
+    print('DEBUG 5: Message attachment_type: ${message['attachment_type']}');
+
+    if (message['type'] == 'image' || message['type'] == 'audio') {
+      if (message['media_id'] != null) {
+        print('DEBUG 6: Message has media_id, showing local file');
+        // Media is downloaded, show it
+        return message['type'] == 'image'
+            ? Image.file(
+                File(message['message']),
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  print('ERROR loading image: $error');
+                  return Container(
+                    width: 200,
+                    height: 200,
+                    color: Colors.grey[300],
+                    child: const Center(
+                      child: Icon(Icons.error_outline,
+                          size: 50, color: Colors.red),
+                    ),
+                  );
+                },
+              )
+            : AudioPlayerWidget(
+                audioPath: message['message'],
+                isPlaying: _isPlayingMap[message['id'].toString()] ?? false,
+                duration: _audioDurationMap[message['id'].toString()] ??
+                    Duration.zero,
+                position: _audioPositionMap[message['id'].toString()] ??
+                    Duration.zero,
+                onPlay: () => _playAudio(message['id'], message['message']),
+              );
+      } else if (message['attachment_url'] != null) {
+        print(
+            'DEBUG 7: Message has attachment_url: ${message['attachment_url']}');
+        // Show download button
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (message['type'] == 'image')
+              Container(
+                width: 200,
+                height: 200,
+                color: Colors.grey[300],
+                child: const Center(
+                  child: Icon(Icons.image, size: 50, color: Colors.grey),
+                ),
+              )
+            else
+              Container(
+                width: 200,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.audio_file, size: 24, color: Colors.grey),
+                    SizedBox(width: 8),
+                    Text('Audio Message', style: TextStyle(color: Colors.grey)),
+                  ],
+                ),
+              ),
+            const SizedBox(height: 8),
+            ElevatedButton.icon(
+              onPressed: () => _saveMediaFromBase64(
+                message['id'].toString(),
+                message['file_data'],
+                message['file_name'],
+                message['type'],
+              ),
+              icon: const Icon(Icons.download),
+              label: const Text('Download'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryTwo,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        );
+      }
     }
 
-    if (_controller.text.isNotEmpty) {
-      // Only send typing status, no message status
-      _sendTypingStatus(true);
-      _typingTimer = Timer(const Duration(seconds: 2), () {
-        _sendTypingStatus(false);
-      });
-    } else {
-      _sendTypingStatus(false);
-    }
+    // Default text message
+    return Text(message['message']);
   }
 
   @override
@@ -986,7 +1211,7 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
                               message["isMe"] &&
                           messagesForDate[messagesForDate.indexOf(message) - 1]
                                   ["type"] !=
-                              "notification"; // Don't group notifications with regular messages
+                              "notification";
                       return GestureDetector(
                         onHorizontalDragEnd: (details) {
                           if (details.primaryVelocity! > 0 &&
@@ -1026,6 +1251,7 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
                           },
                           onReplyTap: _scrollToMessage,
                           messageStatus: message["status"] ?? "sent",
+                          messageContent: _buildMessageContent(message),
                         ),
                       );
                     }).toList(),
@@ -1137,5 +1363,21 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
         ),
       ),
     );
+  }
+
+  void _onTextChanged() {
+    if (_typingTimer?.isActive ?? false) {
+      _typingTimer?.cancel();
+    }
+
+    if (_controller.text.isNotEmpty) {
+      // Only send typing status, no message status
+      _sendTypingStatus(true);
+      _typingTimer = Timer(const Duration(seconds: 2), () {
+        _sendTypingStatus(false);
+      });
+    } else {
+      _sendTypingStatus(false);
+    }
   }
 }

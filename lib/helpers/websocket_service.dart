@@ -394,6 +394,8 @@ class WebSocketService {
     print('DEBUG 1: Starting sendMessage');
     final tempId = message['temp_id'];
     print('DEBUG 2: Using provided temp_id: $tempId');
+    print('DEBUG 2.1: Using group_id: ${message['group_id']}');
+    print('DEBUG 2.2: Has file_data: ${message['file_data'] != null}');
 
     // Insert the message into the database with the temp_id
     await _dbHelper.insertMessage({
@@ -405,6 +407,10 @@ class WebSocketService {
       'type': message['message_type'] ?? 'text',
       'timestamp': message['timestamp'],
       'status': 'sending',
+      'local_path': message['local_path'],
+      'attachment_type': message['attachment_type'],
+      'file_name': message['file_name'],
+      'isMe': 1,
     });
 
     print('DEBUG 3: Notifying UI with temp_id: $tempId');
@@ -419,6 +425,9 @@ class WebSocketService {
       'timestamp': message['timestamp'],
       'status': 'sending',
       'isMe': 1,
+      'local_path': message['local_path'],
+      'attachment_type': message['attachment_type'],
+      'file_name': message['file_name'],
     });
 
     // Send the message through WebSocket
@@ -427,16 +436,20 @@ class WebSocketService {
       'content': message['content'],
       'sender_id': message['sender_id'],
       'conversation_id': message['group_id'],
+      'group_id': message['group_id'],
       'timestamp': message['timestamp'],
       'temp_id': tempId,
-      'attachment_type': message['message_type'] ?? 'text',
+      'attachment_type': message['attachment_type'],
       'file_name': message['file_name'],
       'file_data': message['file_data'],
+      'local_path': message['local_path'],
     };
 
     if (_isConnected && _webSocket != null) {
       try {
         print('DEBUG 4: Sending WebSocket message: $wsMessage');
+        print(
+            'DEBUG 4.1: WebSocket message has file_data: ${wsMessage['file_data'] != null}');
         _webSocket?.add(json.encode(wsMessage));
       } catch (e) {
         print('DEBUG 5: Error sending message: $e');

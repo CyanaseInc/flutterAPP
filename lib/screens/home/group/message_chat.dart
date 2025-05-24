@@ -58,6 +58,7 @@ class MessageChat extends StatefulWidget {
   final Function(String, String)? onReply;
   final Function(String)? onReplyTap;
   final String messageStatus;
+  final Widget? messageContent;
 
   const MessageChat({
     super.key,
@@ -81,6 +82,7 @@ class MessageChat extends StatefulWidget {
     this.onReply,
     this.onReplyTap,
     required this.messageStatus,
+    this.messageContent,
   });
 
   @override
@@ -128,18 +130,12 @@ class _MessageChatState extends State<MessageChat>
     ));
 
     _currentStatus = widget.messageStatus;
-    print(
-        'DEBUG: MessageChat initState - messageId: ${widget.messageId}, status: $_currentStatus');
   }
 
   @override
   void didUpdateWidget(MessageChat oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.messageStatus != widget.messageStatus) {
-      print(
-          'DEBUG: MessageChat status changed - messageId: ${widget.messageId}');
-      print('DEBUG: Old status: ${oldWidget.messageStatus}');
-      print('DEBUG: New status: ${widget.messageStatus}');
       setState(() {
         _currentStatus = widget.messageStatus;
       });
@@ -329,14 +325,16 @@ class _MessageChatState extends State<MessageChat>
                             else if (widget.isImage)
                               _buildImageViewer(context)
                             else
-                              Text(
-                                widget.message!,
-                                style: TextStyle(
-                                  color: widget.isMe ? white : Colors.black87,
-                                  fontSize: 15,
-                                  fontFamily: 'Roboto',
-                                ),
-                              ),
+                              widget.messageContent ??
+                                  Text(
+                                    widget.message!,
+                                    style: TextStyle(
+                                      color:
+                                          widget.isMe ? white : Colors.black87,
+                                      fontSize: 15,
+                                      fontFamily: 'Roboto',
+                                    ),
+                                  ),
                             const SizedBox(height: 4),
                             Row(
                               mainAxisSize: MainAxisSize.min,
@@ -480,7 +478,7 @@ class _MessageChatState extends State<MessageChat>
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
       decoration: BoxDecoration(
-        color: widget.isMe ? primaryTwo : Colors.yellow[100],
+        color: widget.isMe ? primaryColor : Colors.yellow[100],
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
@@ -489,7 +487,7 @@ class _MessageChatState extends State<MessageChat>
           IconButton(
             icon: Icon(
               widget.isPlaying ? Icons.pause_circle : Icons.play_circle,
-              color: widget.isMe ? white : Colors.yellow[800]!,
+              color: widget.isMe ? white : primaryColor,
               size: 28,
             ),
             onPressed: () {
@@ -519,7 +517,7 @@ class _MessageChatState extends State<MessageChat>
                       value: progress,
                       backgroundColor: white,
                       valueColor: AlwaysStoppedAnimation<Color>(
-                        widget.isPlaying ? primaryColor : Colors.grey[600]!,
+                        widget.isPlaying ? primaryTwo : Colors.grey[600]!,
                       ),
                       minHeight: 3,
                     );
@@ -611,45 +609,35 @@ class _MessageChatState extends State<MessageChat>
   }
 
   Widget _buildMessageStatus() {
-    print('DEBUG 20: Building message status for message ${widget.messageId}');
-    print('DEBUG 21: Current status: $_currentStatus');
-
     IconData icon;
     Color color;
 
     switch (_currentStatus) {
       case 'sending':
-        print('DEBUG 22: Status is sending');
         icon = Icons.access_time;
         color = Colors.grey;
         break;
       case 'sent':
-        print('DEBUG 23: Status is sent');
         icon = Icons.check;
         color = Colors.grey;
         break;
       case 'delivered':
-        print('DEBUG 24: Status is delivered');
         icon = Icons.done_all;
         color = Colors.grey;
         break;
       case 'read':
-        print('DEBUG 25: Status is read');
         icon = Icons.done_all;
         color = Colors.blue;
         break;
       case 'failed':
-        print('DEBUG 26: Status is failed');
         icon = Icons.error_outline;
         color = Colors.red;
         break;
       default:
-        print('DEBUG 27: Unknown status: $_currentStatus');
         icon = Icons.access_time;
         color = Colors.grey;
     }
 
-    print('DEBUG 28: Selected icon: $icon, color: $color');
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -657,8 +645,6 @@ class _MessageChatState extends State<MessageChat>
         if (_currentStatus == 'failed')
           TextButton(
             onPressed: () {
-              print(
-                  'DEBUG 29: Retry button pressed for message ${widget.messageId}');
               // Implement retry logic here
             },
             child: const Text('Retry'),
