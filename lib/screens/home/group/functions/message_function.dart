@@ -34,6 +34,13 @@ class MessageFunctions {
         return {
           ...msg,
           "isMe": msg['sender_id'] == currentUserId,
+          "isReply": msg['reply_to_id'] != null,
+          "replyTo": msg['reply_to_id'] != null
+              ? {
+                  "id": msg['reply_to_id'],
+                  "message": msg['reply_to_message'],
+                }
+              : null,
         };
       }).toList();
     } catch (e) {

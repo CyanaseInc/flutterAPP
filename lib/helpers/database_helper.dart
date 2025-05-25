@@ -224,25 +224,22 @@ class DatabaseHelper {
     return await db.insert('participants', participant);
   }
 
-  Future<int> insertMessage(Map<String, dynamic> message) async {
+  Future<void> insertMessage(Map<String, dynamic> message) async {
     final db = await database;
-    return await db.insert(
+    await db.insert(
       'messages',
       {
-        'id': message['id'],
-        'temp_id': message['temp_id'],
         'group_id': message['group_id'],
         'sender_id': message['sender_id'],
         'message': message['message'],
-        'type': message['type'] ?? 'text',
+        'type': message['type'],
         'timestamp': message['timestamp'],
-        'status': message['status'] ?? 'pending',
+        'status': message['status'],
+        'isMe': message['isMe'],
+        'id': message['id'],
+        'temp_id': message['temp_id'],
         'reply_to_id': message['reply_to_id'],
         'reply_to_message': message['reply_to_message'],
-        'isMe': message['isMe'] ?? 0,
-        'media_id': message['media_id'],
-        'edited': message['edited'] ?? false,
-        'deleted': message['deleted'] ?? false,
       },
       conflictAlgorithm: ConflictAlgorithm.replace,
     );

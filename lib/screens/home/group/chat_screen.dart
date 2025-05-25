@@ -88,6 +88,10 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
 
   String? _token;
 
+  // Add progress tracking maps
+  Map<String, double> _uploadProgress = {};
+  Map<String, double> _downloadProgress = {};
+
   @override
   void initState() {
     super.initState();
@@ -192,6 +196,9 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
                   message['content'] ??
                   '',
               'type': message['type'] ?? message['message_type'] ?? 'text',
+              'reply_to_id': message['reply_to_id'],
+              'reply_to_message': message['reply_to_message'],
+              'isReply': message['reply_to_id'] != null,
             };
           }).toList();
 
@@ -566,38 +573,63 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
       final tempId = DateTime.now().millisecondsSinceEpoch.toString();
       print('DEBUG: Sending message with temp_id: $tempId');
 
-      // Create the message object
-      final message = {
-        'type': 'send_message',
+      // Create the WebSocket message with the exact structure the server expects
+      final Map<String, dynamic> wsMessage = {
+        'type': 'message', // Changed from 'send_message' to 'message'
         'content': _controller.text.trim(),
         'sender_id': _currentUserId,
-        'group_id': widget.groupId.toString(),
-        'message_type': 'text',
+        'conversation_id': widget.groupId.toString(),
         'temp_id': tempId,
         'timestamp': DateTime.now().toIso8601String(),
-        'status': 'sending'
+        'status': 'sending',
+        'attachment_type': null,
+        'attachment_url': null,
+        'username': null
       };
+
+      // Add reply information if available
+      if (_replyingToMessage != null) {
+        wsMessage['reply_to_id'] = _replyingToMessage!['id'];
+        wsMessage['reply_to_message'] = _replyingToMessage!['message'];
+        wsMessage['reply_to_type'] = _replyingToMessage!['type'] ?? 'text';
+      }
+
+      // Create the database message object
+      final Map<String, dynamic> dbMessage = {
+        'id': tempId,
+        'temp_id': tempId,
+        'group_id': widget.groupId,
+        'sender_id': _currentUserId,
+        'message': _controller.text.trim(),
+        'type': 'text',
+        'timestamp': wsMessage['timestamp'],
+        'status': 'sending',
+        'isMe': 1,
+        'edited': false,
+        'attachment_type': null,
+        'attachment_url': null,
+        'username': null
+      };
+
+      // Add reply information to database message
+      if (_replyingToMessage != null) {
+        dbMessage['reply_to_id'] = _replyingToMessage!['id'];
+        dbMessage['reply_to_message'] = _replyingToMessage!['message'];
+        dbMessage['reply_to_type'] = _replyingToMessage!['type'] ?? 'text';
+      }
+
+      // Save to local database
+      await _dbHelper.insertMessage(dbMessage);
 
       // Add message to UI immediately with 'sending' status and temp_id
       setState(() {
-        _messages.add({
-          'id': tempId,
-          'temp_id': tempId,
-          'group_id': widget.groupId,
-          'sender_id': _currentUserId,
-          'message': message['content'],
-          'type': 'text',
-          'timestamp': message['timestamp'],
-          'status': 'sending',
-          'isMe': 1,
-          'edited': false,
-        });
+        _messages.add(dbMessage);
         _groupedMessages = MessageSort.groupMessagesByDate(_messages);
         _replyingToMessage = null;
       });
 
       // Send message through WebSocket service
-      await _wsService.sendMessage(message);
+      await _wsService.sendMessage(wsMessage);
 
       _controller.clear();
       _scrollToBottomIfAtBottom();
@@ -659,12 +691,13 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
       final groupId = widget.groupId!;
       print('DEBUG 12.1: Using groupId: $groupId');
 
-      await _dbHelper.insertMessage({
+      // Create message object
+      final message = {
         'id': tempId,
         'temp_id': tempId,
         'group_id': groupId,
         'sender_id': _currentUserId,
-        'message': localPath,
+        'message': localPath, // Store local path as message content
         'type': 'image',
         'media_id': mediaId,
         'timestamp': DateTime.now().toIso8601String(),
@@ -672,14 +705,26 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
         'isMe': 1,
         'reply_to_id': _replyingToMessage?['id'],
         'reply_to_message': _replyingToMessage?['message'],
-      });
+        'local_path': localPath, // Also store as local_path
+      };
+
+      // Store in database
+      await _dbHelper.insertMessage(message);
       print('DEBUG 13: Message stored in database');
+
+      // Update UI immediately
+      setState(() {
+        _messages.add(message);
+        _messages = MessageSort.sortMessagesByDate(_messages);
+        _groupedMessages = MessageSort.groupMessagesByDate(_messages);
+      });
+      print('DEBUG 13.1: UI updated with new message');
 
       // Send through WebSocket
       print('DEBUG 14: Sending message through WebSocket');
       final wsMessage = {
         'type': 'send_message',
-        'content': 'Image',
+        'content': localPath, // Send local path as content
         'sender_id': _currentUserId,
         'group_id': groupId,
         'conversation_id': groupId.toString(),
@@ -698,9 +743,6 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
       await _wsService.sendMessage(wsMessage);
       print('DEBUG 15: WebSocket message sent');
 
-      // Reload messages from database
-      print('DEBUG 16: Reloading messages');
-      await _loadMessages();
       _replyingToMessage = null;
       _scrollToBottomIfAtBottom();
       widget.onMessageSent?.call();
@@ -720,6 +762,11 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
 
       if (_currentUserId == null) {
         print('DEBUG 2: _currentUserId is null, aborting');
+        return;
+      }
+
+      if (widget.groupId == null) {
+        print('DEBUG 2.1: widget.groupId is null, aborting');
         return;
       }
 
@@ -754,12 +801,16 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
 
       // Store message in database
       print('DEBUG 12: Storing message in database');
-      await _dbHelper.insertMessage({
+      final groupId = widget.groupId!;
+      print('DEBUG 12.1: Using groupId: $groupId');
+
+      // Create message object
+      final message = {
         'id': tempId,
         'temp_id': tempId,
-        'group_id': widget.groupId,
+        'group_id': groupId,
         'sender_id': _currentUserId,
-        'message': localPath,
+        'message': localPath, // Store local path as message content
         'type': 'audio',
         'media_id': mediaId,
         'timestamp': DateTime.now().toIso8601String(),
@@ -767,8 +818,20 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
         'isMe': 1,
         'reply_to_id': _replyingToMessage?['id'],
         'reply_to_message': _replyingToMessage?['message'],
-      });
+        'local_path': localPath, // Also store as local_path
+      };
+
+      // Store in database
+      await _dbHelper.insertMessage(message);
       print('DEBUG 13: Message stored in database');
+
+      // Update UI immediately
+      setState(() {
+        _messages.add(message);
+        _messages = MessageSort.sortMessagesByDate(_messages);
+        _groupedMessages = MessageSort.groupMessagesByDate(_messages);
+      });
+      print('DEBUG 13.1: UI updated with new message');
 
       // Send through WebSocket
       print('DEBUG 14: Sending message through WebSocket');
@@ -776,8 +839,8 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
         'type': 'send_message',
         'content': 'Audio message',
         'sender_id': _currentUserId,
-        'group_id': widget.groupId,
-        'conversation_id': widget.groupId.toString(),
+        'group_id': groupId,
+        'conversation_id': groupId.toString(),
         'message_type': 'audio',
         'temp_id': tempId,
         'file_data': base64Audio,
@@ -899,11 +962,31 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
       final minScroll = _scrollController.position.minScrollExtent;
       final finalPosition = targetPosition.clamp(minScroll, maxScroll);
 
+      // Add a highlight effect to the message
+      setState(() {
+        // Remove any existing highlight
+        for (var msg in _messages) {
+          msg['isHighlighted'] = false;
+        }
+        // Add highlight to the target message
+        _messages[index]['isHighlighted'] = true;
+      });
+
+      // Scroll to the message
       _scrollController.animateTo(
         finalPosition,
-        duration: const Duration(milliseconds: 300),
+        duration: const Duration(milliseconds: 500),
         curve: Curves.easeInOut,
       );
+
+      // Remove the highlight after a delay
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted) {
+          setState(() {
+            _messages[index]['isHighlighted'] = false;
+          });
+        }
+      });
     }
   }
 
@@ -920,207 +1003,137 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
   void _handleNewMessage(Map<String, dynamic> message) async {
     try {
       print('DEBUG 1: Handling new message: ${message['type']}');
+
+      // Handle upload progress updates
+      if (message['type'] == 'upload_progress') {
+        setState(() {
+          _uploadProgress[message['message_id'].toString()] =
+              message['progress'];
+        });
+        return;
+      }
+
+      // Handle download progress updates
+      if (message['type'] == 'download_progress') {
+        setState(() {
+          _downloadProgress[message['message_id'].toString()] =
+              message['progress'];
+        });
+        return;
+      }
+
       final db = await _dbHelper.database;
       final userProfile = await db.query('profile', limit: 1);
       final currentUserId = userProfile.first['id'] as String?;
 
-      final isMe = message['sender_id'].toString() == currentUserId;
+      // Extract message data
+      final messageData = message['message'] ?? message;
+      final isMe = messageData['sender_id'].toString() == currentUserId;
       print('DEBUG 2: Message isMe: $isMe');
 
       // Only handle non-sent messages
       if (!isMe) {
         print('DEBUG 3: Processing non-sent message');
         print(
-            'DEBUG 3.1: Message has attachment_url: ${message['attachment_url'] != null}');
+            'DEBUG 3.1: Message has attachment_url: ${messageData['attachment_url'] != null}');
         print(
             'DEBUG 3.2: Message has file_data: ${message['file_data'] != null}');
 
+        String? localPath;
+        int? mediaId;
+
         // If message has file data and is a media type, save it locally
         if (message['file_data'] != null &&
-            (message['message_type'] == 'image' ||
-                message['message_type'] == 'audio')) {
+            (messageData['attachment_type'] == 'image' ||
+                messageData['attachment_type'] == 'audio')) {
           print('DEBUG 4: Message has file data, saving media');
-          await _saveMediaFromBase64(
-            message['id'].toString(),
-            message['file_data'],
-            message['file_name'],
-            message['message_type'],
-          );
+
+          // Create media directory if it doesn't exist
+          final appDir = await getApplicationDocumentsDirectory();
+          final mediaDir = Directory('${appDir.path}/media');
+          if (!await mediaDir.exists()) {
+            await mediaDir.create(recursive: true);
+          }
+
+          final fileName = message['file_name'] ??
+              'file_${DateTime.now().millisecondsSinceEpoch}';
+          localPath = '${mediaDir.path}/$fileName';
+
+          // Save file locally with progress tracking
+          final bytes = base64Decode(message['file_data']);
+          final file = File(localPath);
+          final sink = file.openWrite();
+
+          // Write in chunks to track progress
+          final chunkSize = 1024 * 1024; // 1MB chunks
+          var bytesWritten = 0;
+
+          for (var i = 0; i < bytes.length; i += chunkSize) {
+            final end =
+                (i + chunkSize < bytes.length) ? i + chunkSize : bytes.length;
+            sink.add(bytes.sublist(i, end));
+            bytesWritten += end - i;
+
+            // Update progress
+            final progress = bytesWritten / bytes.length;
+            setState(() {
+              _downloadProgress[messageData['id'].toString()] = progress;
+            });
+          }
+
+          await sink.close();
+          print('DEBUG 5: File saved locally at: $localPath');
+
+          // Clear download progress after completion
+          setState(() {
+            _downloadProgress.remove(messageData['id'].toString());
+          });
+
+          // Insert into media table
+          mediaId = messageData['attachment_type'] == 'image'
+              ? await _dbHelper.insertImageFile(localPath)
+              : await _dbHelper.insertAudioFile(localPath);
+          print('DEBUG 6: Media ID from database: $mediaId');
         }
 
         // Store message in database
-        print('DEBUG 5: Storing message in database');
-        await _dbHelper.insertMessage({
-          'id': message['id'] ?? message['message_id'],
+        print('DEBUG 7: Storing message in database');
+        final dbMessage = {
+          'id': messageData['id']?.toString() ?? message['temp_id'],
           'group_id': widget.groupId,
-          'sender_id': message['sender_id'],
-          'message': message['content'] ?? message['message'] ?? '',
-          'type': message['message_type'] ?? message['type'] ?? 'text',
-          'timestamp': message['timestamp'],
-          'status': 'received',
+          'sender_id': messageData['sender_id'],
+          'message': localPath ??
+              messageData['content'] ??
+              messageData['message'] ??
+              '',
+          'type': messageData['attachment_type'] ?? 'text',
+          'timestamp': messageData['timestamp'],
+          'status': messageData['status'] ?? 'received',
           'isMe': 0,
-          'attachment_url': message['attachment_url'],
-          'attachment_type': message['attachment_type'],
-          'reply_to_id': message['reply_to'],
-          'reply_to_message': message['reply_to_message'],
-        });
-        print('DEBUG 6: Message stored in database');
+          'attachment_url': messageData['attachment_url'],
+          'attachment_type': messageData['attachment_type'],
+          'media_id': mediaId,
+          'local_path': localPath,
+        };
+
+        // Add reply information if available
+        if (message['reply_to_id'] != null) {
+          dbMessage['reply_to_id'] = message['reply_to_id'];
+          dbMessage['reply_to_message'] = message['reply_to_message'];
+          dbMessage['reply_to_type'] = message['reply_to_type'] ?? 'text';
+        }
+
+        await _dbHelper.insertMessage(dbMessage);
+        print('DEBUG 8: Message stored in database');
 
         // Reload messages from database
-        print('DEBUG 7: Reloading messages');
+        print('DEBUG 9: Reloading messages');
         await _loadMessages();
       }
     } catch (e) {
       print('ERROR in _handleNewMessage: $e');
       print('ERROR stack trace: ${StackTrace.current}');
     }
-  }
-
-  Future<void> _saveMediaFromBase64(
-    String messageId,
-    String base64Data,
-    String fileName,
-    String type,
-  ) async {
-    try {
-      print('DEBUG 1: Starting to save media from base64');
-
-      // Create media directory if it doesn't exist
-      final appDir = await getApplicationDocumentsDirectory();
-      final mediaDir = Directory('${appDir.path}/media');
-      if (!await mediaDir.exists()) {
-        print('DEBUG 2: Creating media directory');
-        await mediaDir.create(recursive: true);
-      }
-
-      // Decode base64 and save file
-      print('DEBUG 3: Decoding base64 data');
-      final bytes = base64Decode(base64Data);
-      final localPath = '${mediaDir.path}/$fileName';
-
-      print('DEBUG 4: Saving file to: $localPath');
-      await File(localPath).writeAsBytes(bytes);
-      print('DEBUG 5: File saved successfully');
-
-      // Insert into media table
-      print('DEBUG 6: Inserting into media table');
-      final mediaId = type == 'image'
-          ? await _dbHelper.insertImageFile(localPath)
-          : await _dbHelper.insertAudioFile(localPath);
-      print('DEBUG 7: Media ID from database: $mediaId');
-
-      // Update message with local path and media_id
-      print('DEBUG 8: Updating message with media info');
-      await _dbHelper.updateMessageMediaId(messageId, mediaId);
-      await _dbHelper.updateMessageLocalPath(messageId, localPath);
-      print('DEBUG 9: Message updated successfully');
-
-      // Reload messages to show downloaded media
-      print('DEBUG 10: Reloading messages');
-      await _loadMessages();
-      print('DEBUG 11: Media handling completed successfully');
-    } catch (e) {
-      print('ERROR in _saveMediaFromBase64: $e');
-      print('ERROR stack trace: ${StackTrace.current}');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Failed to save media: $e")),
-      );
-    }
-  }
-
-  Widget _buildMessageContent(Map<String, dynamic> message) {
-    print('DEBUG 1: Building message content for type: ${message['type']}');
-    print('DEBUG 2: Message has media_id: ${message['media_id'] != null}');
-    print(
-        'DEBUG 3: Message has attachment_url: ${message['attachment_url'] != null}');
-    print('DEBUG 4: Message local path: ${message['message']}');
-    print('DEBUG 5: Message attachment_type: ${message['attachment_type']}');
-
-    if (message['type'] == 'image' || message['type'] == 'audio') {
-      if (message['media_id'] != null) {
-        print('DEBUG 6: Message has media_id, showing local file');
-        // Media is downloaded, show it
-        return message['type'] == 'image'
-            ? Image.file(
-                File(message['message']),
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  print('ERROR loading image: $error');
-                  return Container(
-                    width: 200,
-                    height: 200,
-                    color: Colors.grey[300],
-                    child: const Center(
-                      child: Icon(Icons.error_outline,
-                          size: 50, color: Colors.red),
-                    ),
-                  );
-                },
-              )
-            : AudioPlayerWidget(
-                audioPath: message['message'],
-                isPlaying: _isPlayingMap[message['id'].toString()] ?? false,
-                duration: _audioDurationMap[message['id'].toString()] ??
-                    Duration.zero,
-                position: _audioPositionMap[message['id'].toString()] ??
-                    Duration.zero,
-                onPlay: () => _playAudio(message['id'], message['message']),
-              );
-      } else if (message['attachment_url'] != null) {
-        print(
-            'DEBUG 7: Message has attachment_url: ${message['attachment_url']}');
-        // Show download button
-        return Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (message['type'] == 'image')
-              Container(
-                width: 200,
-                height: 200,
-                color: Colors.grey[300],
-                child: const Center(
-                  child: Icon(Icons.image, size: 50, color: Colors.grey),
-                ),
-              )
-            else
-              Container(
-                width: 200,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.audio_file, size: 24, color: Colors.grey),
-                    SizedBox(width: 8),
-                    Text('Audio Message', style: TextStyle(color: Colors.grey)),
-                  ],
-                ),
-              ),
-            const SizedBox(height: 8),
-            ElevatedButton.icon(
-              onPressed: () => _saveMediaFromBase64(
-                message['id'].toString(),
-                message['file_data'],
-                message['file_name'],
-                message['type'],
-              ),
-              icon: const Icon(Icons.download),
-              label: const Text('Download'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryTwo,
-                foregroundColor: Colors.white,
-              ),
-            ),
-          ],
-        );
-      }
-    }
-
-    // Default text message
-    return Text(message['message']);
   }
 
   @override
@@ -1252,6 +1265,7 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
                           onReplyTap: _scrollToMessage,
                           messageStatus: message["status"] ?? "sent",
                           messageContent: _buildMessageContent(message),
+                          isHighlighted: message["isHighlighted"] ?? false,
                         ),
                       );
                     }).toList(),
@@ -1379,5 +1393,148 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
     } else {
       _sendTypingStatus(false);
     }
+  }
+
+  Widget _buildMessageContent(Map<String, dynamic> message) {
+    print('DEBUG 1: Building message content for type: ${message['type']}');
+    print('DEBUG 2: Message has media_id: ${message['media_id'] != null}');
+    print('DEBUG 3: Message has local_path: ${message['local_path'] != null}');
+    print('DEBUG 4: Message content: ${message['message']}');
+
+    if (message['type'] == 'image' || message['type'] == 'audio') {
+      // If we have a local path, show the file
+      if (message['local_path'] != null ||
+          message['message']?.startsWith('/') == true) {
+        final path = message['local_path'] ?? message['message'];
+        print('DEBUG 5: Showing local file from path: $path');
+
+        // Check if there's an upload in progress
+        final uploadProgress = _uploadProgress[message['id'].toString()];
+        if (uploadProgress != null && uploadProgress < 1.0) {
+          return _buildProgressIndicator(uploadProgress, 'Uploading...');
+        }
+
+        return message['type'] == 'image'
+            ? Image.file(
+                File(path),
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  print('ERROR loading image: $error');
+                  return Container(
+                    width: 200,
+                    height: 200,
+                    color: Colors.grey[300],
+                    child: const Center(
+                      child: Icon(Icons.error_outline,
+                          size: 50, color: Colors.red),
+                    ),
+                  );
+                },
+              )
+            : AudioPlayerWidget(
+                audioPath: path,
+                isPlaying: _isPlayingMap[message['id'].toString()] ?? false,
+                duration: _audioDurationMap[message['id'].toString()] ??
+                    Duration.zero,
+                position: _audioPositionMap[message['id'].toString()] ??
+                    Duration.zero,
+                onPlay: () => _playAudio(message['id'], path),
+              );
+      } else if (message['attachment_url'] != null) {
+        print(
+            'DEBUG 6: Showing download button for attachment_url: ${message['attachment_url']}');
+
+        // Check if there's a download in progress
+        final downloadProgress = _downloadProgress[message['id'].toString()];
+        if (downloadProgress != null && downloadProgress < 1.0) {
+          return _buildProgressIndicator(downloadProgress, 'Downloading...');
+        }
+
+        // Show download button
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (message['type'] == 'image')
+              Container(
+                width: 200,
+                height: 200,
+                color: Colors.grey[300],
+                child: const Center(
+                  child: Icon(Icons.image, size: 50, color: Colors.grey),
+                ),
+              )
+            else
+              Container(
+                width: 200,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.audio_file, size: 24, color: Colors.grey),
+                    SizedBox(width: 8),
+                    Text('Audio Message', style: TextStyle(color: Colors.grey)),
+                  ],
+                ),
+              ),
+            const SizedBox(height: 8),
+            ElevatedButton.icon(
+              onPressed: () => _handleNewMessage({
+                ...message,
+                'file_data': message['file_data'],
+                'file_name': message['file_name'],
+              }),
+              icon: const Icon(Icons.download),
+              label: const Text('Download'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryTwo,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        );
+      }
+    }
+
+    // Default text message
+    return Text(
+      message['message'] ?? '',
+      style: TextStyle(
+        color: message['isMe'] == 1 ? Colors.white : Colors.black87,
+        fontSize: 15,
+        fontFamily: 'Roboto',
+      ),
+    );
+  }
+
+  Widget _buildProgressIndicator(double progress, String label) {
+    return Container(
+      width: 200,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.grey[300],
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(label, style: const TextStyle(color: Colors.grey)),
+          const SizedBox(height: 8),
+          LinearProgressIndicator(
+            value: progress,
+            backgroundColor: Colors.grey[400],
+            valueColor: AlwaysStoppedAnimation<Color>(primaryTwo),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '${(progress * 100).toInt()}%',
+            style: const TextStyle(color: Colors.grey, fontSize: 12),
+          ),
+        ],
+      ),
+    );
   }
 }

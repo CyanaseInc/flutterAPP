@@ -174,10 +174,13 @@ class WebSocketService {
       'attachment_type': message['attachment_type'],
       'file_name': message['file_name'],
       'file_data': message['file_data'],
+      'reply_to_id': message['reply_to_id'],
+      'reply_to_message': message['reply_to_message'],
     };
 
     messageToSend.removeWhere((key, value) => value == null);
-    print('Sending WebSocket message: $messageToSend');
+    print(
+        'DEBUG WEBSOCKET SEND: Sending message to WebSocket: ${json.encode(messageToSend)}');
     _webSocket?.add(json.encode(messageToSend));
   }
 
@@ -186,7 +189,8 @@ class WebSocketService {
       (message) async {
         try {
           final data = json.decode(message);
-          print('DEBUG 8: WebSocket received raw message: $data');
+          print(
+              'DEBUG WEBSOCKET RECEIVE: Received message from WebSocket: ${json.encode(data)}');
           print('DEBUG 8.1: Message type being compared: ${data['type']}');
 
           switch (data['type']) {
@@ -221,18 +225,30 @@ class WebSocketService {
                 onMessageReceived?.call(statusUpdate);
               }
 
-              await _dbHelper.insertMessage({
-                'group_id': data['conversation_id'] ?? data['group_id'],
-                'sender_id': data['sender_id'].toString(),
-                'message': data['content'],
-                'type':
-                    data['attachment_type'] ?? data['message_type'] ?? 'text',
-                'timestamp': data['timestamp'],
-                'status': data['status'] ?? 'received',
-                'isMe': 0,
-                'attachment_url': data['attachment_url'],
-                'id': data['id'].toString(),
-              });
+              // Only insert if we don't already have this message
+              final db = await _dbHelper.database;
+              final existingMessage = await db.query(
+                'messages',
+                where: 'id = ?',
+                whereArgs: [data['id'].toString()],
+              );
+
+              if (existingMessage.isEmpty) {
+                await _dbHelper.insertMessage({
+                  'group_id': data['conversation_id'] ?? data['group_id'],
+                  'sender_id': data['sender_id'].toString(),
+                  'message': data['content'],
+                  'type':
+                      data['attachment_type'] ?? data['message_type'] ?? 'text',
+                  'timestamp': data['timestamp'],
+                  'status': data['status'] ?? 'received',
+                  'isMe': 0,
+                  'id': data['id'].toString(),
+                  'temp_id': data['temp_id'],
+                  'reply_to_id': data['reply_to_id'],
+                  'reply_to_message': data['reply_to_message'],
+                });
+              }
 
               if (data['id'] != null) {
                 print(
@@ -391,80 +407,58 @@ class WebSocketService {
   }
 
   Future<void> sendMessage(Map<String, dynamic> message) async {
-    print('DEBUG 1: Starting sendMessage');
-    final tempId = message['temp_id'];
-    print('DEBUG 2: Using provided temp_id: $tempId');
-    print('DEBUG 2.1: Using group_id: ${message['group_id']}');
-    print('DEBUG 2.2: Has file_data: ${message['file_data'] != null}');
+    try {
+      if (message['file_data'] != null) {
+        // For messages with file data, track upload progress
+        final fileData = message['file_data'];
+        final chunkSize = 1024 * 1024; // 1MB chunks
+        final totalChunks = (fileData.length / chunkSize).ceil();
+        var currentChunk = 0;
 
-    // Insert the message into the database with the temp_id
-    await _dbHelper.insertMessage({
-      'id': tempId,
-      'temp_id': tempId,
-      'group_id': message['group_id'],
-      'sender_id': message['sender_id'],
-      'message': message['content'],
-      'type': message['message_type'] ?? 'text',
-      'timestamp': message['timestamp'],
-      'status': 'sending',
-      'local_path': message['local_path'],
-      'attachment_type': message['attachment_type'],
-      'file_name': message['file_name'],
-      'isMe': 1,
-    });
+        // Send initial message with progress
+        message['upload_progress'] = 0.0;
+        await _sendMessageInternal(message);
 
-    print('DEBUG 3: Notifying UI with temp_id: $tempId');
-    // Notify UI about the new message
-    onMessageReceived?.call({
-      'type': 'message',
-      'content': message['content'],
-      'sender_id': message['sender_id'],
-      'group_id': message['group_id'],
-      'message_type': message['message_type'] ?? 'text',
-      'temp_id': tempId,
-      'timestamp': message['timestamp'],
-      'status': 'sending',
-      'isMe': 1,
-      'local_path': message['local_path'],
-      'attachment_type': message['attachment_type'],
-      'file_name': message['file_name'],
-    });
+        // Send file data in chunks
+        for (var i = 0; i < fileData.length; i += chunkSize) {
+          final end = (i + chunkSize < fileData.length)
+              ? i + chunkSize
+              : fileData.length;
+          final chunk = fileData.substring(i, end);
 
-    // Send the message through WebSocket
-    final wsMessage = {
-      'type': 'send_message',
-      'content': message['content'],
-      'sender_id': message['sender_id'],
-      'conversation_id': message['group_id'],
-      'group_id': message['group_id'],
-      'timestamp': message['timestamp'],
-      'temp_id': tempId,
-      'attachment_type': message['attachment_type'],
-      'file_name': message['file_name'],
-      'file_data': message['file_data'],
-      'local_path': message['local_path'],
-    };
+          // Send chunk
+          await _sendMessageInternal({
+            'type': 'file_chunk',
+            'message_id': message['temp_id'],
+            'chunk': chunk,
+            'chunk_index': currentChunk,
+            'total_chunks': totalChunks,
+          });
 
-    if (_isConnected && _webSocket != null) {
-      try {
-        print('DEBUG 4: Sending WebSocket message: $wsMessage');
-        print(
-            'DEBUG 4.1: WebSocket message has file_data: ${wsMessage['file_data'] != null}');
-        _webSocket?.add(json.encode(wsMessage));
-      } catch (e) {
-        print('DEBUG 5: Error sending message: $e');
-        await _dbHelper.updateMessageStatus(tempId, 'failed');
-        onMessageReceived?.call({
-          'type': 'message',
-          'message_type': message['message_type'] ?? 'text',
-          'temp_id': tempId,
-          'status': 'failed',
-          'isMe': 1,
-          'group_id': message['group_id'],
+          currentChunk++;
+
+          // Update progress
+          final progress = currentChunk / totalChunks;
+          message['upload_progress'] = progress;
+          await _sendMessageInternal({
+            'type': 'upload_progress',
+            'message_id': message['temp_id'],
+            'progress': progress,
+          });
+        }
+
+        // Send completion message
+        await _sendMessageInternal({
+          'type': 'file_complete',
+          'message_id': message['temp_id'],
         });
+      } else {
+        // For regular messages, send as is
+        await _sendMessageInternal(message);
       }
-    } else {
-      print('DEBUG 6: WebSocket not connected');
+    } catch (e) {
+      print('Error sending message: $e');
+      rethrow;
     }
   }
 

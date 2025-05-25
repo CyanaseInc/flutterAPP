@@ -5,6 +5,7 @@ import 'package:lottie/lottie.dart';
 import 'package:cyanase/helpers/endpoints.dart';
 import 'package:cyanase/helpers/database_helper.dart';
 import 'package:cyanase/helpers/api_helper.dart';
+import 'package:cyanase/helpers/websocket_service.dart';
 
 class PendingRequestsScreen extends StatefulWidget {
   final int groupId;
@@ -104,6 +105,18 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
         senderId: 'system',
       );
 
+      // Send notification through WebSocket
+      final wsMessage = {
+        'type': 'send_message',
+        'content': "$userName has joined the group",
+        'sender_id': 'system',
+        'group_id': widget.groupId.toString(),
+        'conversation_id': widget.groupId.toString(),
+        'timestamp': DateTime.now().toIso8601String(),
+        'status': 'sending'
+      };
+      await WebSocketService.instance.sendMessage(wsMessage);
+
       // Notify parent
       widget.onRequestProcessed();
 
@@ -175,6 +188,26 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
       if (!response['success']) {
         throw Exception(response['message'] ?? 'Failed to deny request');
       }
+
+      // Use request['user_name'] for the notification
+      final userName = request['user_name'] as String? ?? 'A user';
+      await _dbHelper.insertNotification(
+        groupId: widget.groupId,
+        message: "${request['user_name']}'s request was denied",
+        senderId: 'system',
+      );
+
+      // Send notification through WebSocket
+      final wsMessage = {
+        'type': 'send_message',
+        'content': "${request['user_name']}'s request was denied",
+        'sender_id': 'system',
+        'group_id': widget.groupId.toString(),
+        'conversation_id': widget.groupId.toString(),
+        'timestamp': DateTime.now().toIso8601String(),
+        'status': 'sending'
+      };
+      await WebSocketService.instance.sendMessage(wsMessage);
 
       // Notify parent
       widget.onRequestProcessed();

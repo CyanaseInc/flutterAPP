@@ -9,6 +9,7 @@ import 'package:cyanase/helpers/api_helper.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:cyanase/helpers/websocket_service.dart';
 
 class AddGroupMembersScreen extends StatefulWidget {
   final int groupId;
@@ -148,7 +149,6 @@ class _AddGroupMembersScreenState extends State<AddGroupMembersScreen>
       }
       return phoneNumber;
     } catch (e) {
-      
       return phoneNumber;
     }
   }
@@ -281,6 +281,20 @@ class _AddGroupMembersScreenState extends State<AddGroupMembersScreen>
                 "${contact['name'] ?? 'A new member'} has joined the group",
             senderId: 'system',
           );
+
+          // Send notification through WebSocket
+          final wsMessage = {
+            'type': 'send_message',
+            'content':
+                "${contact['name'] ?? 'A new member'} has joined the group",
+            'sender_id': 'system',
+            'group_id': widget.groupId.toString(),
+            'conversation_id': widget.groupId.toString(),
+            'message_type': 'notification',
+            'timestamp': DateTime.now().toIso8601String(),
+            'status': 'sending'
+          };
+          await WebSocketService.instance.sendMessage(wsMessage);
         }
 
         ScaffoldMessenger.of(context).showSnackBar(
@@ -383,7 +397,8 @@ class _AddGroupMembersScreenState extends State<AddGroupMembersScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text("Add Members", style: TextStyle(color: white, fontSize: 20)),
+        title:
+            Text("Add Members", style: TextStyle(color: white, fontSize: 20)),
         backgroundColor: primaryTwo,
         iconTheme: IconThemeData(color: white),
         actions: [
@@ -397,7 +412,8 @@ class _AddGroupMembersScreenState extends State<AddGroupMembersScreen>
                 );
               },
             ),
-            onPressed: _isSyncingContacts || _isLoading ? null : _refreshContacts,
+            onPressed:
+                _isSyncingContacts || _isLoading ? null : _refreshContacts,
           ),
           IconButton(
             icon: _isLoading
@@ -427,16 +443,18 @@ class _AddGroupMembersScreenState extends State<AddGroupMembersScreen>
                             Column(
                               children: [
                                 CircleAvatar(
-                                  backgroundImage:
-                                      contact['profilePic']?.isNotEmpty == true
-                                          ? NetworkImage(contact['profilePic'])
-                                          : AssetImage('assets/images/avatar.png')
-                                              as ImageProvider,
+                                  backgroundImage: contact['profilePic']
+                                              ?.isNotEmpty ==
+                                          true
+                                      ? NetworkImage(contact['profilePic'])
+                                      : AssetImage('assets/images/avatar.png')
+                                          as ImageProvider,
                                   radius: 30,
                                 ),
                                 SizedBox(height: 4),
                                 Text(
-                                    contact['name']?.split(' ').first ?? 'Unknown',
+                                    contact['name']?.split(' ').first ??
+                                        'Unknown',
                                     style: TextStyle(fontSize: 12)),
                               ],
                             ),

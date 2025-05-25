@@ -59,6 +59,7 @@ class MessageChat extends StatefulWidget {
   final Function(String)? onReplyTap;
   final String messageStatus;
   final Widget? messageContent;
+  final bool isHighlighted;
 
   const MessageChat({
     super.key,
@@ -83,6 +84,7 @@ class MessageChat extends StatefulWidget {
     this.onReplyTap,
     required this.messageStatus,
     this.messageContent,
+    this.isHighlighted = false,
   });
 
   @override
@@ -276,7 +278,8 @@ class _MessageChatState extends State<MessageChat>
                   label: widget.isMe ? "Sent message" : "Received message",
                   child: Stack(
                     children: [
-                      Container(
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 300),
                         constraints: BoxConstraints(
                           maxWidth: MediaQuery.of(context).size.width * 0.6,
                         ),
@@ -299,8 +302,11 @@ class _MessageChatState extends State<MessageChat>
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
-                              blurRadius: 4,
+                              color: widget.isHighlighted
+                                  ? Colors.yellow.withOpacity(0.5)
+                                  : Colors.black.withOpacity(0.05),
+                              blurRadius: widget.isHighlighted ? 8 : 4,
+                              spreadRadius: widget.isHighlighted ? 2 : 0,
                               offset: const Offset(0, 2),
                             ),
                           ],
@@ -329,8 +335,9 @@ class _MessageChatState extends State<MessageChat>
                                   Text(
                                     widget.message!,
                                     style: TextStyle(
-                                      color:
-                                          widget.isMe ? white : Colors.black87,
+                                      color: widget.isMe
+                                          ? Colors.white
+                                          : Colors.black87,
                                       fontSize: 15,
                                       fontFamily: 'Roboto',
                                     ),
@@ -458,7 +465,7 @@ class _MessageChatState extends State<MessageChat>
                             ? "Audio"
                             : widget.replyTo!,
                     style: TextStyle(
-                      color: widget.isMe ? Colors.grey : Colors.black54,
+                      color: widget.isMe ? Colors.white70 : Colors.black54,
                       fontSize: 13,
                       fontStyle: FontStyle.italic,
                     ),
