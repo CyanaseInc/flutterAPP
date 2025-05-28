@@ -234,7 +234,7 @@ class DatabaseHelper {
         'message': message['message'],
         'type': message['type'],
         'timestamp': message['timestamp'],
-        'status': message['status'],
+        'status': message['status'] ?? 'sent',
         'isMe': message['isMe'],
         'id': message['id'],
         'temp_id': message['temp_id'],

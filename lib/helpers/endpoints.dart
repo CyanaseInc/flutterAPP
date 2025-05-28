@@ -1,7 +1,7 @@
 class ApiEndpoints {
-  //static const String server = "https/://server.cyanase.app";
-  static const myIp = "192.168.199.220";
-  static const String server = "http://$myIp:8000";
+  //static const myIp = "server.cyanase.app";
+  static const myIp = "192.168.38.220:8000";
+  static const String server = "http://$myIp";
   static const String checkuser = "$server/api/v1/en/checkUser/user/";
   static const String signup = "$server/api/v1/en/register/user/";
   static const String createGroup = "$server/api/v1/en/register/user/";
@@ -136,9 +136,8 @@ class ApiEndpoints {
       "$server/api/v1/en/auth/user/riskprofile/";
   static const String apiUrlGetRiskProfile =
       "$server/api/v1/en/auth/get/riskprofile/";
-  static const String checkPasswordEmail =
-      "$server/api/v1/en/app/password/reset/";
-  static const String apiUrlPasswordReset = "$server/app/reset/password/";
+  static const String checkPasswordEmail = "$server/api/v1/en/password/reset/";
+  static const String apiUrlPasswordReset = "$server/reset/password/";
   static const String changeUserPassword =
       "$server/api/v1/en/auth/user/change/password/";
   static const String apiUrlGetUserVerification =

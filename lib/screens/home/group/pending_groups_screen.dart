@@ -25,9 +25,10 @@ class _PendingGroupsScreenState extends State<PendingGroupsScreen> {
     _adminGroups = List.from(widget.adminGroups);
   }
 
-  void _updatePendingCount(int groupId) {
+  void _updatePendingCount(String groupId) {
     setState(() {
-      final index = _adminGroups.indexWhere((g) => g['group_id'] == groupId);
+      final index =
+          _adminGroups.indexWhere((g) => g['group_id'].toString() == groupId);
       if (index != -1) {
         final newCount = _adminGroups[index]['pending_count'] - 1;
         if (newCount > 0) {
@@ -80,7 +81,7 @@ class _PendingGroupsScreenState extends State<PendingGroupsScreen> {
               itemCount: _adminGroups.length,
               itemBuilder: (context, index) {
                 final group = _adminGroups[index];
-                final groupId = group['group_id'] as int;
+                final groupId = group['group_id'].toString();
                 final groupName = group['group_name'] as String;
                 final pendingCount = group['pending_count'] as int;
 
@@ -119,7 +120,7 @@ class _PendingGroupsScreenState extends State<PendingGroupsScreen> {
                         context,
                         MaterialPageRoute(
                           builder: (context) => PendingRequestsScreen(
-                            groupId: groupId,
+                            groupId: int.parse(groupId),
                             groupName: groupName,
                             onRequestProcessed: () =>
                                 _updatePendingCount(groupId),

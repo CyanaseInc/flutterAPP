@@ -31,7 +31,7 @@ class WebSocketService {
         .listen((List<ConnectivityResult> results) {
       final result = results.first;
       _isNetworkAvailable = result != ConnectivityResult.none;
-      print('Network status changed: ${result.toString()}');
+     
 
       if (_isNetworkAvailable) {
         print('Network available, attempting to reconnect WebSocket');
@@ -54,12 +54,22 @@ class WebSocketService {
     _groupId = groupId;
     await _getTokenFromDatabase();
     if (_webSocket == null || _webSocket!.readyState != WebSocket.open) {
+      final protocol = ApiEndpoints.server.startsWith('https') ? 'wss' : 'ws';
       final wsUrl =
-          'ws://${ApiEndpoints.myIp}:8000/ws/messages/$groupId/?token=$_token';
-      print('Connecting to WebSocket at: $wsUrl');
+          '$protocol://${ApiEndpoints.myIp}/ws/chat/$groupId/?token=$_token';
 
+      print('DEBUG [WebSocket] Attempting to connect to: $wsUrl');
+     
       try {
-        _webSocket = await WebSocket.connect(wsUrl);
+        _webSocket = await WebSocket.connect(
+          wsUrl,
+          headers: {
+            'Connection': 'Upgrade',
+            'Upgrade': 'websocket',
+            'Sec-WebSocket-Version': '13',
+          },
+        );
+        print('DEBUG [WebSocket] Connection established successfully');
         _isConnected = true;
         onConnectionStatusChanged?.call(true);
         _listenToMessages();
@@ -79,7 +89,7 @@ class WebSocketService {
               'type': 'send_message',
               'content': message['message'],
               'sender_id': message['sender_id'],
-              'conversation_id': message['group_id'],
+              'room_id': message['group_id'],
               'timestamp': message['timestamp'],
               'temp_id': message['id'].toString(),
               'attachment_type': message['type'],
@@ -168,7 +178,7 @@ class WebSocketService {
       'type': 'send_message',
       'content': message['content'],
       'sender_id': message['sender_id'],
-      'conversation_id': message['conversation_id'],
+      'room_id': message['room_id'],
       'timestamp': message['timestamp'],
       'temp_id': message['temp_id'],
       'attachment_type': message['attachment_type'],
@@ -176,11 +186,11 @@ class WebSocketService {
       'file_data': message['file_data'],
       'reply_to_id': message['reply_to_id'],
       'reply_to_message': message['reply_to_message'],
+      'message_type': message['message_type'],
     };
 
     messageToSend.removeWhere((key, value) => value == null);
-    print(
-        'DEBUG WEBSOCKET SEND: Sending message to WebSocket: ${json.encode(messageToSend)}');
+    print('🔵 [STATUS] Sending message to WebSocket with temp_id: ${message['temp_id']}');
     _webSocket?.add(json.encode(messageToSend));
   }
 
@@ -189,132 +199,45 @@ class WebSocketService {
       (message) async {
         try {
           final data = json.decode(message);
-          print(
-              'DEBUG WEBSOCKET RECEIVE: Received message from WebSocket: ${json.encode(data)}');
-          print('DEBUG 8.1: Message type being compared: ${data['type']}');
-
+         
           switch (data['type']) {
             case 'message':
-              print('DEBUG 9: Processing received message');
+              // Handle received message
               if (data['temp_id'] != null) {
-                print('DEBUG 10: Found matching temp_id: ${data['temp_id']}');
-                print('DEBUG 10.1: New message ID from server: ${data['id']}');
-
-                await _dbHelper.updateMessageId(
-                    data['temp_id'].toString(), data['id'].toString());
-
-                final idUpdate = {
-                  'type': 'message_id_update',
-                  'old_id': data['temp_id'].toString(),
-                  'new_id': data['id'].toString(),
-                  'group_id':
-                      data['conversation_id'] ?? data['group_id'] ?? _groupId,
-                };
-                print('DEBUG 14.1: Sending ID update to UI: $idUpdate');
-                onMessageReceived?.call(idUpdate);
-
-                final statusUpdate = {
-                  'type': 'update_message_status',
-                  'message_id': data['id'].toString(),
-                  'status': 'sent',
-                  'timestamp': data['timestamp'],
-                  'group_id':
-                      data['conversation_id'] ?? data['group_id'] ?? _groupId,
-                };
-                print('DEBUG 14.2: Sending status update to UI: $statusUpdate');
-                onMessageReceived?.call(statusUpdate);
+                // This is a sent message confirmation
+                print('🔵 [STATUS] Processing sent message confirmation');
+                await _handleSentMessageConfirmation(data);
+              } else {
+                // This is a new received message
+                print('🔵 [STATUS] Processing new received message');
+                await _handleReceivedMessage(data);
               }
-
-              // Only insert if we don't already have this message
-              final db = await _dbHelper.database;
-              final existingMessage = await db.query(
-                'messages',
-                where: 'id = ?',
-                whereArgs: [data['id'].toString()],
-              );
-
-              if (existingMessage.isEmpty) {
-                await _dbHelper.insertMessage({
-                  'group_id': data['conversation_id'] ?? data['group_id'],
-                  'sender_id': data['sender_id'].toString(),
-                  'message': data['content'],
-                  'type':
-                      data['attachment_type'] ?? data['message_type'] ?? 'text',
-                  'timestamp': data['timestamp'],
-                  'status': data['status'] ?? 'received',
-                  'isMe': 0,
-                  'id': data['id'].toString(),
-                  'temp_id': data['temp_id'],
-                  'reply_to_id': data['reply_to_id'],
-                  'reply_to_message': data['reply_to_message'],
-                });
-              }
-
-              if (data['id'] != null) {
-                print(
-                    'DEBUG 11: Sending delivered status for message ${data['id']}');
-                _sendDeliveredStatus(data['id'].toString());
-              }
-
-              onMessageReceived?.call(data);
               break;
 
-            case 'update_message_status':
             case 'message_status':
-              print('DEBUG 12: Processing message status update');
-              final messageId = data['message_id'] ?? data['id'];
-              final status = data['status'];
-
-              if (messageId != null && status != null) {
-                print(
-                    'DEBUG 13: Updating message $messageId to status $status');
-                await _dbHelper.updateMessageStatus(
-                    messageId.toString(), status);
-
-                final statusUpdate = {
-                  'type': 'update_message_status',
-                  'message_id': messageId.toString(),
-                  'status': status,
-                  'timestamp': data['timestamp'],
-                  'group_id':
-                      data['conversation_id'] ?? data['group_id'] ?? _groupId,
-                };
-                print('DEBUG 14: Sending status update to UI: $statusUpdate');
-                onMessageReceived?.call(statusUpdate);
-              }
-              break;
-
-            case 'error':
-              print('WebSocket error: ${data['message']}');
+              print('🔵 [STATUS] Processing message status update');
+              await _handleMessageStatusUpdate(data);
               break;
 
             case 'typing':
               onMessageReceived?.call(data);
               break;
 
-            case 'initial_messages':
-              onMessageReceived?.call(data);
-              break;
-
-            case 'pong':
-              print('Received pong from server');
-              break;
-
             default:
-              print('DEBUG 16: Unknown message type: ${data['type']}');
+              print('🔵 [STATUS] Unknown message type: ${data['type']}');
           }
         } catch (e) {
-          print('DEBUG 17: Error processing WebSocket message: $e');
+          print('🔴 [STATUS] Error processing WebSocket message: $e');
         }
       },
       onError: (error) {
-        print('DEBUG 18: WebSocket error: $error');
+        print('🔴 [STATUS] WebSocket error: $error');
         _isConnected = false;
         onConnectionStatusChanged?.call(false);
         _startRetryTimer();
       },
       onDone: () {
-        print('DEBUG 19: WebSocket connection closed');
+        print('🔵 [STATUS] WebSocket connection closed');
         _isConnected = false;
         onConnectionStatusChanged?.call(false);
         _startRetryTimer();
@@ -322,7 +245,111 @@ class WebSocketService {
     );
   }
 
-  Future<void> _sendDeliveredStatus(String messageId) async {
+  Future<void> _handleSentMessageConfirmation(Map<String, dynamic> data) async {
+    try {
+      final tempId = data['temp_id'].toString();
+      final newId = data['id'].toString();
+      
+      print('🔵 [STATUS] Updating sent message status');
+      print('🔵 [STATUS] Temp ID: $tempId');
+      print('🔵 [STATUS] New ID: $newId');
+
+      // First check if message with new ID already exists
+      final db = await _dbHelper.database;
+      final existingMessage = await db.query(
+        'messages',
+        where: 'id = ?',
+        whereArgs: [newId],
+      );
+
+      if (existingMessage.isEmpty) {
+        // Update message ID and status in database
+        await _dbHelper.updateMessageId(tempId, newId);
+        await _dbHelper.updateMessageStatus(newId, 'sent');
+
+        // Notify UI of ID update
+        onMessageReceived?.call({
+          'type': 'message_id_update',
+          'old_id': tempId,
+          'new_id': newId,
+          'status': 'sent',
+          'group_id': data['room_id'],
+        });
+      } else {
+        print('🔵 [STATUS] Message with ID $newId already exists, skipping update');
+      }
+    } catch (e) {
+      print('🔴 [STATUS] Error handling sent message confirmation: $e');
+    }
+  }
+
+  Future<void> _handleReceivedMessage(Map<String, dynamic> data) async {
+    try {
+      final messageData = data['message'] ?? data;
+      print('🔵 [STATUS] Processing received message');
+      print('🔵 [STATUS] Message ID: ${messageData['id']}');
+
+      // Save message to database with 'unread' status
+      await _dbHelper.insertMessage({
+        'id': messageData['id'].toString(),
+        'group_id': messageData['room_id'],
+        'sender_id': messageData['sender_id'],
+        'message': messageData['content'],
+        'type': messageData['message_type'] ?? 'text',
+        'timestamp': messageData['timestamp'],
+        'status': 'unread',
+        'isMe': 0,
+      });
+
+      // Notify UI of new message
+      onMessageReceived?.call({
+        'type': 'new_message',
+        'message': messageData,
+      });
+
+      // Send delivered status
+      await sendDeliveredStatus(messageData['id'].toString());
+    } catch (e) {
+      print('🔴 [STATUS] Error handling received message: $e');
+    }
+  }
+
+  Future<void> _handleMessageStatusUpdate(Map<String, dynamic> data) async {
+    try {
+      final messageId = data['message_id']?.toString();
+      final status = data['status'];
+      final userId = data['user_id']?.toString();
+      final timestamp = data['timestamp'];
+
+      if (messageId == null || status == null) {
+        print('🔴 [STATUS] Missing required fields for status update');
+        return;
+      }
+
+      print('🔵 [STATUS] Updating message status');
+      print('🔵 [STATUS] Message ID: $messageId');
+      print('🔵 [STATUS] New Status: $status');
+      print('🔵 [STATUS] User ID: $userId');
+      print('🔵 [STATUS] Timestamp: $timestamp');
+
+      // Update status in database
+      await _dbHelper.updateMessageStatus(messageId, status);
+
+      // Notify UI of status update
+      onMessageReceived?.call({
+        'type': 'update_message_status',
+        'message_id': messageId,
+        'status': status,
+        'user_id': userId,
+        'timestamp': timestamp,
+        'group_id': _groupId,
+      });
+    } catch (e) {
+      print('🔴 [STATUS] Error handling message status update: $e');
+    }
+  }
+
+  Future<void> sendDeliveredStatus(String messageId) async {
     if (!_isConnected || _webSocket == null) return;
 
     try {
@@ -334,18 +361,17 @@ class WebSocketService {
       if (senderId == null) return;
 
       final statusMessage = {
-        'type': 'update_message_status',
+        'type': 'delivery_receipt',
         'message_id': messageId,
-        'status': 'delivered',
         'user_id': senderId,
-        'conversation_id': _groupId,
+        'room_id': _groupId,
         'timestamp': DateTime.now().toIso8601String(),
       };
 
-      print('Sending delivered status for message $messageId');
+      print('🔵 [STATUS] Sending delivered status for message $messageId');
       _webSocket?.add(json.encode(statusMessage));
     } catch (e) {
-      print('Error sending delivered status: $e');
+      print('🔴 [STATUS] Error sending delivered status: $e');
     }
   }
 
@@ -361,18 +387,17 @@ class WebSocketService {
       if (senderId == null) return;
 
       final statusMessage = {
-        'type': 'update_message_status',
+        'type': 'read_receipt',
         'message_id': messageId,
-        'status': 'read',
         'user_id': senderId,
-        'conversation_id': _groupId,
+        'room_id': _groupId,
         'timestamp': DateTime.now().toIso8601String(),
       };
 
-      print('Sending read status for message $messageId');
+      print('🔵 [STATUS] Sending read status for message $messageId');
       _webSocket?.add(json.encode(statusMessage));
     } catch (e) {
-      print('Error sending read status: $e');
+      print('🔴 [STATUS] Error sending read status: $e');
     }
   }
 
@@ -393,7 +418,7 @@ class WebSocketService {
       final typingMessage = {
         'type': 'typing',
         'data': {
-          'conversation_id': message['group_id'],
+          'room_id': message['group_id'],
           'sender_id': senderId,
           'is_typing': message['is_typing'],
         }
@@ -408,56 +433,49 @@ class WebSocketService {
 
   Future<void> sendMessage(Map<String, dynamic> message) async {
     try {
-      if (message['file_data'] != null) {
-        // For messages with file data, track upload progress
-        final fileData = message['file_data'];
-        final chunkSize = 1024 * 1024; // 1MB chunks
-        final totalChunks = (fileData.length / chunkSize).ceil();
-        var currentChunk = 0;
+      // First check if message with temp_id already exists
+      final db = await _dbHelper.database;
+      final tempId = message['temp_id'] ?? DateTime.now().millisecondsSinceEpoch.toString();
+      
+      final existingMessage = await db.query(
+        'messages',
+        where: 'temp_id = ?',
+        whereArgs: [tempId],
+      );
 
-        // Send initial message with progress
-        message['upload_progress'] = 0.0;
-        await _sendMessageInternal(message);
+      if (existingMessage.isEmpty) {
+        // Create database message
+        final dbMessage = {
+          'id': tempId,
+          'temp_id': tempId,
+          'group_id': message['room_id'],
+          'sender_id': message['sender_id'],
+          'message': message['content'],
+          'type': message['message_type'] ?? 'text',
+          'timestamp': message['timestamp'],
+          'status': 'sending',
+          'isMe': 1,
+        };
 
-        // Send file data in chunks
-        for (var i = 0; i < fileData.length; i += chunkSize) {
-          final end = (i + chunkSize < fileData.length)
-              ? i + chunkSize
-              : fileData.length;
-          final chunk = fileData.substring(i, end);
+        // Save to database
+        await _dbHelper.insertMessage(dbMessage);
+        print('🔵 [STATUS] Message saved to database with temp_id: $tempId');
 
-          // Send chunk
-          await _sendMessageInternal({
-            'type': 'file_chunk',
-            'message_id': message['temp_id'],
-            'chunk': chunk,
-            'chunk_index': currentChunk,
-            'total_chunks': totalChunks,
-          });
-
-          currentChunk++;
-
-          // Update progress
-          final progress = currentChunk / totalChunks;
-          message['upload_progress'] = progress;
-          await _sendMessageInternal({
-            'type': 'upload_progress',
-            'message_id': message['temp_id'],
-            'progress': progress,
-          });
+        // If WebSocket is not connected, add to queue
+        if (!_isConnected || _webSocket == null) {
+          print('🔵 [STATUS] WebSocket not connected, adding message to queue');
+          _messageQueue.add(message);
+          return;
         }
 
-        // Send completion message
-        await _sendMessageInternal({
-          'type': 'file_complete',
-          'message_id': message['temp_id'],
-        });
-      } else {
-        // For regular messages, send as is
+        // Send through WebSocket
         await _sendMessageInternal(message);
+        print('🔵 [STATUS] Message sent through WebSocket');
+      } else {
+        print('🔵 [STATUS] Message with temp_id $tempId already exists, skipping');
       }
     } catch (e) {
-      print('Error sending message: $e');
+      print('🔴 [STATUS] Error sending message: $e');
       rethrow;
     }
   }
@@ -473,5 +491,84 @@ class WebSocketService {
 
   void removeFromQueue(String messageId) {
     _messageQueue.removeWhere((msg) => msg['id'].toString() == messageId);
+  }
+
+  void _handleWebSocketMessage(dynamic message) {
+    try {
+      print('🔵 [WS] Raw WebSocket message received: $message');
+      
+      if (message is String) {
+        final decoded = json.decode(message);
+        
+        switch (decoded['type']) {
+          case 'message':
+            _handleNewMessage(decoded);
+            break;
+          case 'update_message_status':
+            print('🔵 [WS] Processing message status update');
+            _handleMessageStatus(decoded);
+            break;
+          case 'message_id_update':
+            print('🔵 [WS] Processing message ID update');
+            _handleMessageIdUpdate(decoded);
+            break;
+          case 'typing':
+            print('🔵 [WS] Processing typing status');
+            _handleTypingStatus(decoded);
+            break;
+          default:
+            print('🔵 [WS] Unknown message type received: ${decoded['type']}');
+            print('🔵 [WS] Full message content: $decoded');
+        }
+      }
+    } catch (e) {
+      print('🔴 [WS] Error handling WebSocket message: $e');
+    }
+  }
+
+  void _handleMessageStatus(Map<String, dynamic> data) {
+    try {
+    
+      if (data['message_id'] == null || data['status'] == null) {
+        print('🔴 [WS] Missing required fields for status update');
+        return;
+      }
+
+      // Forward the status update to the UI
+      if (onMessageReceived != null) {
+        onMessageReceived!(data);
+      }
+    } catch (e) {
+      print('🔴 [WS] Error handling message status: $e');
+    }
+  }
+
+  void _handleMessageIdUpdate(Map<String, dynamic> data) {
+    try {
+      print('🔵 [WS] Handling message ID update:');
+      print('🔵 [WS] Old ID: ${data['old_id']}');
+      print('🔵 [WS] New ID: ${data['new_id']}');
+      print('🔵 [WS] Status: ${data['status']}');
+
+      if (data['old_id'] == null || data['new_id'] == null) {
+        print('🔴 [WS] Missing required fields for ID update');
+        return;
+      }
+
+      // Forward the ID update to the UI
+      if (onMessageReceived != null) {
+        onMessageReceived!(data);
+      }
+    } catch (e) {
+      print('🔴 [WS] Error handling message ID update: $e');
+    }
+  }
+
+  void _handleTypingStatus(Map<String, dynamic> data) {
+    // Implementation of handling typing status
+  }
+
+  void _handleNewMessage(Map<String, dynamic> data) {
+    // Implementation of handling new message
   }
 }

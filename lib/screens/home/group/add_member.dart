@@ -10,22 +10,31 @@ import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:cyanase/helpers/websocket_service.dart';
+import 'package:share_plus/share_plus.dart'; // Added for sharing
+import 'package:clipboard/clipboard.dart'; // Added for copying to clipboard
 
 class AddGroupMembersScreen extends StatefulWidget {
   final int groupId;
+  final bool isAdmin;
+  final String groupLink;
 
-  AddGroupMembersScreen({required this.groupId});
+  const AddGroupMembersScreen({
+    required this.groupId,
+    required this.groupLink,
+    required this.isAdmin,
+    super.key,
+  });
 
   @override
   _AddGroupMembersScreenState createState() => _AddGroupMembersScreenState();
 }
 
 class _AddGroupMembersScreenState extends State<AddGroupMembersScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   final DatabaseHelper _dbHelper = DatabaseHelper();
   List<Map<String, dynamic>> _allContacts = [];
   List<Map<String, dynamic>> _onlineContacts = [];
-  Set<String> _selectedContactIds = Set<String>();
+  Set<String> _selectedContactIds = <String>{};
   List<Map<String, dynamic>> _selectedContacts = [];
   List<String> _existingMembers = [];
   bool _isLoading = true;
@@ -35,6 +44,9 @@ class _AddGroupMembersScreenState extends State<AddGroupMembersScreen>
   Timer? _debounce;
   bool _isOnlineSearching = false;
   AnimationController? _refreshAnimationController;
+  AnimationController?
+      _shareDialogAnimationController; // Added for dialog animation
+  Animation<double>? _shareDialogScaleAnimation;
 
   @override
   void initState() {
@@ -50,6 +62,17 @@ class _AddGroupMembersScreenState extends State<AddGroupMembersScreen>
           }
         }
       });
+
+    // Initialize share dialog animation
+    _shareDialogAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+    _shareDialogScaleAnimation = CurvedAnimation(
+      parent: _shareDialogAnimationController!,
+      curve: Curves.easeOutBack,
+    );
+
     _loadData();
   }
 
@@ -82,7 +105,6 @@ class _AddGroupMembersScreenState extends State<AddGroupMembersScreen>
         _syncProgress = 0.0;
       });
       _refreshAnimationController?.forward();
-      // Clear existing contacts
       final db = await _dbHelper.database;
       await db.delete('contacts');
       setState(() {
@@ -97,7 +119,6 @@ class _AddGroupMembersScreenState extends State<AddGroupMembersScreen>
         _syncProgress = 1.0;
       });
       await Future.delayed(const Duration(milliseconds: 500));
-      // Reload contacts
       final updatedContacts = await _dbHelper.getContacts();
       if (mounted) {
         setState(() {
@@ -235,7 +256,7 @@ class _AddGroupMembersScreenState extends State<AddGroupMembersScreen>
   Future<void> _addMembersToGroup() async {
     if (_selectedContacts.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Please select at least one contact')),
+        const SnackBar(content: Text('Please select at least one contact')),
       );
       return;
     }
@@ -247,8 +268,14 @@ class _AddGroupMembersScreenState extends State<AddGroupMembersScreen>
     try {
       final db = await _dbHelper.database;
       final userProfile = await db.query('profile', limit: 1);
+
       if (userProfile.isEmpty) throw Exception('No user profile found');
-      final token = userProfile.first['token'] as String;
+      final token = userProfile.first['token'] as String?;
+      final userId = userProfile.first['id'] as String?;
+      
+      if (token == null || userId == null) {
+        throw Exception('Invalid user profile data');
+      }
 
       final Map<String, dynamic> requestData = {
         'groupid': widget.groupId.toString(),
@@ -266,39 +293,53 @@ class _AddGroupMembersScreenState extends State<AddGroupMembersScreen>
 
       if (response['success'] == true) {
         for (final contact in _selectedContacts) {
-          await _dbHelper.insertParticipant({
-            'group_id': widget.groupId,
-            'user_id': contact['id'],
-            'role': 'member',
-            'joined_at': DateTime.now().toIso8601String(),
-            'muted': 0,
-            'user_name': contact['name'] ?? 'Unknown',
-          });
+          try {
+            // Database operations
+            await _dbHelper.insertParticipant({
+              'group_id': widget.groupId,
+              'user_id': contact['id'],
+              'role': 'member',
+              'joined_at': DateTime.now().toIso8601String(),
+              'muted': 0,
+              'user_name': contact['name'] ?? 'Unknown',
+            });
 
-          await _dbHelper.insertNotification(
-            groupId: widget.groupId,
-            message:
-                "${contact['name'] ?? 'A new member'} has joined the group",
-            senderId: 'system',
-          );
+            await _dbHelper.insertNotification(
+              groupId: widget.groupId,
+              message: "${contact['name'] ?? 'A new member'} has joined the group",
+              senderId: 'system',
+            );
 
-          // Send notification through WebSocket
-          final wsMessage = {
-            'type': 'send_message',
-            'content':
-                "${contact['name'] ?? 'A new member'} has joined the group",
-            'sender_id': 'system',
-            'group_id': widget.groupId.toString(),
-            'conversation_id': widget.groupId.toString(),
-            'message_type': 'notification',
-            'timestamp': DateTime.now().toIso8601String(),
-            'status': 'sending'
-          };
-          await WebSocketService.instance.sendMessage(wsMessage);
+            // WebSocket notification
+            try {
+              final wsMessage = {
+                'type': 'send_message',
+                'content': "${contact['name'] ?? 'A new member'} has joined the group",
+                'sender_id': userId,
+                'group_id': widget.groupId.toString(),
+                'room_id': widget.groupId.toString(),
+                'message_type': 'notification',
+                'timestamp': DateTime.now().toIso8601String(),
+                'status': 'sending'
+              };
+              
+              if (WebSocketService.instance.isConnected) {
+                await WebSocketService.instance.sendMessage(wsMessage);
+              } else {
+                print('WebSocket not connected, skipping notification');
+              }
+            } catch (wsError) {
+              print('WebSocket error: $wsError');
+              // Continue with other contacts even if WebSocket fails
+            }
+          } catch (e) {
+            print('Error processing contact ${contact['id']}: $e');
+            // Continue with other contacts even if one fails
+          }
         }
 
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Members added successfully!')),
+          const SnackBar(content: Text('Members added successfully!')),
         );
         Navigator.pop(context);
       } else {
@@ -325,7 +366,7 @@ class _AddGroupMembersScreenState extends State<AddGroupMembersScreen>
     }
 
     _debounce?.cancel();
-    _debounce = Timer(Duration(milliseconds: 800), () async {
+    _debounce = Timer(const Duration(milliseconds: 800), () async {
       setState(() {
         _isOnlineSearching = true;
         _onlineContacts.clear();
@@ -351,7 +392,7 @@ class _AddGroupMembersScreenState extends State<AddGroupMembersScreen>
           });
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
+            const SnackBar(
               content: Text('No contacts found'),
               duration: Duration(seconds: 3),
             ),
@@ -385,11 +426,156 @@ class _AddGroupMembersScreenState extends State<AddGroupMembersScreen>
     return [...localFiltered, ...onlineFiltered];
   }
 
+  // New method to show the share group link dialog
+  void _showShareLinkDialog() {
+    _shareDialogAnimationController?.forward();
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return ScaleTransition(
+          scale: _shareDialogScaleAnimation!,
+          child: AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            backgroundColor: white,
+            contentPadding: const EdgeInsets.all(20),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: primaryTwo.withOpacity(0.1),
+                  ),
+                  child: SvgPicture.asset(
+                    'assets/icons/share.svg', // Ensure you have a share icon in assets
+                    width: 40,
+                    height: 40,
+                    colorFilter: const ColorFilter.mode(
+                      primaryTwo,
+                      BlendMode.srcIn,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Share Group Link',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: primaryTwo,
+                    decoration: TextDecoration.none,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Invite friends to join the group using this link:',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[800],
+                    decoration: TextDecoration.none,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey[300]!, width: 0.5),
+                  ),
+                  child: Text(
+                    widget.groupLink,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Colors.black87,
+                      fontFamily: 'monospace',
+                      decoration: TextDecoration.none,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: primaryTwo,
+                        foregroundColor: white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 20, vertical: 12),
+                      ),
+                      onPressed: () {
+                        FlutterClipboard.copy(widget.groupLink).then((_) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                                content: Text('Link copied to clipboard!')),
+                          );
+                        });
+                        Navigator.of(context).pop();
+                      },
+                      child: const Text(
+                        'Copy Link',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          decoration: TextDecoration.none,
+                        ),
+                      ),
+                    ),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.grey[200],
+                        foregroundColor: primaryTwo,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 20, vertical: 12),
+                      ),
+                      onPressed: () {
+                        Share.share(
+                          'Join my group on Cyanase: ${widget.groupLink}',
+                          subject: 'Join Our Group!',
+                        );
+                        Navigator.of(context).pop();
+                      },
+                      child: const Text(
+                        'Share',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          decoration: TextDecoration.none,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    ).then((_) {
+      _shareDialogAnimationController?.reverse();
+    });
+  }
+
   @override
   void dispose() {
     _debounce?.cancel();
     _searchController.dispose();
     _refreshAnimationController?.dispose();
+    _shareDialogAnimationController?.dispose();
     super.dispose();
   }
 
@@ -397,10 +583,12 @@ class _AddGroupMembersScreenState extends State<AddGroupMembersScreen>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title:
-            Text("Add Members", style: TextStyle(color: white, fontSize: 20)),
+        title: const Text(
+          "Add Members",
+          style: TextStyle(color: white, fontSize: 20),
+        ),
         backgroundColor: primaryTwo,
-        iconTheme: IconThemeData(color: white),
+        iconTheme: const IconThemeData(color: white),
         actions: [
           IconButton(
             icon: AnimatedBuilder(
@@ -408,7 +596,7 @@ class _AddGroupMembersScreenState extends State<AddGroupMembersScreen>
               builder: (context, child) {
                 return Transform.rotate(
                   angle: _refreshAnimationController!.value * 2 * 3.14159,
-                  child: Icon(Icons.refresh, color: white),
+                  child: const Icon(Icons.refresh, color: white),
                 );
               },
             ),
@@ -416,9 +604,13 @@ class _AddGroupMembersScreenState extends State<AddGroupMembersScreen>
                 _isSyncingContacts || _isLoading ? null : _refreshContacts,
           ),
           IconButton(
+            icon: const Icon(Icons.link, color: white), // New share link button
+            onPressed: _isLoading ? null : _showShareLinkDialog,
+          ),
+          IconButton(
             icon: _isLoading
-                ? SizedBox(width: 24, height: 24, child: Loader())
-                : Icon(Icons.check, color: white),
+                ? const SizedBox(width: 24, height: 24, child: Loader())
+                : const Icon(Icons.check, color: white),
             onPressed: _isLoading ? null : _addMembersToGroup,
           ),
         ],
@@ -430,7 +622,8 @@ class _AddGroupMembersScreenState extends State<AddGroupMembersScreen>
               if (_selectedContacts.isNotEmpty)
                 Container(
                   height: 100,
-                  padding: EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
                   child: ListView.builder(
                     scrollDirection: Axis.horizontal,
                     itemCount: _selectedContacts.length,
@@ -443,19 +636,20 @@ class _AddGroupMembersScreenState extends State<AddGroupMembersScreen>
                             Column(
                               children: [
                                 CircleAvatar(
-                                  backgroundImage: contact['profilePic']
-                                              ?.isNotEmpty ==
-                                          true
-                                      ? NetworkImage(contact['profilePic'])
-                                      : AssetImage('assets/images/avatar.png')
-                                          as ImageProvider,
+                                  backgroundImage:
+                                      contact['profilePic']?.isNotEmpty == true
+                                          ? NetworkImage(contact['profilePic'])
+                                          : const AssetImage(
+                                                  'assets/images/avatar.png')
+                                              as ImageProvider,
                                   radius: 30,
                                 ),
-                                SizedBox(height: 4),
+                                const SizedBox(height: 4),
                                 Text(
-                                    contact['name']?.split(' ').first ??
-                                        'Unknown',
-                                    style: TextStyle(fontSize: 12)),
+                                  contact['name']?.split(' ').first ??
+                                      'Unknown',
+                                  style: const TextStyle(fontSize: 12),
+                                ),
                               ],
                             ),
                             Positioned(
@@ -463,7 +657,7 @@ class _AddGroupMembersScreenState extends State<AddGroupMembersScreen>
                               right: 0,
                               child: GestureDetector(
                                 onTap: () => _toggleSelection(contact),
-                                child: CircleAvatar(
+                                child: const CircleAvatar(
                                   radius: 12,
                                   backgroundColor: Colors.red,
                                   child: Icon(Icons.close,
@@ -483,13 +677,14 @@ class _AddGroupMembersScreenState extends State<AddGroupMembersScreen>
                   controller: _searchController,
                   decoration: InputDecoration(
                     hintText: 'Search contacts...',
-                    prefixIcon: Icon(Icons.search),
+                    prefixIcon: const Icon(Icons.search),
                     border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10)),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
                   onChanged: (query) {
                     if (_debounce?.isActive ?? false) _debounce?.cancel();
-                    _debounce = Timer(Duration(milliseconds: 500), () {
+                    _debounce = Timer(const Duration(milliseconds: 500), () {
                       setState(() {});
                       if (_filterLocalContacts(query).isEmpty) {
                         _searchOnline(query);
@@ -498,11 +693,11 @@ class _AddGroupMembersScreenState extends State<AddGroupMembersScreen>
                   },
                 ),
               ),
-              if (_isOnlineSearching) Loader(),
-              SizedBox(height: 10),
+              if (_isOnlineSearching) const Loader(),
+              const SizedBox(height: 10),
               Expanded(
                 child: _isLoading
-                    ? Center(child: Loader())
+                    ? const Center(child: Loader())
                     : ListView.builder(
                         itemCount: _combinedContacts.length,
                         itemBuilder: (context, index) {
@@ -512,15 +707,16 @@ class _AddGroupMembersScreenState extends State<AddGroupMembersScreen>
                               _selectedContactIds.contains(contactId);
                           final isAlreadyMember =
                               _existingMembers.contains(contactId);
-                          if (isAlreadyMember) return SizedBox.shrink();
+                          if (isAlreadyMember) return const SizedBox.shrink();
 
                           return ListTile(
                             leading: CircleAvatar(
-                              backgroundImage:
-                                  contact['profilePic']?.isNotEmpty == true
-                                      ? NetworkImage(contact['profilePic'])
-                                      : AssetImage('assets/images/avatar.png')
-                                          as ImageProvider,
+                              backgroundImage: contact['profilePic']
+                                          ?.isNotEmpty ==
+                                      true
+                                  ? NetworkImage(contact['profilePic'])
+                                  : const AssetImage('assets/images/avatar.png')
+                                      as ImageProvider,
                             ),
                             title: Text(contact['name'] ?? 'Unknown'),
                             subtitle: Text(
@@ -571,7 +767,9 @@ class _AddGroupMembersScreenState extends State<AddGroupMembersScreen>
                           width: 60,
                           height: 60,
                           colorFilter: const ColorFilter.mode(
-                              primaryTwo, BlendMode.srcIn),
+                            primaryTwo,
+                            BlendMode.srcIn,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 20),

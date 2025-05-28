@@ -205,6 +205,7 @@ class ApiService {
         },
         body: jsonEncode(userData), // userData should be directly encodable
       );
+
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
       } else {
@@ -217,10 +218,10 @@ class ApiService {
   }
 
   static Future<Map<String, dynamic>> ResetPassword(
-      Map<String, dynamic> userData, Map<String, dynamic> queryParams) async {
+      Map<String, dynamic> userData) async {
     final url = Uri.parse(ApiEndpoints
         .apiUrlPasswordReset); // Ensure this path matches your Django URL
-
+    print('userData $userData');
     try {
       final response = await http.post(
         url,
@@ -229,6 +230,7 @@ class ApiService {
         },
         body: jsonEncode(userData), // userData should be directly encodable
       );
+      print('response.body ${response.body}');
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
       } else {

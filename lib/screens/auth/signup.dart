@@ -376,7 +376,12 @@ class _SignupScreenState extends State<SignupScreen> {
     const Color yourPrimaryColor = primaryTwo;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Signup'),
+        title: const Text(
+          'Signup',
+          style: TextStyle(
+            color: white,
+          ),
+        ),
         backgroundColor: primaryTwo,
         leading: IconButton(
           icon: Icon(Icons.arrow_back_ios, color: white),
@@ -427,7 +432,7 @@ class _SignupScreenState extends State<SignupScreen> {
                   ],
                 ),
               ),
-              _buildNavigationButtons(yourPrimaryColor),
+              _buildNavigationButtons(),
             ],
           ),
 
@@ -444,7 +449,7 @@ class _SignupScreenState extends State<SignupScreen> {
     );
   }
 
-  Widget _buildNavigationButtons(Color primaryColor) {
+  Widget _buildNavigationButtons() {
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Row(

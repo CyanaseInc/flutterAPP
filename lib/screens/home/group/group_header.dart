@@ -24,20 +24,22 @@ class GroupHeader extends StatefulWidget {
   final String myContributions;
   final Map<String, dynamic> initialLoanSettings;
   final bool isAdmin;
+  final String groupLink;
   final bool allowWithdraw; // New parameter
 
-  const GroupHeader({
-    Key? key,
-    required this.groupName,
-    required this.description,
-    required this.profilePic,
-    required this.groupId,
-    required this.totalBalance,
-    required this.myContributions,
-    required this.initialLoanSettings,
-    required this.isAdmin,
-    required this.allowWithdraw,
-  }) : super(key: key);
+  const GroupHeader(
+      {Key? key,
+      required this.groupName,
+      required this.description,
+      required this.profilePic,
+      required this.groupId,
+      required this.totalBalance,
+      required this.myContributions,
+      required this.initialLoanSettings,
+      required this.isAdmin,
+      required this.allowWithdraw,
+      required this.groupLink})
+      : super(key: key);
 
   @override
   _GroupHeaderState createState() => _GroupHeaderState();
@@ -348,6 +350,8 @@ class _GroupHeaderState extends State<GroupHeader> {
                           MaterialPageRoute(
                             builder: (context) => AddGroupMembersScreen(
                               groupId: widget.groupId,
+                              isAdmin: widget.isAdmin,
+                              groupLink: widget.groupLink,
                             ),
                           ),
                         );

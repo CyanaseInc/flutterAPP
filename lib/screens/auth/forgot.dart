@@ -144,7 +144,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   void _resetPassword() async {
     final newPassword = _newPasswordController.text.trim();
     final confirmPassword = _confirmPasswordController.text.trim();
-    final email = _emailController.text.trim();
+    final email = _emailController.text
+        .trim()
+        .split(' ')[0]; // Take only the email part before any space
 
     if (newPassword != confirmPassword) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -159,16 +161,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     final userData = {
       'email': email,
       'password': newPassword,
-      'confirmpassword':
-          confirmPassword, // Include confirm password in POST data
-    };
-    final queryParams = {
-      'email': email,
-      'password': newPassword,
+      'ref': 'reset_token',
     };
 
     try {
-      final response = await ApiService.ResetPassword(userData, queryParams);
+      final response = await ApiService.ResetPassword(userData);
       if (response['success'] == true) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -176,7 +173,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             backgroundColor: Colors.green,
           ),
         );
-        // Navigate back to login or another screen
         Navigator.pop(context);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -210,8 +206,16 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Center(
-          child: Text('Forgot Password'),
+        title: const Text(
+          'Forgot password',
+          style: TextStyle(
+            color: white,
+          ),
+        ),
+        backgroundColor: primaryTwo,
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back_ios, color: white),
+          onPressed: () => Navigator.pop(context),
         ),
       ),
       body: Stack(
@@ -426,18 +430,28 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   curve: Curves.easeInOut,
                 );
               },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryTwo,
+                foregroundColor: Colors.white,
+              ),
               child: const Text('Back'),
             ),
           ElevatedButton(
             onPressed: _isCurrentSlideValid()
                 ? () {
                     if (_currentPage == 0) {
-                      _sendVerificationCode(); // Send verification code on "Next" button press
+                      _sendVerificationCode();
                     } else {
                       _nextPage();
                     }
                   }
                 : null,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: primaryTwo,
+              foregroundColor: Colors.white,
+              disabledBackgroundColor: Colors.grey,
+              disabledForegroundColor: Colors.white70,
+            ),
             child: Text(
               _currentPage < 2 ? 'Next' : 'Reset Password',
             ),

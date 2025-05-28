@@ -13,13 +13,13 @@ import 'chat_app_bar.dart';
 import 'message_chat.dart';
 import 'chat_input.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:cyanase/helpers/websocket_service.dart';
-import 'package:cyanase/helpers/web_shared_storage.dart';
+import 'package:cyanase/helpers/chat_websocket_service.dart';
+
 import 'dart:io';
 import 'dart:convert';
-import 'package:http/http.dart' as http;
+
 import 'package:path_provider/path_provider.dart';
-import 'package:cyanase/helpers/api_endpoints.dart';
+
 
 class MessageChatScreen extends StatefulWidget {
   final String name;
@@ -57,7 +57,7 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
   final AudioFunctions _audioFunctions = AudioFunctions();
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  final WebSocketService _wsService = WebSocketService.instance;
+  final ChatWebSocketService _wsService = ChatWebSocketService.instance;
   Map<String, dynamic>? _replyingToMessage;
   String? _currentUserId;
   bool _isRecording = false;
@@ -435,7 +435,9 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
 
   void _initializeWebSocket() {
     _wsService.onMessageReceived = (data) {
-      if (data['type'] == 'message') {
+      if (data['type'] == 'initial_messages') {
+        _handleInitialMessages(data['messages']);
+      } else if (data['type'] == 'message') {
         _handleNewMessage(data);
       } else if (data['type'] == 'update_message_status') {
         _handleMessageStatusUpdate(data);
@@ -446,6 +448,24 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
       }
     };
     _wsService.initialize(widget.groupId.toString());
+  }
+
+  void _handleInitialMessages(List<dynamic> messages) {
+    print('Handling initial messages: ${messages.length} messages');
+    setState(() {
+      _messages = messages.map((message) {
+        final isMe = message['sender_id'].toString() == _currentUserId;
+        return {
+          ...message,
+          'isMe': isMe ? 1 : 0,
+          'status': isMe ? (message['status'] ?? 'sent') : 'received',
+          'message': message['content'] ?? '',
+          'type': message['attachment_type'] ?? 'text',
+        };
+      }).map((m) => Map<String, dynamic>.from(m)).toList();
+      _messages = MessageSort.sortMessagesByDate(_messages);
+      _groupedMessages = MessageSort.groupMessagesByDate(_messages);
+    });
   }
 
   void _handleMessageIdUpdate(Map<String, dynamic> data) {
@@ -567,28 +587,42 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
   }
 
   Future<void> _sendMessage() async {
-    if (_controller.text.trim().isEmpty || _currentUserId == null) return;
+    print('FUNCTION CALLED: _sendMessage');
+    print('DEBUG 1: Starting _sendMessage......Oh yeah');
+ 
+    
+    if (_controller.text.trim().isEmpty || _currentUserId == null) {
+      print('DEBUG 2: Message empty or no user ID, returning');
+      return;
+    }
 
     try {
       final tempId = DateTime.now().millisecondsSinceEpoch.toString();
-      print('DEBUG: Sending message with temp_id: $tempId');
+      print('DEBUG 3: Generated temp_id: $tempId');
 
       // Create the WebSocket message with the exact structure the server expects
       final Map<String, dynamic> wsMessage = {
-        'type': 'message', // Changed from 'send_message' to 'message'
+        'type': 'send_message',
         'content': _controller.text.trim(),
         'sender_id': _currentUserId,
-        'conversation_id': widget.groupId.toString(),
+        'room_id': widget.groupId.toString(),
         'temp_id': tempId,
         'timestamp': DateTime.now().toIso8601String(),
         'status': 'sending',
+        'message_type': 'text',
         'attachment_type': null,
         'attachment_url': null,
-        'username': null
+        'username': null,
+        'data': {
+          'sender_id': _currentUserId,
+          'is_typing': false
+        }
       };
+   
 
       // Add reply information if available
       if (_replyingToMessage != null) {
+        print('DEBUG 5: Adding reply information');
         wsMessage['reply_to_id'] = _replyingToMessage!['id'];
         wsMessage['reply_to_message'] = _replyingToMessage!['message'];
         wsMessage['reply_to_type'] = _replyingToMessage!['type'] ?? 'text';
@@ -610,35 +644,65 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
         'attachment_url': null,
         'username': null
       };
+      
 
       // Add reply information to database message
       if (_replyingToMessage != null) {
+        print('DEBUG 7: Adding reply information to database message');
         dbMessage['reply_to_id'] = _replyingToMessage!['id'];
         dbMessage['reply_to_message'] = _replyingToMessage!['message'];
         dbMessage['reply_to_type'] = _replyingToMessage!['type'] ?? 'text';
       }
-
-      // Save to local database
       await _dbHelper.insertMessage(dbMessage);
-
-      // Add message to UI immediately with 'sending' status and temp_id
+     
       setState(() {
         _messages.add(dbMessage);
         _groupedMessages = MessageSort.groupMessagesByDate(_messages);
         _replyingToMessage = null;
       });
+    
 
-      // Send message through WebSocket service
-      await _wsService.sendMessage(wsMessage);
+    
+      try {
+        await _wsService.sendMessage(wsMessage);
+        print('DEBUG 12.3: WebSocket message sent, waiting for acknowledgment');
+      } catch (e) {
+        print('ERROR in WebSocket send: $e');
+        print('ERROR stack trace: ${StackTrace.current}');
+        
+        setState(() {
+          final index = _messages.indexWhere((msg) => msg['temp_id'] == tempId);
+          if (index != -1) {
+            _messages[index]['status'] = 'failed';
+            _groupedMessages = MessageSort.groupMessagesByDate(_messages);
+          }
+        });
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Failed to send message: $e")),
+        );
+        return;
+      }
 
       _controller.clear();
       _scrollToBottomIfAtBottom();
       widget.onMessageSent?.call();
+      print('DEBUG 14: Message sending process completed successfully');
     } catch (e) {
-      print('Error sending message: $e');
+      print('ERROR in WebSocket send: $e');
+      print('ERROR stack trace: ${StackTrace.current}');
+      
+      // Update message status to failed in UI
+      setState(() {
+        
+          _groupedMessages = MessageSort.groupMessagesByDate(_messages);
+        
+      });
+      
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Failed to send message: $e")),
       );
+      return; // Exit the function on error
     }
   }
 

@@ -27,7 +27,6 @@ class MessageFunctions {
       final messages = await _dbHelper.getMessages(
         groupId: groupId,
         limit: limit,
-        offset: offset,
       );
 
       return messages.map((msg) {

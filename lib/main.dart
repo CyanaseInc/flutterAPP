@@ -7,6 +7,7 @@ import 'screens/auth/login_with_phone.dart';
 import 'theme/theme.dart';
 import 'package:cyanase/helpers/database_helper.dart';
 import 'screens/home/home.dart';
+import 'package:cyanase/helpers/notification_service.dart';
 
 class NotificationHandler {
   @pragma('vm:entry-point')
@@ -38,6 +39,10 @@ void main() async {
   AwesomeNotifications().setListeners(
     onActionReceivedMethod: NotificationHandler.onActionReceivedMethod,
   );
+
+  // Initialize notification service
+  final notificationService = NotificationService();
+  await notificationService.initialize();
 
   runApp(const MyApp());
 }

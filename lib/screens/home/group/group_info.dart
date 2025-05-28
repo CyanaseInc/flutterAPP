@@ -164,6 +164,7 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
                   initialLoanSettings: _groupDetails['loan_settings'] ?? {},
                   isAdmin: _isAdmin,
                   allowWithdraw: _allowWithdraw,
+                  groupLink: _groupDetails['invite_info']?['invite_code'] ?? '',
                   // interestEarned: _interestEarned, // Pass allowWithdraw
                 ),
                 const SizedBox(height: 10),

@@ -6,11 +6,12 @@ import 'package:cyanase/helpers/endpoints.dart';
 import 'package:cyanase/helpers/database_helper.dart';
 import 'package:cyanase/helpers/api_helper.dart';
 import 'package:cyanase/helpers/websocket_service.dart';
+import 'package:cyanase/helpers/loader.dart';
 
 class PendingRequestsScreen extends StatefulWidget {
   final int groupId;
   final String groupName;
-  final VoidCallback onRequestProcessed; // Callback to notify parents
+  final VoidCallback onRequestProcessed;
 
   const PendingRequestsScreen({
     super.key,
@@ -32,7 +33,22 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
   @override
   void initState() {
     super.initState();
+    _initializeWebSocket();
     _fetchPendingRequests();
+  }
+
+  Future<void> _initializeWebSocket() async {
+    try {
+      print('Initializing WebSocket for group ${widget.groupId}');
+      await WebSocketService.instance.initialize(widget.groupId.toString());
+      if (WebSocketService.instance.isConnected) {
+        print('WebSocket connected successfully');
+      } else {
+        print('WebSocket initialization failed');
+      }
+    } catch (e) {
+      print('Error initializing WebSocket: $e');
+    }
   }
 
   Future<void> _fetchPendingRequests() async {
@@ -42,7 +58,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
       final requests = await db.query(
         'participants',
         where: 'group_id = ? AND is_approved = ? AND is_denied = ?',
-        whereArgs: [widget.groupId, 0, 0],
+        whereArgs: [widget.groupId.toString(), 0, 0],
       );
 
       if (mounted) {
@@ -52,6 +68,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
         });
       }
     } catch (e) {
+      print('Error fetching pending requests: $e');
       if (mounted) {
         setState(() => _isLoading = false);
       }
@@ -63,6 +80,9 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
 
     final userId = request['user_id'].toString();
     setState(() => _processingUserId = userId);
+
+    // Show loader
+    _showLoader();
 
     // Optimistic update
     final originalRequests = List<Map<String, dynamic>>.from(_pendingRequests);
@@ -82,7 +102,8 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
       }
 
       final token = userProfile.first['token'] as String;
-      final adminId = userProfile.first['user_id'] as String? ?? 'self';
+      final adminId = userProfile.first['id'] as String? ?? 'self';
+    
 
       final approveData = {
         'groupid': widget.groupId.toString(),
@@ -97,8 +118,9 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
         throw Exception(response['message'] ?? 'Failed to approve request');
       }
 
-      // Use request['user_name'] for the notification
       final userName = request['user_name'] as String? ?? 'A user';
+
+      // Insert notification in database
       await _dbHelper.insertNotification(
         groupId: widget.groupId,
         message: "$userName has joined the group",
@@ -109,13 +131,29 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
       final wsMessage = {
         'type': 'send_message',
         'content': "$userName has joined the group",
-        'sender_id': 'system',
+        'sender_id': adminId,
         'group_id': widget.groupId.toString(),
-        'conversation_id': widget.groupId.toString(),
+        'room_id': widget.groupId.toString(),
+        'message_type': 'notification',
         'timestamp': DateTime.now().toIso8601String(),
-        'status': 'sending'
+        'status': 'sending',
       };
-      await WebSocketService.instance.sendMessage(wsMessage);
+
+      try {
+        await WebSocketService.instance.sendMessage(wsMessage);
+      } catch (e) {
+        print('WebSocket send error: $e');
+        // Queue message if WebSocket fails
+        await _dbHelper.insertMessage({
+          'group_id': widget.groupId.toString(),
+          'sender_id': userId,
+          'message': "$userName has joined the group",
+          'type': 'notification',
+          'timestamp': DateTime.now().toIso8601String(),
+          'status': 'sending',
+          'isMe': 0,
+        });
+      }
 
       // Notify parent
       widget.onRequestProcessed();
@@ -123,7 +161,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${request['user_name'] ?? 'User'} approved!'),
+            content: Text('$userName approved!'),
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),
@@ -132,21 +170,20 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
         );
       }
     } catch (e) {
+      print('Error approving request: $e');
       setState(() {
         _pendingRequests = originalRequests;
+        _processingUserId = null;
       });
-      if (context.mounted) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to approve: ${e.toString()}'),
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('Failed to approve request: $e')),
         );
       }
     } finally {
+      // Hide loader
       if (mounted) {
-        setState(() => _processingUserId = null);
+        Navigator.of(context, rootNavigator: true).pop();
       }
     }
   }
@@ -157,11 +194,13 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
     final userId = request['user_id'].toString();
     setState(() => _processingUserId = userId);
 
+    // Show loader
+    _showLoader();
+
     final originalRequests = List<Map<String, dynamic>>.from(_pendingRequests);
     setState(() {
       _pendingRequests.removeWhere((r) {
         final rUserId = r['user_id'].toString();
-
         return rUserId == userId;
       });
     });
@@ -189,25 +228,42 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
         throw Exception(response['message'] ?? 'Failed to deny request');
       }
 
-      // Use request['user_name'] for the notification
       final userName = request['user_name'] as String? ?? 'A user';
+
+      // Insert notification in database
       await _dbHelper.insertNotification(
         groupId: widget.groupId,
-        message: "${request['user_name']}'s request was denied",
+        message: "$userName's request was denied",
         senderId: 'system',
       );
 
       // Send notification through WebSocket
       final wsMessage = {
         'type': 'send_message',
-        'content': "${request['user_name']}'s request was denied",
-        'sender_id': 'system',
+        'content': "$userName's request was denied",
+        'sender_id': userId,
         'group_id': widget.groupId.toString(),
-        'conversation_id': widget.groupId.toString(),
+        'room_id': widget.groupId.toString(),
+        'message_type': 'notification',
         'timestamp': DateTime.now().toIso8601String(),
-        'status': 'sending'
+        'status': 'sending',
       };
-      await WebSocketService.instance.sendMessage(wsMessage);
+
+      try {
+        await WebSocketService.instance.sendMessage(wsMessage);
+      } catch (e) {
+        print('WebSocket send error: $e');
+        // Queue message if WebSocket fails
+        await _dbHelper.insertMessage({
+          'group_id': widget.groupId.toString(),
+          'sender_id': userId,
+          'message': "$userName's request was denied",
+          'type': 'notification',
+          'timestamp': DateTime.now().toIso8601String(),
+          'status': 'sending',
+          'isMe': 0,
+        });
+      }
 
       // Notify parent
       widget.onRequestProcessed();
@@ -215,7 +271,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('${request['user_name']} denied'),
+            content: Text('$userName denied'),
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),
@@ -230,7 +286,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
         debugPrint(
             'Reverted to original requests, length: ${_pendingRequests.length}');
       });
-      if (context.mounted) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to deny: ${e.toString()}'),
@@ -242,8 +298,29 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
     } finally {
       if (mounted) {
         setState(() => _processingUserId = null);
+        Navigator.of(context, rootNavigator: true).pop();
       }
     }
+  }
+
+  void _showLoader() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Stack(
+        children: [
+          ModalBarrier(
+            color: Colors.black.withOpacity(0.4),
+            dismissible: false,
+          ),
+          const Center(
+            child: Loader(
+            
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<bool> _showConfirmationDialog(
@@ -371,17 +448,19 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.green,
                         ),
-                        onPressed: () async {
-                          final confirmed = await _showConfirmationDialog(
-                            context,
-                            'Approve',
-                            request['user_name'] ?? 'this request',
-                          );
-                          if (confirmed) {
-                            await _approveRequest(request);
-                            if (context.mounted) Navigator.pop(context);
-                          }
-                        },
+                        onPressed: isProcessing
+                            ? null
+                            : () async {
+                                final confirmed = await _showConfirmationDialog(
+                                  context,
+                                  'Approve',
+                                  request['user_name'] ?? 'this request',
+                                );
+                                if (confirmed) {
+                                  await _approveRequest(request);
+                                  if (context.mounted) Navigator.pop(context);
+                                }
+                              },
                       ),
                       const SizedBox(width: 16),
                       ElevatedButton.icon(
@@ -390,17 +469,19 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.red,
                         ),
-                        onPressed: () async {
-                          final confirmed = await _showConfirmationDialog(
-                            context,
-                            'Deny',
-                            request['user_name'] ?? 'this request',
-                          );
-                          if (confirmed) {
-                            await _denyRequest(request);
-                            if (context.mounted) Navigator.pop(context);
-                          }
-                        },
+                        onPressed: isProcessing
+                            ? null
+                            : () async {
+                                final confirmed = await _showConfirmationDialog(
+                                  context,
+                                  'Deny',
+                                  request['user_name'] ?? 'this request',
+                                );
+                                if (confirmed) {
+                                  await _denyRequest(request);
+                                  if (context.mounted) Navigator.pop(context);
+                                }
+                              },
                       ),
                     ],
                   ),
@@ -434,7 +515,10 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                   ? const SizedBox(
                       width: 24,
                       height: 24,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(primaryTwo),
+                      ),
                     )
                   : Row(
                       mainAxisSize: MainAxisSize.min,
@@ -486,6 +570,10 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
           overflow: TextOverflow.ellipsis,
         ),
         backgroundColor: primaryTwo,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: white),
+          onPressed: () => Navigator.pop(context),
+        ),
         iconTheme: const IconThemeData(color: white),
       ),
       body: _isLoading
@@ -533,5 +621,11 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
     if (diff.inHours > 0) return '${diff.inHours}h ago';
     if (diff.inMinutes > 0) return '${diff.inMinutes}m ago';
     return 'Just now';
+  }
+
+  @override
+  void dispose() {
+    // No need to dispose WebSocketService as it's a singleton
+    super.dispose();
   }
 }
