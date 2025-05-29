@@ -286,34 +286,45 @@ class ChatWebSocketService {
       final messageData = data['message'] ?? data;
       print('Processing received message: $messageData');
 
-      // Save message to database with 'unread' status
-      await _dbHelper.insertMessage({
-        'id': messageData['id'].toString(),
-        'group_id': messageData['room_id'],
-        'sender_id': messageData['sender_id'],
-        'message': messageData['content'],
-        'type': messageData['message_type'] ?? 'text',
-        'timestamp': messageData['timestamp'],
-        'status': 'unread',
-        'isMe': 0,
-        'username': messageData['username'],
-        'sender_info': messageData['sender_info'],
-        'is_edited': messageData['is_edited'] ?? false,
-        'is_deleted': messageData['is_deleted'] ?? false,
-        'is_forwarded': messageData['is_forwarded'] ?? false,
-        'reply_to_id': messageData['reply_to_id'],
-        'reply_to_message': messageData['reply_to_message'],
-        'reply_to_type': messageData['reply_to_type']
-      });
+      // Check if message already exists in database
+      final db = await _dbHelper.database;
+      final existingMessage = await db.query(
+        'messages',
+        where: 'id = ?',
+        whereArgs: [messageData['id'].toString()],
+      );
 
-      // Notify UI of new message
-      onMessageReceived?.call({
-        'type': 'message',
-        'message': messageData,
-      });
+      // Only save if message doesn't exist
+      if (existingMessage.isEmpty) {
+        // Save message to database with 'unread' status
+        await _dbHelper.insertMessage({
+          'id': messageData['id'].toString(),
+          'group_id': messageData['room_id'],
+          'sender_id': messageData['sender_id'],
+          'message': messageData['content'],
+          'type': messageData['message_type'] ?? 'text',
+          'timestamp': messageData['timestamp'],
+          'status': 'unread',
+          'isMe': 0,
+          'username': messageData['username'],
+          'sender_info': messageData['sender_info'],
+          'is_edited': messageData['is_edited'] ?? false,
+          'is_deleted': messageData['is_deleted'] ?? false,
+          'is_forwarded': messageData['is_forwarded'] ?? false,
+          'reply_to_id': messageData['reply_to_id'],
+          'reply_to_message': messageData['reply_to_message'],
+          'reply_to_type': messageData['reply_to_type']
+        });
 
-      // Send delivered status
-      await sendDeliveredStatus(messageData['id'].toString());
+        // Notify UI of new message immediately
+        onMessageReceived?.call({
+          'type': 'message',
+          'message': messageData
+        });
+
+        // Send delivered status
+        await sendDeliveredStatus(messageData['id'].toString());
+      }
     } catch (e) {
       print('Error handling received message: $e');
     }

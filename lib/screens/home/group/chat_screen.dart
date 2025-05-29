@@ -58,12 +58,14 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final ChatWebSocketService _wsService = ChatWebSocketService.instance;
+  final GlobalKey<AnimatedListState> _listKey = GlobalKey<AnimatedListState>();
   Map<String, dynamic>? _replyingToMessage;
   String? _currentUserId;
   bool _isRecording = false;
   Duration _recordingDuration = Duration.zero;
   final DatabaseHelper _dbHelper = DatabaseHelper();
   List<String> _memberNames = [];
+  Timer? _dbPollingTimer;
 
   List<Map<String, dynamic>> _messages = [];
   Map<String, bool> _isPlayingMap = {};
@@ -87,6 +89,7 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
       {}; // Map of user_id to username who are typing
 
   String? _token;
+  String? _lastMessageTimestamp;
 
   // Add progress tracking maps
   Map<String, double> _uploadProgress = {};
@@ -107,6 +110,7 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
       });
     }
     _controller.addListener(_onTextChanged);
+    _startDbPolling();
   }
 
   @override
@@ -117,6 +121,7 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
     _recordingTimer?.cancel();
     _audioFunctions.dispose();
     _typingTimer?.cancel();
+    _dbPollingTimer?.cancel();
     _controller.removeListener(_onTextChanged);
     super.dispose();
   }
@@ -435,9 +440,12 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
 
   void _initializeWebSocket() {
     _wsService.onMessageReceived = (data) {
+      print('DEBUG: Received WebSocket message: $data');
+      
       if (data['type'] == 'initial_messages') {
         _handleInitialMessages(data['messages']);
       } else if (data['type'] == 'message') {
+        print('DEBUG: Handling new message from WebSocket');
         _handleNewMessage(data);
       } else if (data['type'] == 'update_message_status') {
         _handleMessageStatusUpdate(data);
@@ -447,6 +455,8 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
         _handleTypingStatus(data['data']);
       }
     };
+    
+    // Initialize WebSocket connection
     _wsService.initialize(widget.groupId.toString());
   }
 
@@ -1064,140 +1074,137 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
     });
   }
 
-  void _handleNewMessage(Map<String, dynamic> message) async {
+  void _handleNewMessage(Map<String, dynamic> message) {
     try {
-      print('DEBUG 1: Handling new message: ${message['type']}');
-
-      // Handle upload progress updates
-      if (message['type'] == 'upload_progress') {
-        setState(() {
-          _uploadProgress[message['message_id'].toString()] =
-              message['progress'];
-        });
-        return;
-      }
-
-      // Handle download progress updates
-      if (message['type'] == 'download_progress') {
-        setState(() {
-          _downloadProgress[message['message_id'].toString()] =
-              message['progress'];
-        });
-        return;
-      }
-
-      final db = await _dbHelper.database;
-      final userProfile = await db.query('profile', limit: 1);
-      final currentUserId = userProfile.first['id'] as String?;
-
+      print('DEBUG: Starting _handleNewMessage');
+      
       // Extract message data
       final messageData = message['message'] ?? message;
-      final isMe = messageData['sender_id'].toString() == currentUserId;
-      print('DEBUG 2: Message isMe: $isMe');
+      print('DEBUG: Message data: $messageData');
+      
+      // Check if we're in the current chat
+      if (messageData['room_id']?.toString() == widget.groupId.toString()) {
+        print('DEBUG: Message is for current chat');
+        
+        // Check if message already exists in the UI
+        final messageExists = _messages.any((m) => 
+          m['id'].toString() == messageData['id'].toString() ||
+          m['temp_id']?.toString() == messageData['id'].toString()
+        );
 
-      // Only handle non-sent messages
-      if (!isMe) {
-        print('DEBUG 3: Processing non-sent message');
-        print(
-            'DEBUG 3.1: Message has attachment_url: ${messageData['attachment_url'] != null}');
-        print(
-            'DEBUG 3.2: Message has file_data: ${message['file_data'] != null}');
+        if (!messageExists) {
+          print('DEBUG: Adding new message to UI');
+          
+          // Create message object for UI
+          final dbMessage = {
+            'id': messageData['id']?.toString() ?? message['temp_id'],
+            'group_id': widget.groupId,
+            'sender_id': messageData['sender_id'],
+            'message': messageData['content'] ?? messageData['message'] ?? '',
+            'type': messageData['attachment_type'] ?? 'text',
+            'timestamp': messageData['timestamp'],
+            'status': messageData['status'] ?? 'received',
+            'isMe': 0,
+            'attachment_url': messageData['attachment_url'],
+            'attachment_type': messageData['attachment_type'],
+          };
 
-        String? localPath;
-        int? mediaId;
-
-        // If message has file data and is a media type, save it locally
-        if (message['file_data'] != null &&
-            (messageData['attachment_type'] == 'image' ||
-                messageData['attachment_type'] == 'audio')) {
-          print('DEBUG 4: Message has file data, saving media');
-
-          // Create media directory if it doesn't exist
-          final appDir = await getApplicationDocumentsDirectory();
-          final mediaDir = Directory('${appDir.path}/media');
-          if (!await mediaDir.exists()) {
-            await mediaDir.create(recursive: true);
+          // Add reply information if available
+          if (message['reply_to_id'] != null) {
+            dbMessage['reply_to_id'] = message['reply_to_id'];
+            dbMessage['reply_to_message'] = message['reply_to_message'];
+            dbMessage['reply_to_type'] = message['reply_to_type'] ?? 'text';
           }
 
-          final fileName = message['file_name'] ??
-              'file_${DateTime.now().millisecondsSinceEpoch}';
-          localPath = '${mediaDir.path}/$fileName';
-
-          // Save file locally with progress tracking
-          final bytes = base64Decode(message['file_data']);
-          final file = File(localPath);
-          final sink = file.openWrite();
-
-          // Write in chunks to track progress
-          final chunkSize = 1024 * 1024; // 1MB chunks
-          var bytesWritten = 0;
-
-          for (var i = 0; i < bytes.length; i += chunkSize) {
-            final end =
-                (i + chunkSize < bytes.length) ? i + chunkSize : bytes.length;
-            sink.add(bytes.sublist(i, end));
-            bytesWritten += end - i;
-
-            // Update progress
-            final progress = bytesWritten / bytes.length;
-            setState(() {
-              _downloadProgress[messageData['id'].toString()] = progress;
-            });
-          }
-
-          await sink.close();
-          print('DEBUG 5: File saved locally at: $localPath');
-
-          // Clear download progress after completion
+          // Update UI immediately with the new message
           setState(() {
-            _downloadProgress.remove(messageData['id'].toString());
+            _messages.insert(0, dbMessage);
+            _groupedMessages = MessageSort.groupMessagesByDate(_messages);
           });
 
-          // Insert into media table
-          mediaId = messageData['attachment_type'] == 'image'
-              ? await _dbHelper.insertImageFile(localPath)
-              : await _dbHelper.insertAudioFile(localPath);
-          print('DEBUG 6: Media ID from database: $mediaId');
+          // Scroll to bottom if we're already near the bottom
+          if (_scrollController.hasClients) {
+            final isNearBottom = _scrollController.position.pixels >=
+                _scrollController.position.maxScrollExtent - 100;
+            if (isNearBottom) {
+              _scrollToBottom();
+            }
+          }
+
+          // Mark message as read
+          _dbHelper.updateMessageStatus(
+            messageData['id'].toString(),
+            'read'
+          );
+          
+          print('DEBUG: Message added to UI successfully');
+        } else {
+          print('DEBUG: Message already exists in UI');
         }
-
-        // Store message in database
-        print('DEBUG 7: Storing message in database');
-        final dbMessage = {
-          'id': messageData['id']?.toString() ?? message['temp_id'],
-          'group_id': widget.groupId,
-          'sender_id': messageData['sender_id'],
-          'message': localPath ??
-              messageData['content'] ??
-              messageData['message'] ??
-              '',
-          'type': messageData['attachment_type'] ?? 'text',
-          'timestamp': messageData['timestamp'],
-          'status': messageData['status'] ?? 'received',
-          'isMe': 0,
-          'attachment_url': messageData['attachment_url'],
-          'attachment_type': messageData['attachment_type'],
-          'media_id': mediaId,
-          'local_path': localPath,
-        };
-
-        // Add reply information if available
-        if (message['reply_to_id'] != null) {
-          dbMessage['reply_to_id'] = message['reply_to_id'];
-          dbMessage['reply_to_message'] = message['reply_to_message'];
-          dbMessage['reply_to_type'] = message['reply_to_type'] ?? 'text';
-        }
-
-        await _dbHelper.insertMessage(dbMessage);
-        print('DEBUG 8: Message stored in database');
-
-        // Reload messages from database
-        print('DEBUG 9: Reloading messages');
-        await _loadMessages();
+      } else {
+        print('DEBUG: Message is not for current chat');
       }
     } catch (e) {
       print('ERROR in _handleNewMessage: $e');
       print('ERROR stack trace: ${StackTrace.current}');
     }
+  }
+
+  void _startDbPolling() {
+    // Poll database every 1 second for new messages
+    _dbPollingTimer = Timer.periodic(const Duration(seconds: 1), (timer) async {
+      if (!mounted) return;
+      
+      try {
+        final db = await _dbHelper.database;
+        final newMessages = await db.query(
+          'messages',
+          where: 'group_id = ? AND timestamp > ?',
+          whereArgs: [_lastMessageTimestamp ?? '', _lastMessageTimestamp ?? ''],
+          orderBy: 'timestamp DESC',
+        );
+
+        if (newMessages.isNotEmpty) {
+          // Update last message timestamp
+          _lastMessageTimestamp = newMessages.first['timestamp'] as String?;
+
+          // Process new messages
+          for (final message in newMessages) {
+            // Check if message already exists in UI
+            final messageExists = _messages.any((m) => 
+              m['id'].toString() == message['id'].toString() ||
+              m['temp_id']?.toString() == message['id'].toString()
+            );
+
+            if (!messageExists) {
+              setState(() {
+                _messages.insert(0, message);
+                _groupedMessages = MessageSort.groupMessagesByDate(_messages);
+              });
+
+              // Mark message as read if it's not from current user
+              if (message['isMe'] == 0) {
+                _dbHelper.updateMessageStatus(
+                  message['id'].toString(),
+                  'read'
+                );
+              }
+
+              // Scroll to bottom if near bottom
+              if (_scrollController.hasClients) {
+                final isNearBottom = _scrollController.position.pixels >=
+                    _scrollController.position.maxScrollExtent - 100;
+                if (isNearBottom) {
+                  _scrollToBottom();
+                }
+              }
+            }
+          }
+        }
+      } catch (e) {
+        print('Error polling database: $e');
+      }
+    });
   }
 
   @override
@@ -1240,12 +1247,13 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
               _onScroll();
               return true;
             },
-            child: ListView.builder(
+            child: AnimatedList(
+              key: _listKey,
               controller: _scrollController,
               reverse: true,
               padding: const EdgeInsets.only(top: 16, bottom: 80),
-              itemCount: _groupedMessages.length + 1,
-              itemBuilder: (context, index) {
+              initialItemCount: _groupedMessages.length + 1,
+              itemBuilder: (context, index, animation) {
                 if (index == _groupedMessages.length) {
                   return _isLoading
                       ? const Padding(
@@ -1258,82 +1266,93 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
                 final dateKey = _groupedMessages.keys.elementAt(index);
                 final messagesForDate = _groupedMessages[dateKey]!;
 
-                return Column(
-                  children: [
-                    Center(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
-                        margin: const EdgeInsets.symmetric(vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.grey[800]!.withOpacity(0.8),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Text(
-                          dateKey,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
+                return SlideTransition(
+                  position: animation.drive(
+                    Tween<Offset>(
+                      begin: const Offset(0, 0.1),
+                      end: Offset.zero,
+                    ).chain(CurveTween(curve: Curves.easeOut)),
+                  ),
+                  child: FadeTransition(
+                    opacity: animation,
+                    child: Column(
+                      children: [
+                        Center(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 6),
+                            margin: const EdgeInsets.symmetric(vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.grey[800]!.withOpacity(0.8),
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Text(
+                              dateKey,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
                           ),
                         ),
-                      ),
+                        ...messagesForDate.map((message) {
+                          final bool isSameSender = messagesForDate
+                                      .indexOf(message) >
+                                  0 &&
+                              messagesForDate[messagesForDate.indexOf(message) - 1]
+                                      ["isMe"] ==
+                                  message["isMe"] &&
+                              messagesForDate[messagesForDate.indexOf(message) - 1]
+                                      ["type"] !=
+                                  "notification";
+                          return GestureDetector(
+                            onHorizontalDragEnd: (details) {
+                              if (details.primaryVelocity! > 0 &&
+                                  message["type"] != "notification") {
+                                _setReplyMessage(message);
+                              }
+                            },
+                            child: MessageChat(
+                              senderAvatar: '', // Update with actual avatar logic
+                              senderName:
+                                  'wasswa', // Update with actual sender name
+                              isMe: message["isMe"] == 1,
+                              message: message["message"],
+                              time: message["timestamp"],
+                              isSameSender: isSameSender,
+                              replyToId: message["reply_to_id"]?.toString(),
+                              replyTo: message["reply_to_message"],
+                              isAudio: message["type"] == "audio",
+                              isImage: message["type"] == "image",
+                              isNotification: message["type"] == "notification",
+                              onPlayAudio: _playAudio,
+                              isPlaying:
+                                  _isPlayingMap[message["id"].toString()] ?? false,
+                              audioDuration:
+                                  _audioDurationMap[message["id"].toString()] ??
+                                      Duration.zero,
+                              audioPosition:
+                                  _audioPositionMap[message["id"].toString()] ??
+                                      Duration.zero,
+                              messageId: message["id"].toString(),
+                              onReply: (messageId, messageText) {
+                                _setReplyMessage({
+                                  'id': messageId,
+                                  'message': messageText,
+                                  'sender_id': message["sender_id"],
+                                });
+                              },
+                              onReplyTap: _scrollToMessage,
+                              messageStatus: message["status"] ?? "sent",
+                              messageContent: _buildMessageContent(message),
+                              isHighlighted: message["isHighlighted"] ?? false,
+                            ),
+                          );
+                        }).toList(),
+                      ],
                     ),
-                    ...messagesForDate.map((message) {
-                      final bool isSameSender = messagesForDate
-                                  .indexOf(message) >
-                              0 &&
-                          messagesForDate[messagesForDate.indexOf(message) - 1]
-                                  ["isMe"] ==
-                              message["isMe"] &&
-                          messagesForDate[messagesForDate.indexOf(message) - 1]
-                                  ["type"] !=
-                              "notification";
-                      return GestureDetector(
-                        onHorizontalDragEnd: (details) {
-                          if (details.primaryVelocity! > 0 &&
-                              message["type"] != "notification") {
-                            _setReplyMessage(message);
-                          }
-                        },
-                        child: MessageChat(
-                          senderAvatar: '', // Update with actual avatar logic
-                          senderName:
-                              'wasswa', // Update with actual sender name
-                          isMe: message["isMe"] == 1,
-                          message: message["message"],
-                          time: message["timestamp"],
-                          isSameSender: isSameSender,
-                          replyToId: message["reply_to_id"]?.toString(),
-                          replyTo: message["reply_to_message"],
-                          isAudio: message["type"] == "audio",
-                          isImage: message["type"] == "image",
-                          isNotification: message["type"] == "notification",
-                          onPlayAudio: _playAudio,
-                          isPlaying:
-                              _isPlayingMap[message["id"].toString()] ?? false,
-                          audioDuration:
-                              _audioDurationMap[message["id"].toString()] ??
-                                  Duration.zero,
-                          audioPosition:
-                              _audioPositionMap[message["id"].toString()] ??
-                                  Duration.zero,
-                          messageId: message["id"].toString(),
-                          onReply: (messageId, messageText) {
-                            _setReplyMessage({
-                              'id': messageId,
-                              'message': messageText,
-                              'sender_id': message["sender_id"],
-                            });
-                          },
-                          onReplyTap: _scrollToMessage,
-                          messageStatus: message["status"] ?? "sent",
-                          messageContent: _buildMessageContent(message),
-                          isHighlighted: message["isHighlighted"] ?? false,
-                        ),
-                      );
-                    }).toList(),
-                  ],
+                  ),
                 );
               },
             ),
