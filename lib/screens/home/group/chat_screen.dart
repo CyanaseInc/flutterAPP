@@ -439,12 +439,15 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
   }
 
   void _initializeWebSocket() {
+    print('DEBUG: Initializing WebSocket connection');
+    
+    // Set up message handler
     _wsService.onMessageReceived = (data) {
       print('DEBUG: Received WebSocket message: $data');
       
       if (data['type'] == 'initial_messages') {
         _handleInitialMessages(data['messages']);
-      } else if (data['type'] == 'message') {
+      } else if (data['type'] == 'message' || data['type'] == 'new_message') {
         print('DEBUG: Handling new message from WebSocket');
         _handleNewMessage(data);
       } else if (data['type'] == 'update_message_status') {
@@ -597,18 +600,16 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
   }
 
   Future<void> _sendMessage() async {
-    print('FUNCTION CALLED: _sendMessage');
-    print('DEBUG 1: Starting _sendMessage......Oh yeah');
  
     
     if (_controller.text.trim().isEmpty || _currentUserId == null) {
-      print('DEBUG 2: Message empty or no user ID, returning');
+      
       return;
     }
 
     try {
       final tempId = DateTime.now().millisecondsSinceEpoch.toString();
-      print('DEBUG 3: Generated temp_id: $tempId');
+      
 
       // Create the WebSocket message with the exact structure the server expects
       final Map<String, dynamic> wsMessage = {
@@ -632,7 +633,7 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
 
       // Add reply information if available
       if (_replyingToMessage != null) {
-        print('DEBUG 5: Adding reply information');
+       
         wsMessage['reply_to_id'] = _replyingToMessage!['id'];
         wsMessage['reply_to_message'] = _replyingToMessage!['message'];
         wsMessage['reply_to_type'] = _replyingToMessage!['type'] ?? 'text';
@@ -658,7 +659,7 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
 
       // Add reply information to database message
       if (_replyingToMessage != null) {
-        print('DEBUG 7: Adding reply information to database message');
+       
         dbMessage['reply_to_id'] = _replyingToMessage!['id'];
         dbMessage['reply_to_message'] = _replyingToMessage!['message'];
         dbMessage['reply_to_type'] = _replyingToMessage!['type'] ?? 'text';
@@ -675,7 +676,7 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
     
       try {
         await _wsService.sendMessage(wsMessage);
-        print('DEBUG 12.3: WebSocket message sent, waiting for acknowledgment');
+      
       } catch (e) {
         print('ERROR in WebSocket send: $e');
         print('ERROR stack trace: ${StackTrace.current}');
@@ -697,7 +698,7 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
       _controller.clear();
       _scrollToBottomIfAtBottom();
       widget.onMessageSent?.call();
-      print('DEBUG 14: Message sending process completed successfully');
+      
     } catch (e) {
       print('ERROR in WebSocket send: $e');
       print('ERROR stack trace: ${StackTrace.current}');
@@ -718,52 +719,35 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
 
   Future<void> _sendImageMessage(String imagePath) async {
     try {
-      print('DEBUG 1: Starting _sendImageMessage with path: $imagePath');
-      print('DEBUG 1.1: widget.groupId = ${widget.groupId}');
+     
 
-      if (_currentUserId == null) {
-        print('DEBUG 2: _currentUserId is null, aborting');
-        return;
-      }
 
-      if (widget.groupId == null) {
-        print('DEBUG 2.1: widget.groupId is null, aborting');
-        return;
-      }
+     
 
       final tempId = DateTime.now().millisecondsSinceEpoch.toString();
       final fileName = 'image_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      print('DEBUG 3: Generated tempId: $tempId and fileName: $fileName');
+     
 
       // Create a copy in the app's documents directory
-      print('DEBUG 4: Setting up local storage');
+     
       final appDir = await getApplicationDocumentsDirectory();
       final mediaDir = Directory('${appDir.path}/media');
       if (!await mediaDir.exists()) {
-        print('DEBUG 5: Creating media directory');
+       
         await mediaDir.create(recursive: true);
       }
 
       final localPath = '${mediaDir.path}/$fileName';
-      print('DEBUG 6: Copying file to local path: $localPath');
+     
       await File(imagePath).copy(localPath);
-      print('DEBUG 7: File copied successfully to local storage');
 
-      // Read file as base64
-      print('DEBUG 8: Reading file as base64');
       final bytes = await File(imagePath).readAsBytes();
       final base64Image = base64Encode(bytes);
-      print('DEBUG 9: File converted to base64');
 
       // Insert into media table
-      print('DEBUG 10: Inserting into media table');
       final mediaId = await _dbHelper.insertImageFile(localPath);
-      print('DEBUG 11: Media ID from database: $mediaId');
 
-      // Store message in database
-      print('DEBUG 12: Storing message in database');
       final groupId = widget.groupId!;
-      print('DEBUG 12.1: Using groupId: $groupId');
 
       // Create message object
       final message = {
@@ -784,7 +768,6 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
 
       // Store in database
       await _dbHelper.insertMessage(message);
-      print('DEBUG 13: Message stored in database');
 
       // Update UI immediately
       setState(() {
@@ -792,10 +775,8 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
         _messages = MessageSort.sortMessagesByDate(_messages);
         _groupedMessages = MessageSort.groupMessagesByDate(_messages);
       });
-      print('DEBUG 13.1: UI updated with new message');
 
-      // Send through WebSocket
-      print('DEBUG 14: Sending message through WebSocket');
+    
       final wsMessage = {
         'type': 'send_message',
         'content': localPath, // Send local path as content
@@ -810,17 +791,14 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
         'timestamp': DateTime.now().toIso8601String(),
         'status': 'sending'
       };
-      print(
-          'DEBUG 14.1: WebSocket message prepared with group_id: ${wsMessage['group_id']}');
-      print(
-          'DEBUG 14.2: WebSocket message has file_data: ${wsMessage['file_data'] != null}');
+     
       await _wsService.sendMessage(wsMessage);
-      print('DEBUG 15: WebSocket message sent');
+
 
       _replyingToMessage = null;
       _scrollToBottomIfAtBottom();
       widget.onMessageSent?.call();
-      print('DEBUG 17: Image message process completed successfully');
+  
     } catch (e) {
       print('ERROR in _sendImageMessage: $e');
       print('ERROR stack trace: ${StackTrace.current}');
@@ -832,51 +810,48 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
 
   Future<void> _sendAudioMessage(String path) async {
     try {
-      print('DEBUG 1: Starting _sendAudioMessage with path: $path');
+      
 
       if (_currentUserId == null) {
-        print('DEBUG 2: _currentUserId is null, aborting');
+
         return;
       }
 
-      if (widget.groupId == null) {
-        print('DEBUG 2.1: widget.groupId is null, aborting');
-        return;
-      }
+      
 
       final tempId = DateTime.now().millisecondsSinceEpoch.toString();
       final fileName = 'audio_${DateTime.now().millisecondsSinceEpoch}.m4a';
-      print('DEBUG 3: Generated tempId: $tempId and fileName: $fileName');
+      
 
       // Create a copy in the app's documents directory
-      print('DEBUG 4: Setting up local storage');
+     
       final appDir = await getApplicationDocumentsDirectory();
       final mediaDir = Directory('${appDir.path}/media');
       if (!await mediaDir.exists()) {
-        print('DEBUG 5: Creating media directory');
+   
         await mediaDir.create(recursive: true);
       }
 
       final localPath = '${mediaDir.path}/$fileName';
-      print('DEBUG 6: Copying file to local path: $localPath');
+     
       await File(path).copy(localPath);
-      print('DEBUG 7: File copied successfully to local storage');
+     ;
 
       // Read file as base64
-      print('DEBUG 8: Reading file as base64');
+    
       final bytes = await File(path).readAsBytes();
       final base64Audio = base64Encode(bytes);
-      print('DEBUG 9: File converted to base64');
+   
 
       // Insert into media table
-      print('DEBUG 10: Inserting into media table');
+
       final mediaId = await _dbHelper.insertAudioFile(localPath);
-      print('DEBUG 11: Media ID from database: $mediaId');
+    
 
       // Store message in database
-      print('DEBUG 12: Storing message in database');
+   
       final groupId = widget.groupId!;
-      print('DEBUG 12.1: Using groupId: $groupId');
+    
 
       // Create message object
       final message = {
@@ -897,7 +872,7 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
 
       // Store in database
       await _dbHelper.insertMessage(message);
-      print('DEBUG 13: Message stored in database');
+   
 
       // Update UI immediately
       setState(() {
@@ -905,10 +880,7 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
         _messages = MessageSort.sortMessagesByDate(_messages);
         _groupedMessages = MessageSort.groupMessagesByDate(_messages);
       });
-      print('DEBUG 13.1: UI updated with new message');
 
-      // Send through WebSocket
-      print('DEBUG 14: Sending message through WebSocket');
       final wsMessage = {
         'type': 'send_message',
         'content': 'Audio message',
@@ -923,20 +895,14 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
         'timestamp': DateTime.now().toIso8601String(),
         'status': 'sending'
       };
-      print(
-          'DEBUG 14.1: WebSocket message prepared with group_id: ${wsMessage['group_id']}');
-      print(
-          'DEBUG 14.2: WebSocket message has file_data: ${wsMessage['file_data'] != null}');
+     
       await _wsService.sendMessage(wsMessage);
-      print('DEBUG 15: WebSocket message sent');
 
-      // Reload messages from database
-      print('DEBUG 16: Reloading messages');
       await _loadMessages();
       _replyingToMessage = null;
       _scrollToBottomIfAtBottom();
       widget.onMessageSent?.call();
-      print('DEBUG 17: Audio message process completed successfully');
+     
     } catch (e) {
       print('ERROR in _sendAudioMessage: $e');
       print('ERROR stack trace: ${StackTrace.current}');
@@ -1077,14 +1043,14 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
   void _handleNewMessage(Map<String, dynamic> message) {
     try {
       print('DEBUG: Starting _handleNewMessage');
-      
+
       // Extract message data
       final messageData = message['message'] ?? message;
-      print('DEBUG: Message data: $messageData');
+     
       
       // Check if we're in the current chat
       if (messageData['room_id']?.toString() == widget.groupId.toString()) {
-        print('DEBUG: Message is for current chat');
+        
         
         // Check if message already exists in the UI
         final messageExists = _messages.any((m) => 
@@ -1096,25 +1062,25 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
           print('DEBUG: Adding new message to UI');
           
           // Create message object for UI
-          final dbMessage = {
-            'id': messageData['id']?.toString() ?? message['temp_id'],
-            'group_id': widget.groupId,
-            'sender_id': messageData['sender_id'],
+        final dbMessage = {
+          'id': messageData['id']?.toString() ?? message['temp_id'],
+          'group_id': widget.groupId,
+          'sender_id': messageData['sender_id'],
             'message': messageData['content'] ?? messageData['message'] ?? '',
-            'type': messageData['attachment_type'] ?? 'text',
-            'timestamp': messageData['timestamp'],
-            'status': messageData['status'] ?? 'received',
-            'isMe': 0,
-            'attachment_url': messageData['attachment_url'],
-            'attachment_type': messageData['attachment_type'],
-          };
+          'type': messageData['attachment_type'] ?? 'text',
+          'timestamp': messageData['timestamp'],
+          'status': messageData['status'] ?? 'received',
+          'isMe': 0,
+          'attachment_url': messageData['attachment_url'],
+          'attachment_type': messageData['attachment_type'],
+        };
 
-          // Add reply information if available
-          if (message['reply_to_id'] != null) {
-            dbMessage['reply_to_id'] = message['reply_to_id'];
-            dbMessage['reply_to_message'] = message['reply_to_message'];
-            dbMessage['reply_to_type'] = message['reply_to_type'] ?? 'text';
-          }
+        // Add reply information if available
+        if (message['reply_to_id'] != null) {
+          dbMessage['reply_to_id'] = message['reply_to_id'];
+          dbMessage['reply_to_message'] = message['reply_to_message'];
+          dbMessage['reply_to_type'] = message['reply_to_type'] ?? 'text';
+        }
 
           // Update UI immediately with the new message
           setState(() {
@@ -1151,60 +1117,9 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
   }
 
   void _startDbPolling() {
-    // Poll database every 1 second for new messages
-    _dbPollingTimer = Timer.periodic(const Duration(seconds: 1), (timer) async {
-      if (!mounted) return;
-      
-      try {
-        final db = await _dbHelper.database;
-        final newMessages = await db.query(
-          'messages',
-          where: 'group_id = ? AND timestamp > ?',
-          whereArgs: [_lastMessageTimestamp ?? '', _lastMessageTimestamp ?? ''],
-          orderBy: 'timestamp DESC',
-        );
-
-        if (newMessages.isNotEmpty) {
-          // Update last message timestamp
-          _lastMessageTimestamp = newMessages.first['timestamp'] as String?;
-
-          // Process new messages
-          for (final message in newMessages) {
-            // Check if message already exists in UI
-            final messageExists = _messages.any((m) => 
-              m['id'].toString() == message['id'].toString() ||
-              m['temp_id']?.toString() == message['id'].toString()
-            );
-
-            if (!messageExists) {
-              setState(() {
-                _messages.insert(0, message);
-                _groupedMessages = MessageSort.groupMessagesByDate(_messages);
-              });
-
-              // Mark message as read if it's not from current user
-              if (message['isMe'] == 0) {
-                _dbHelper.updateMessageStatus(
-                  message['id'].toString(),
-                  'read'
-                );
-              }
-
-              // Scroll to bottom if near bottom
-              if (_scrollController.hasClients) {
-                final isNearBottom = _scrollController.position.pixels >=
-                    _scrollController.position.maxScrollExtent - 100;
-                if (isNearBottom) {
-                  _scrollToBottom();
-                }
-              }
-            }
-          }
-        }
-      } catch (e) {
-        print('Error polling database: $e');
-      }
-    });
+    // We don't need polling anymore since we're using WebSocket
+    _dbPollingTimer?.cancel();
+    _dbPollingTimer = null;
   }
 
   @override
@@ -1276,81 +1191,81 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
                   child: FadeTransition(
                     opacity: animation,
                     child: Column(
-                      children: [
-                        Center(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 6),
-                            margin: const EdgeInsets.symmetric(vertical: 8),
-                            decoration: BoxDecoration(
-                              color: Colors.grey[800]!.withOpacity(0.8),
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: Text(
-                              dateKey,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
+                  children: [
+                    Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        margin: const EdgeInsets.symmetric(vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[800]!.withOpacity(0.8),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Text(
+                          dateKey,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
-                        ...messagesForDate.map((message) {
-                          final bool isSameSender = messagesForDate
-                                      .indexOf(message) >
-                                  0 &&
-                              messagesForDate[messagesForDate.indexOf(message) - 1]
-                                      ["isMe"] ==
-                                  message["isMe"] &&
-                              messagesForDate[messagesForDate.indexOf(message) - 1]
-                                      ["type"] !=
-                                  "notification";
-                          return GestureDetector(
-                            onHorizontalDragEnd: (details) {
-                              if (details.primaryVelocity! > 0 &&
-                                  message["type"] != "notification") {
-                                _setReplyMessage(message);
-                              }
-                            },
-                            child: MessageChat(
-                              senderAvatar: '', // Update with actual avatar logic
-                              senderName:
-                                  'wasswa', // Update with actual sender name
-                              isMe: message["isMe"] == 1,
-                              message: message["message"],
-                              time: message["timestamp"],
-                              isSameSender: isSameSender,
-                              replyToId: message["reply_to_id"]?.toString(),
-                              replyTo: message["reply_to_message"],
-                              isAudio: message["type"] == "audio",
-                              isImage: message["type"] == "image",
-                              isNotification: message["type"] == "notification",
-                              onPlayAudio: _playAudio,
-                              isPlaying:
-                                  _isPlayingMap[message["id"].toString()] ?? false,
-                              audioDuration:
-                                  _audioDurationMap[message["id"].toString()] ??
-                                      Duration.zero,
-                              audioPosition:
-                                  _audioPositionMap[message["id"].toString()] ??
-                                      Duration.zero,
-                              messageId: message["id"].toString(),
-                              onReply: (messageId, messageText) {
-                                _setReplyMessage({
-                                  'id': messageId,
-                                  'message': messageText,
-                                  'sender_id': message["sender_id"],
-                                });
-                              },
-                              onReplyTap: _scrollToMessage,
-                              messageStatus: message["status"] ?? "sent",
-                              messageContent: _buildMessageContent(message),
-                              isHighlighted: message["isHighlighted"] ?? false,
-                            ),
-                          );
-                        }).toList(),
-                      ],
+                      ),
+                    ),
+                    ...messagesForDate.map((message) {
+                      final bool isSameSender = messagesForDate
+                                  .indexOf(message) >
+                              0 &&
+                          messagesForDate[messagesForDate.indexOf(message) - 1]
+                                  ["isMe"] ==
+                              message["isMe"] &&
+                          messagesForDate[messagesForDate.indexOf(message) - 1]
+                                  ["type"] !=
+                              "notification";
+                      return GestureDetector(
+                        onHorizontalDragEnd: (details) {
+                          if (details.primaryVelocity! > 0 &&
+                              message["type"] != "notification") {
+                            _setReplyMessage(message);
+                          }
+                        },
+                        child: MessageChat(
+                          senderAvatar: '', // Update with actual avatar logic
+                          senderName:
+                              'wasswa', // Update with actual sender name
+                          isMe: message["isMe"] == 1,
+                          message: message["message"],
+                          time: message["timestamp"],
+                          isSameSender: isSameSender,
+                          replyToId: message["reply_to_id"]?.toString(),
+                          replyTo: message["reply_to_message"],
+                          isAudio: message["type"] == "audio",
+                          isImage: message["type"] == "image",
+                          isNotification: message["type"] == "notification",
+                          onPlayAudio: _playAudio,
+                          isPlaying:
+                              _isPlayingMap[message["id"].toString()] ?? false,
+                          audioDuration:
+                              _audioDurationMap[message["id"].toString()] ??
+                                  Duration.zero,
+                          audioPosition:
+                              _audioPositionMap[message["id"].toString()] ??
+                                  Duration.zero,
+                          messageId: message["id"].toString(),
+                          onReply: (messageId, messageText) {
+                            _setReplyMessage({
+                              'id': messageId,
+                              'message': messageText,
+                              'sender_id': message["sender_id"],
+                            });
+                          },
+                          onReplyTap: _scrollToMessage,
+                          messageStatus: message["status"] ?? "sent",
+                          messageContent: _buildMessageContent(message),
+                          isHighlighted: message["isHighlighted"] ?? false,
+                        ),
+                      );
+                    }).toList(),
+                  ],
                     ),
                   ),
                 );
@@ -1479,17 +1394,14 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
   }
 
   Widget _buildMessageContent(Map<String, dynamic> message) {
-    print('DEBUG 1: Building message content for type: ${message['type']}');
-    print('DEBUG 2: Message has media_id: ${message['media_id'] != null}');
-    print('DEBUG 3: Message has local_path: ${message['local_path'] != null}');
-    print('DEBUG 4: Message content: ${message['message']}');
+    
 
     if (message['type'] == 'image' || message['type'] == 'audio') {
       // If we have a local path, show the file
       if (message['local_path'] != null ||
           message['message']?.startsWith('/') == true) {
         final path = message['local_path'] ?? message['message'];
-        print('DEBUG 5: Showing local file from path: $path');
+        
 
         // Check if there's an upload in progress
         final uploadProgress = _uploadProgress[message['id'].toString()];
@@ -1524,8 +1436,7 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
                 onPlay: () => _playAudio(message['id'], path),
               );
       } else if (message['attachment_url'] != null) {
-        print(
-            'DEBUG 6: Showing download button for attachment_url: ${message['attachment_url']}');
+
 
         // Check if there's a download in progress
         final downloadProgress = _downloadProgress[message['id'].toString()];

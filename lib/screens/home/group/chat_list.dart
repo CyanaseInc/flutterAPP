@@ -43,7 +43,8 @@ class ChatListState extends State<ChatList>
   Timer? _pingTimer;
   bool _isConnecting = false;
   int _reconnectAttempts = 0;
-  static const int maxReconnectAttempts = 5;
+  static const int maxReconnectAttempts = 3;
+  Timer? _dbPollingTimer;
 
   @override
   void initState() {
@@ -56,12 +57,13 @@ class ChatListState extends State<ChatList>
     );
     _fadeAnimation =
         Tween<double>(begin: 0.0, end: 1.0).animate(_animationController!);
-    print('🔵 Initializing WebSocket connection...');
+ 
     
     // Initialize WebSocket and load chats
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _initializeWebSocket();
       await _loadChats(); // Load initial chats
+      _startDbPolling(); // Start polling for updates
     });
     
     _animationController!.forward();
@@ -76,6 +78,7 @@ class ChatListState extends State<ChatList>
     _animationController?.dispose();
     _refreshController.close();
     _searchController.dispose();
+    _dbPollingTimer?.cancel();
     super.dispose();
   }
 
@@ -85,7 +88,7 @@ class ChatListState extends State<ChatList>
 
   Future<void> _initializeWebSocket() async {
     if (_isConnecting) {
-      print('🔵 Already attempting to connect...');
+      
       return;
     }
 
@@ -133,7 +136,7 @@ class ChatListState extends State<ChatList>
                
                 final chatList = List<Map<String, dynamic>>.from(
                     response['chat_list'] ?? []);
-                print('🔵 Number of chats received: ${chatList.length}');
+               
 
                 if (chatList.isEmpty) {
                   print('🔵 No chat list data received');
@@ -141,45 +144,45 @@ class ChatListState extends State<ChatList>
                 }
 
                 // Process the chat list data
-                print('🔵 Starting to process group data');
+                
                 await processGroupData({'success': true, 'data': chatList});
-                print('🔵 Finished processing group data');
+               
               } else if (response['type'] == 'new_message') {
                 print('🔵 Processing new_message');
                 final message = response['message'];
                 print('🔵 New message data: $message');
                 
                 if (message != null) {
-                  print('🔵 Message details:');
-                  print('  - Group ID: ${message['room_id']}');
-                  print('  - Sender ID: ${message['sender_id']}');
-                  print('  - Content: ${message['content']}');
-                  print('  - Timestamp: ${message['timestamp']}');
-                  print('  - Message Type: ${message['message_type']}');
-                  
                   // Validate required fields
                   if (message['room_id'] == null) {
                     print('🔴 Error: group_id is null in message');
                     return;
                   }
 
-                  print('🔵 Inserting new message into database');
-                  // Update local database with new message
-                  await _dbHelper.insertMessage({
-                    'group_id': message['room_id'].toString(), // Ensure it's a string
-                    'sender_id': message['sender_id']?.toString() ?? _userId,
-                    'message': message['content'] ?? '',
-                    'timestamp': message['timestamp'] ?? DateTime.now().toIso8601String(),
-                    'type': message['message_type'] ?? 'text',
-                    'isMe': 0,
-                    'status': 'unread', // Add required status field
-                  });
-                  print('🔵 Message inserted successfully');
-                  
-                  // Immediately reload chats to update UI
-                  print('🔵 Reloading chats to update UI');
-                  await _loadChats();
-                  print('🔵 Chats reloaded');
+                  // Check if message already exists
+                  final db = await _dbHelper.database;
+                  final existingMessage = await db.query(
+                    'messages',
+                    where: 'id = ? OR temp_id = ?',
+                    whereArgs: [message['id']?.toString() ?? '', message['temp_id']?.toString() ?? ''],
+                  );
+
+                  if (existingMessage.isEmpty) {
+                    print('🔵 Inserting new message into database');
+                    // Update local database with new message
+                    await _dbHelper.insertMessage({
+                      'group_id': message['room_id'].toString(),
+                      'sender_id': message['sender_id']?.toString() ?? _userId,
+                      'message': message['content'] ?? '',
+                      'timestamp': message['timestamp'] ?? DateTime.now().toIso8601String(),
+                      'type': message['message_type'] ?? 'text',
+                      'isMe': 0,
+                      'status': 'unread',
+                    });
+                    print('🔵 Message inserted successfully');
+                  } else {
+                    print('🔵 Message already exists, skipping insert');
+                  }
                 } else {
                   print('🔴 Error: Message data is null');
                 }
@@ -197,7 +200,7 @@ class ChatListState extends State<ChatList>
             print('🔴 Stack trace: $stackTrace');
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Connection error: $error')),
+                SnackBar(content: Text('Check your internet connection')),
               );
             }
             _attemptReconnect();
@@ -248,7 +251,7 @@ class ChatListState extends State<ChatList>
     final delay = Duration(seconds: min(30, pow(2, _reconnectAttempts).toInt()));
     Future.delayed(delay, () {
       if (mounted && !_isConnecting) {
-        print('🔵 Initiating reconnection after ${delay.inSeconds} seconds...');
+       
         _initializeWebSocket();
       }
     });
@@ -808,6 +811,16 @@ class ChatListState extends State<ChatList>
       print('🔴 Error marking messages as read: $e');
       print('🔴 Stack trace: $stackTrace');
     }
+  }
+
+  void _startDbPolling() {
+    // Poll database every second for updates
+    _dbPollingTimer?.cancel();
+    _dbPollingTimer = Timer.periodic(const Duration(seconds: 1), (timer) async {
+      if (mounted) {
+        await _loadChats();
+      }
+    });
   }
 }
 

@@ -290,8 +290,8 @@ class ChatWebSocketService {
       final db = await _dbHelper.database;
       final existingMessage = await db.query(
         'messages',
-        where: 'id = ?',
-        whereArgs: [messageData['id'].toString()],
+        where: 'id = ? OR temp_id = ?',
+        whereArgs: [messageData['id'].toString(), messageData['temp_id']?.toString() ?? ''],
       );
 
       // Only save if message doesn't exist
@@ -316,14 +316,10 @@ class ChatWebSocketService {
           'reply_to_type': messageData['reply_to_type']
         });
 
-        // Notify UI of new message immediately
-        onMessageReceived?.call({
-          'type': 'message',
-          'message': messageData
-        });
-
         // Send delivered status
         await sendDeliveredStatus(messageData['id'].toString());
+      } else {
+        print('Message already exists in database, skipping save');
       }
     } catch (e) {
       print('Error handling received message: $e');

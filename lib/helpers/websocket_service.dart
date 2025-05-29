@@ -58,8 +58,7 @@ class WebSocketService {
       final wsUrl =
           '$protocol://${ApiEndpoints.myIp}/ws/chat/$groupId/?token=$_token';
 
-      print('DEBUG [WebSocket] Attempting to connect to: $wsUrl');
-     
+      
       try {
         _webSocket = await WebSocket.connect(
           wsUrl,
@@ -69,7 +68,7 @@ class WebSocketService {
             'Sec-WebSocket-Version': '13',
           },
         );
-        print('DEBUG [WebSocket] Connection established successfully');
+       
         _isConnected = true;
         onConnectionStatusChanged?.call(true);
         _listenToMessages();
