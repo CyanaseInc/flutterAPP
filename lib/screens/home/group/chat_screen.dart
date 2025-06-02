@@ -297,19 +297,17 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
 
     setState(() {
       _messages = messages.map((message) {
-        // Convert isMe to integer (0 or 1) for database storage
         final isMe = message['sender_id'].toString() == currentUserId;
         final sender = participants.firstWhere(
           (p) => p['name'] == message['sender_name'],
           orElse: () => {'name': 'Unknown', 'role': 'member'},
         );
         
-        // Only set status to unread if it's not already set to read
         final status = message['status'] ?? (isMe ? 'sent' : 'unread');
         
         return {
           ...message,
-          'isMe': isMe ? 1 : 0,  // Store as integer
+          'isMe': isMe ? 1 : 0,
           'status': status,
           'message': message['media_path'] ?? message['message'] ?? message['content'] ?? '',
           'type': message['type'] ?? message['message_type'] ?? 'text',
@@ -1006,7 +1004,7 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
         'content': "image_message", // Send local path as content
         'sender_id': _currentUserId,
         'group_id': groupId,
-        'conversation_id': groupId.toString(),
+        'room_id': groupId.toString(),
         'message_type': 'image',
         'temp_id': tempId,
         'file_data': base64Image,
@@ -1109,7 +1107,7 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
         'content': 'Audio message',
         'sender_id': _currentUserId,
         'group_id': groupId,
-        'conversation_id': groupId.toString(),
+        'room_id': groupId.toString(),
         'message_type': 'audio',
         'temp_id': tempId,
         'file_data': base64Audio,
@@ -1213,7 +1211,7 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
     });
   }
 
-void _handleNewMessage(Map<String, dynamic> data) {
+void _handleNewMessage(Map<String, dynamic> data) async {
   if (!mounted) {
     print('🔴 [ChatScreen] Widget not mounted, ignoring message');
     return;
@@ -1256,15 +1254,57 @@ void _handleNewMessage(Map<String, dynamic> data) {
     'sender_role': messageData['sender_role'] ?? 'member',
   };
 
-  print('🔵 [DEBUG] Inserting new message: $newMessage');
+  print('🔵 [DEBUG] Checking for existing message: ${newMessage['id']}');
 
-  // Insert message into database (stream will handle UI update)
-  _dbHelper.insertMessage(newMessage).catchError((e) {
-    print('🔴 [ChatScreen] Error inserting message to database: $e');
+  try {
+    // Check if message already exists in database
+    final db = await _dbHelper.database;
+    final existingMessage = await db.query(
+      'messages',
+      where: 'id = ? OR temp_id = ?',
+      whereArgs: [newMessage['id'].toString(), newMessage['temp_id']?.toString() ?? ''],
+    );
+
+    if (existingMessage.isEmpty) {
+      print('🔵 [DEBUG] Message is new, inserting into database');
+      
+      // Insert message into database
+      await _dbHelper.insertMessage(newMessage);
+      
+      if (!mounted) return;
+      
+      setState(() {
+        // Add new message to the list
+        _messages.add(newMessage);
+        // Sort messages by date
+        _messages = MessageSort.sortMessagesByDate(_messages);
+        // Update grouped messages
+        _groupedMessages = MessageSort.groupMessagesByDate(_messages);
+        
+        // Update unread messages
+        if (newMessage['isMe'] == 0 && newMessage['status'] == 'unread') {
+          _unreadMessageIds.add(newMessage['id'].toString());
+          _hasUnreadMessages = true;
+          _showUnreadBadge = true;
+        }
+      });
+
+      // Auto-scroll if at bottom
+      if (_scrollController.hasClients &&
+          _scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 50) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _scrollToBottom();
+        });
+      }
+    } else {
+      print('🔵 [DEBUG] Message already exists in database, skipping insert');
+    }
+  } catch (e) {
+    print('🔴 [ChatScreen] Error handling new message: $e');
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Failed to save message: $e')),
     );
-  });
+  }
 }
 void _markVisibleMessagesAsRead() {
   if (!_scrollController.hasClients) return;
@@ -1390,7 +1430,6 @@ Future<void> _markMessageAsRead(String messageId) async {
           );
         },
         onBackPressed: () async {
-          // Mark messages as read before navigating back
           if (widget.groupId != null) {
             await _markMessagesAsRead(widget.groupId.toString());
           }
@@ -1412,125 +1451,112 @@ Future<void> _markMessageAsRead(String messageId) async {
               _onScroll();
               return true;
             },
-            child: AnimatedList(
-  key: _listKey,
-  controller: _scrollController,
-  reverse: true,
-  padding: const EdgeInsets.only(top: 16, bottom: 80),
-  initialItemCount: _messages.length + 1,
-  itemBuilder: (context, index, animation) {
-    if (index == _messages.length) {
-      return _isLoading
-          ? const Padding(
-              padding: EdgeInsets.all(8.0),
-              child: Center(child: Loader()),
-            )
-          : const SizedBox.shrink();
-    }
+            child: ListView.builder(
+              controller: _scrollController,
+              reverse: true,
+              padding: const EdgeInsets.only(top: 16, bottom: 80),
+              itemCount: _messages.length + 1,
+              itemBuilder: (context, index) {
+                if (index == _messages.length) {
+                  return _isLoading
+                      ? const Padding(
+                          padding: EdgeInsets.all(8.0),
+                          child: Center(child: Loader()),
+                        )
+                      : const SizedBox.shrink();
+                }
 
-    final message = _messages[index];
-    final messageDate = DateFormat('dd MMMM yyyy').format(DateTime.parse(message['timestamp']));
-    final isFirstUnread = _unreadMessageIds.contains(message['id']?.toString()) &&
-        _messages.indexWhere((m) => _unreadMessageIds.contains(m['id']?.toString())) == index;
-    final showDateHeader = index == _messages.length - 1 ||
-        DateFormat('dd MMMM yyyy').format(DateTime.parse(_messages[index + 1]['timestamp'])) != messageDate;
-    final isSameSender = index < _messages.length - 1 &&
-        _messages[index + 1]['isMe'] == message['isMe'] &&
-        _messages[index + 1]['type'] != 'notification';
+                final message = _messages[index];
+                final messageDate = DateFormat('dd MMMM yyyy').format(DateTime.parse(message['timestamp']));
+                final isFirstUnread = _unreadMessageIds.contains(message['id']?.toString()) &&
+                    _messages.indexWhere((m) => _unreadMessageIds.contains(m['id']?.toString())) == index;
+                final showDateHeader = index == _messages.length - 1 ||
+                    DateFormat('dd MMMM yyyy').format(DateTime.parse(_messages[index + 1]['timestamp'])) != messageDate;
+                final isSameSender = index < _messages.length - 1 &&
+                    _messages[index + 1]['isMe'] == message['isMe'] &&
+                    _messages[index + 1]['type'] != 'notification';
 
-    return SlideTransition(
-      position: animation.drive(
-        Tween<Offset>(
-          begin: const Offset(0, 0.1),
-          end: Offset.zero,
-        ).chain(CurveTween(curve: Curves.easeOut)),
-      ),
-      child: FadeTransition(
-        opacity: animation,
-        child: Column(
-          children: [
-            if (showDateHeader)
-              Center(
-                key: ValueKey('date_$messageDate'),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  margin: const EdgeInsets.symmetric(vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[800]!.withOpacity(0.8),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Text(
-                    messageDate,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ),
-            if (isFirstUnread && _hasUnreadMessages)
-              Container(
-                key: ValueKey('unread_divider_${_unreadMessageIds.length}'),
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Row(
+                return Column(
                   children: [
-                    Expanded(child: Divider(color: primaryTwo)),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: Text(
-                        'New Messages (${_unreadMessageIds.length})',
-                        style: TextStyle(color: primaryTwo, fontWeight: FontWeight.bold),
+                    if (showDateHeader)
+                      Center(
+                        key: ValueKey('date_$messageDate'),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          margin: const EdgeInsets.symmetric(vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[800]!.withOpacity(0.8),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Text(
+                            messageDate,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ),
+                    if (isFirstUnread && _hasUnreadMessages)
+                      Container(
+                        key: ValueKey('unread_divider_${_unreadMessageIds.length}'),
+                        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        child: Row(
+                          children: [
+                            Expanded(child: Divider(color: primaryTwo)),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              child: Text(
+                                'New Messages (${_unreadMessageIds.length})',
+                                style: TextStyle(color: primaryTwo, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                            Expanded(child: Divider(color: primaryTwo)),
+                          ],
+                        ),
+                      ),
+                    GestureDetector(
+                      key: ValueKey(message['id']?.toString() ?? message['timestamp']),
+                      onHorizontalDragEnd: (details) {
+                        if (details.primaryVelocity! > 0 && message['type'] != 'notification') {
+                          _setReplyMessage(message);
+                        }
+                      },
+                      child: MessageChat(
+                        senderAvatar: message['sender_avatar'] ?? '',
+                        senderName: message['sender_name'] ?? 'Unknown',
+                        senderRole: message['sender_role'] ?? 'member',
+                        isMe: message['isMe'] == 1,
+                        message: message['message'],
+                        time: message['timestamp'],
+                        isSameSender: isSameSender,
+                        replyToId: message['reply_to_id']?.toString(),
+                        replyTo: message['reply_to_message'],
+                        isAudio: message['type'] == 'audio',
+                        isImage: message['type'] == 'image',
+                        isNotification: message['type'] == 'notification',
+                        onPlayAudio: _playAudio,
+                        isPlaying: _isPlayingMap[message['id'].toString()] ?? false,
+                        audioDuration: _audioDurationMap[message['id'].toString()] ?? Duration.zero,
+                        audioPosition: _audioPositionMap[message['id'].toString()] ?? Duration.zero,
+                        messageId: message['id'].toString(),
+                        onReply: (messageId, messageText) {
+                          _setReplyMessage(message);
+                        },
+                        onReplyTap: (messageId) {
+                          _scrollToMessage(messageId);
+                        },
+                        messageStatus: message['status'] ?? 'sent',
+                        messageContent: _buildMessageContent(message),
+                        isHighlighted: message['isHighlighted'] ?? false,
+                        isUnread: message['isMe'] == 0 && message['status'] == 'unread',
                       ),
                     ),
-                    Expanded(child: Divider(color: primaryTwo)),
                   ],
-                ),
-              ),
-            GestureDetector(
-              key: ValueKey(message['id']?.toString() ?? message['timestamp']),
-              onHorizontalDragEnd: (details) {
-                if (details.primaryVelocity! > 0 && message['type'] != 'notification') {
-                  print('🔵 [ChatScreen] Setting reply from gesture: $message');
-                  _setReplyMessage(message);
-                }
+                );
               },
-              child: MessageChat(
-                senderAvatar: message['sender_avatar'] ?? '',
-                senderName: message['sender_name'] ?? 'Unknown',
-                senderRole: message['sender_role'] ?? 'member',
-                isMe: message['isMe'] == 1,
-                message: message['message'],
-                time: message['timestamp'],
-                isSameSender: isSameSender,
-                replyToId: message['reply_to_id']?.toString(),
-                replyTo: message['reply_to_message'],
-                isAudio: message['type'] == 'audio',
-                isImage: message['type'] == 'image',
-                isNotification: message['type'] == 'notification',
-                onPlayAudio: _playAudio,
-                isPlaying: _isPlayingMap[message['id'].toString()] ?? false,
-                audioDuration: _audioDurationMap[message['id'].toString()] ?? Duration.zero,
-                audioPosition: _audioPositionMap[message['id'].toString()] ?? Duration.zero,
-                messageId: message['id'].toString(),
-                onReply: (messageId, messageText) {
-                  _setReplyMessage(message);
-                },
-                onReplyTap: (messageId) {
-                  _scrollToMessage(messageId);
-                },
-                messageStatus: message['status'] ?? 'sent',
-                messageContent: _buildMessageContent(message),
-                isHighlighted: message['isHighlighted'] ?? false,
-                isUnread: message['isMe'] == 0 && message['status'] == 'unread',
-              ),
             ),
-          ],
-        ),
-      ),
-    );
-  },
-),
           ),
           Positioned(
             top: 8,

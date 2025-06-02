@@ -271,8 +271,8 @@ class DatabaseHelper {
       final result = await db.insert(
         'participants',
         participantData,
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
 
       print('🔵 [DatabaseHelper] Successfully inserted participant for group ${participant['group_id']}');
       return result;
@@ -499,8 +499,8 @@ class DatabaseHelper {
 
     try {
       final result = await db.rawQuery(query, args);
-     
-      return result;
+
+    return result;
     } catch (e) {
       print('🔴 [DatabaseHelper] Error fetching messages: $e');
       return [];
@@ -521,9 +521,9 @@ class DatabaseHelper {
     final db = await database;
     final result = await db.rawQuery('''
       SELECT user_name, role, profile_pic
-      FROM participants
+    FROM participants   
       WHERE group_id = ?
-    ''', [groupId]);
+  ''', [groupId]);
 
     return result
         .map((row) => {

@@ -5,49 +5,39 @@ class MessageSort {
   // Sort messages by date (newest to oldest)
   static List<Map<String, dynamic>> sortMessagesByDate(
       List<Map<String, dynamic>> messages) {
-    messages.sort((a, b) {
-      final DateTime aDate =
-          DateTime.tryParse(a["timestamp"] ?? "") ?? DateTime.now();
-      final DateTime bDate =
-          DateTime.tryParse(b["timestamp"] ?? "") ?? DateTime.now();
-      return bDate.compareTo(aDate); // Newest first
-    });
-    return messages;
+    return List<Map<String, dynamic>>.from(messages)
+      ..sort((a, b) {
+        final aTime = DateTime.parse(a['timestamp'] ?? '');
+        final bTime = DateTime.parse(b['timestamp'] ?? '');
+        return bTime.compareTo(aTime); // Sort in descending order (newest first)
+      });
   }
 
   // Group messages by date with WhatsApp-like date key
   static Map<String, List<Map<String, dynamic>>> groupMessagesByDate(
       List<Map<String, dynamic>> messages) {
-    final Map<String, List<Map<String, dynamic>>> groupedMessages = {};
-
-    for (final message in messages) {
-      final DateTime? messageDate = message["timestamp"] != null
-          ? DateTime.tryParse(message["timestamp"])
-          : null;
-
-      if (messageDate == null) {
-        print('Skipping message with invalid timestamp: $message');
-        continue;
+    final grouped = <String, List<Map<String, dynamic>>>{};
+    
+    for (var message in messages) {
+      final date = DateTime.parse(message['timestamp'] ?? '');
+      final dateKey = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+      
+      if (!grouped.containsKey(dateKey)) {
+        grouped[dateKey] = [];
       }
-
-      final String dateKey = _getDateKey(messageDate.toLocal());
-
-      if (!groupedMessages.containsKey(dateKey)) {
-        groupedMessages[dateKey] = [];
-      }
-      groupedMessages[dateKey]!.add(message);
+      grouped[dateKey]!.add(message);
     }
 
-    // Sort messages within each group (oldest to newest for chat screen display)
-    groupedMessages.forEach((key, messages) {
+    // Sort messages within each group
+    grouped.forEach((key, messages) {
       messages.sort((a, b) {
-        final DateTime aDate = DateTime.parse(a["timestamp"]);
-        final DateTime bDate = DateTime.parse(b["timestamp"]);
-        return aDate.compareTo(bDate); // Oldest first within group
+        final aTime = DateTime.parse(a['timestamp'] ?? '');
+        final bTime = DateTime.parse(b['timestamp'] ?? '');
+        return bTime.compareTo(aTime); // Sort in descending order (newest first)
       });
     });
 
-    return groupedMessages;
+    return grouped;
   }
 
   // Get a WhatsApp-like date key

@@ -119,7 +119,7 @@ class ChatWebSocketService {
       return;
     }
 
-    print('Processing message queue. Queue size: ${_messageQueue.length}');
+    
     final messagesToProcess = List<Map<String, dynamic>>.from(_messageQueue);
 
     for (final message in messagesToProcess) {
@@ -133,7 +133,7 @@ class ChatWebSocketService {
         }
 
         _messageQueue.remove(message);
-        print('Removed message ${message['id']} from queue');
+        
       } catch (e) {
         print('Error processing queued message: $e');
         if (message['id'] != null) {
