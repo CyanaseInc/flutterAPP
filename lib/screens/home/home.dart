@@ -16,6 +16,10 @@ import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:async';
+import 'package:cyanase/helpers/notification_service.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:cyanase/screens/home/group/chat_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final bool? passcode;
@@ -43,6 +47,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   final TextEditingController _searchController = TextEditingController();
   bool _isSyncingContacts = false;
   double _syncProgress = 0.0;
+  int _totalUnreadCount = 0;
+  Timer? _unreadCheckTimer;
 
   @override
   void initState() {
@@ -52,6 +58,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initApp();
+      _checkUnreadMessages();
+      _startUnreadCheckTimer();
+      _setupNotificationHandler();
     });
   }
 
@@ -359,11 +368,73 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
+  void _startUnreadCheckTimer() {
+    _unreadCheckTimer?.cancel();
+    _unreadCheckTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      _checkUnreadMessages();
+    });
+  }
+
+  void _setupNotificationHandler() {
+    print('🔵 [HomeScreen] Setting up notification handler');
+    // Initialize notification service
+    NotificationService().initialize().then((_) {
+      print('🔵 [HomeScreen] Notification service initialized');
+      // Set up notification tap handler
+      NotificationService().setNotificationTapHandler((response) {
+        print('🔵 [HomeScreen] Notification tapped');
+        print('🔵 [HomeScreen] Payload: ${response.payload}');
+        _handleNotificationTap(response);
+      });
+      print('🔵 [HomeScreen] Notification tap handler set up');
+    }).catchError((error) {
+      print('🔴 [HomeScreen] Error initializing notification service: $error');
+    });
+  }
+
+  void _handleNotificationTap(NotificationResponse response) {
+    if (response.payload == null) return;
+
+    try {
+      final payload = jsonDecode(response.payload!);
+      final groupId = payload['groupId'];
+      final messageId = payload['messageId'];
+
+      if (groupId != null) {
+        // Switch to groups tab
+        _tabController.animateTo(1);
+        
+        // Navigate to the specific chat
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => MessageChatScreen(
+                name: 'Group Chat', // You might want to fetch the actual group name
+                profilePic: '',
+                groupId: int.parse(groupId),
+                description: '',
+                isAdminOnlyMode: false,
+                isCurrentUserAdmin: false,
+                allowSubscription: false,
+                hasUserPaid: true,
+                subscriptionAmount: '0',
+              ),
+            ),
+          );
+        });
+      }
+    } catch (e) {
+      print('Error handling notification tap: $e');
+    }
+  }
+
   @override
   void dispose() {
     _tabController.removeListener(_updateTabTitle);
     _tabController.dispose();
     _searchController.dispose();
+    _unreadCheckTimer?.cancel();
     super.dispose();
   }
 
@@ -404,7 +475,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   controller: _tabController,
                   children: [
                     PersonalTab(tabController: _tabController),
-                    GroupsTab(),
+                    GroupsTab(
+                      onUnreadCountChanged: updateUnreadCount,
+                    ),
                     const GoalsTab(),
                   ],
                 ),
@@ -524,8 +597,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   const SizedBox(height: 4),
                   SvgPicture.asset(
                     'assets/icons/person.svg',
-                    color:
-                        _tabController.index == 0 ? primaryLight : Colors.white,
+                    color: _tabController.index == 0 ? primaryLight : Colors.white,
                     width: 24,
                     height: 24,
                   ),
@@ -535,19 +607,48 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               ),
             ),
             Tab(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
+              child: Stack(
                 children: [
-                  const SizedBox(height: 4),
-                  SvgPicture.asset(
-                    'assets/icons/groups.svg',
-                    color:
-                        _tabController.index == 1 ? primaryLight : Colors.white,
-                    width: 24,
-                    height: 24,
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const SizedBox(height: 4),
+                      SvgPicture.asset(
+                        'assets/icons/groups.svg',
+                        color: _tabController.index == 1 ? primaryLight : Colors.white,
+                        width: 24,
+                        height: 24,
+                      ),
+                      const SizedBox(height: 2),
+                      const Text('Groups'),
+                    ],
                   ),
-                  const SizedBox(height: 2),
-                  const Text('Groups'),
+                  if (_totalUnreadCount > 0)
+                    Positioned(
+                      right: 0,
+                      top: 0,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: primaryTwo, width: 2),
+                        ),
+                        constraints: const BoxConstraints(
+                          minWidth: 16,
+                          minHeight: 16,
+                        ),
+                        child: Text(
+                          _totalUnreadCount.toString(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -558,8 +659,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   const SizedBox(height: 4),
                   SvgPicture.asset(
                     'assets/icons/goal-icon.svg',
-                    color:
-                        _tabController.index == 2 ? primaryLight : Colors.white,
+                    color: _tabController.index == 2 ? primaryLight : Colors.white,
                     width: 24,
                     height: 24,
                   ),
@@ -657,5 +757,34 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         );
       }
     });
+  }
+
+  void updateUnreadCount(int count) {
+    if (mounted) {
+      setState(() {
+        _totalUnreadCount = count;
+      });
+    }
+  }
+
+  Future<void> _checkUnreadMessages() async {
+    try {
+      final dbHelper = DatabaseHelper();
+      final db = await dbHelper.database;
+      
+      final unreadMessages = await db.query(
+        'messages',
+        where: 'isMe = 0 AND status = ?',
+        whereArgs: ['unread'],
+      );
+      
+      if (mounted) {
+        setState(() {
+          _totalUnreadCount = unreadMessages.length;
+        });
+      }
+    } catch (e) {
+      print('Error checking unread messages: $e');
+    }
   }
 }

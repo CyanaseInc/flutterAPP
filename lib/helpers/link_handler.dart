@@ -14,7 +14,7 @@ class DeepLinkHandler {
     try {
       // Handle initial link when app is launched
       Uri? initialUri = await _appLinks.getInitialLink();
-      debugPrint('Initial deep link: $initialUri');
+      
       if (initialUri != null) {
         _handleDeepLink(initialUri);
       }

@@ -14,6 +14,8 @@ import 'message_chat.dart';
 import 'chat_input.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:cyanase/helpers/chat_websocket_service.dart';
+import 'package:cyanase/helpers/notification_service.dart';
+import 'package:intl/intl.dart';
 
 import 'dart:io';
 import 'dart:convert';
@@ -71,7 +73,8 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
   Map<String, bool> _isPlayingMap = {};
   Map<String, Duration> _audioDurationMap = {};
   Map<String, Duration> _audioPositionMap = {};
-
+StreamSubscription<Map<int, List<Map<String, dynamic>>>>? _messageStreamSubscription;
+String? _lastMessageTimestamp;
   Timer? _recordingTimer;
   bool _showScrollToBottomButton = false;
   String? _currentDateHeader;
@@ -89,55 +92,159 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
       {}; // Map of user_id to username who are typing
 
   String? _token;
-  String? _lastMessageTimestamp;
+
 
   // Add progress tracking maps
   Map<String, double> _uploadProgress = {};
   Map<String, double> _downloadProgress = {};
 
+  // Add these new variables
+  int _unreadCount = 0;
+  bool _showUnreadBadge = false;
+  final GlobalKey _unreadBadgeKey = GlobalKey();
+  Timer? _unreadBadgeTimer;
+
+  // Add these new variables
+  bool _isUserScrolling = false;
+  bool _shouldAutoScroll = true;
+  Timer? _scrollDebounceTimer;
+  double _lastScrollPosition = 0;
+
+
+  // Add these new variables
+  List<String> _unreadMessageIds = [];
+  bool _hasUnreadMessages = false;
+  bool _isInitialLoad = true;
+
+  // Add this new variable to track if we're scrolling up
+  bool _isScrollingUp = false;
+
+ @override
+void initState() {
+  super.initState();
+  _loadGroupMembers();
+  _loadMessages(isInitialLoad: true);
+  _scrollController.addListener(_onScroll);
+  _initializeWebSocket();
+  _getCurrentUserId();
+  _getToken();
+  if (widget.allowSubscription == true && widget.hasUserPaid == false) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _showSubscriptionReminder(context);
+    });
+  }
+  _controller.addListener(_onTextChanged);
+  _setupMessageStream(); // Add stream setup
+  _initializeUnreadMessages();
+}
+
   @override
-  void initState() {
-    super.initState();
-    _loadGroupMembers();
-    _loadMessages();
-    _scrollController.addListener(_onScroll);
-    _initializeWebSocket();
-    _getCurrentUserId();
-    _getToken();
-    if (widget.allowSubscription && !widget.hasUserPaid) {
+@override
+void dispose() {
+  print('🔵 [ChatScreen] Disposing chat screen');
+  _wsService.onMessageReceived = null;
+  _scrollController.dispose();
+  _controller.dispose();
+  _recordingTimer?.cancel();
+  _audioFunctions.dispose();
+  _typingTimer?.cancel();
+  _controller.removeListener(_onTextChanged);
+  _unreadBadgeTimer?.cancel();
+  _scrollDebounceTimer?.cancel();
+  _messageStreamSubscription?.cancel(); // Cancel stream subscription
+  super.dispose();
+}
+void _setupMessageStream() {
+  _messageStreamSubscription = _dbHelper.messageStream.listen((groupMessages) {
+    if (!mounted) return;
+    final messages = groupMessages[widget.groupId];
+    if (messages == null || messages.isEmpty) return;
+
+    print('🔵 [ChatScreen] Received ${messages.length} messages from stream for group: ${widget.groupId}');
+    setState(() {
+      _messages = messages.map((message) {
+        final isMe = message['sender_id'].toString() == _currentUserId;
+        return {
+          ...message,
+          'isMe': isMe ? 1 : 0,
+          'status': message['status'] ?? (isMe ? 'sent' : 'unread'),
+          'message': message['media_path'] ?? message['message'] ?? '',
+          'type': message['type'] ?? 'text',
+          'sender_name': message['sender_name'] ?? 'Unknown',
+          'sender_avatar': message['sender_avatar'] ?? '',
+          'sender_role': message['sender_role'] ?? 'member',
+        };
+      }).toList();
+
+      _messages = MessageSort.sortMessagesByDate(_messages);
+      _groupedMessages = MessageSort.groupMessagesByDate(_messages);
+
+      // Update unread messages
+      _updateUnreadMessages();
+
+      // Animate new messages
+      final newMessageIndex = _messages.indexWhere((m) =>
+          m['timestamp'] == messages.first['timestamp'] &&
+          !_messages.any((existing) => existing['id'] == m['id']));
+      if (newMessageIndex != -1 && messages.first['sender_id'] != _currentUserId) {
+        _unreadMessageIds.add(messages.first['id'].toString());
+        _hasUnreadMessages = true;
+        _showUnreadBadge = true;
+        _listKey.currentState?.insertItem(
+          newMessageIndex,
+          duration: const Duration(milliseconds: 300),
+        );
+      }
+
+      // Update last timestamp
+      if (_messages.isNotEmpty) {
+        _lastMessageTimestamp = _messages.first['timestamp'];
+      }
+    });
+
+    // Auto-scroll if at bottom
+    if (_scrollController.hasClients &&
+        _scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 50) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _showSubscriptionReminder(context);
+        _scrollToBottom();
       });
     }
-    _controller.addListener(_onTextChanged);
-    _startDbPolling();
-  }
 
-  @override
-  void dispose() {
-    _wsService.dispose();
-    _scrollController.dispose();
-    _controller.dispose();
-    _recordingTimer?.cancel();
-    _audioFunctions.dispose();
-    _typingTimer?.cancel();
-    _dbPollingTimer?.cancel();
-    _controller.removeListener(_onTextChanged);
-    super.dispose();
+    // Update notification badge
+    NotificationService().updateBadgeCountFromDatabase();
+  }, onError: (e) {
+    print('🔴 [ChatScreen] Stream error: $e');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Error receiving messages: $e')),
+    );
+  });
+}
+void _scrollToBottom() {
+  if (_scrollController.hasClients) {
+    _scrollController.animateTo(
+      0.0,
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOut,
+    );
   }
-
-  void _scrollToBottom() {
-    if (_scrollController.hasClients) {
+}
+void _scrollToFirstUnreadOrBottom() {
+  if (_unreadMessageIds.isNotEmpty) {
+    final unreadIndex = _messages.indexWhere((msg) => _unreadMessageIds.contains(msg['id'].toString()));
+    if (unreadIndex != -1) {
+      final scrollPosition = (_messages.length - unreadIndex - 1) * 80.0;
       _scrollController.animateTo(
-        0, // Since the list is reversed, 0 is the bottom
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOut,
+        scrollPosition,
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeInOut,
       );
-      // Immediately hide the button after scrolling to bottom
-      setState(() => _showScrollToBottomButton = false);
+    } else {
+      _scrollToBottom();
     }
+  } else {
+    _scrollToBottom();
   }
-
+}
   void _scrollToBottomIfAtBottom() {
     if (_scrollController.hasClients) {
       final bool isAtBottom = _scrollController.position.pixels >=
@@ -170,89 +277,126 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
     }
   }
 
-  Future<void> _loadMessages() async {
-    setState(() => _isLoading = true);
+Future<void> _loadMessages({bool isInitialLoad = false}) async {
+  print('🔵 [DEBUG] Loading messages...');
+  setState(() => _isLoading = true);
 
-    try {
-      final newMessages = await _messageFunctions.getMessages(
-        widget.groupId,
-        limit: _messagesPerPage,
-        offset: _currentPage * _messagesPerPage,
-      );
+  try {
+    final messages = await _dbHelper.getMessages(
+      groupId: widget.groupId,
+    );
+    print('🔵 [DEBUG] Retrieved ${messages.length} messages from database');
+   
+    final db = await _dbHelper.database;
+    final userProfile = await db.query('profile', limit: 1);
+    final currentUserId = userProfile.first['id'] as String?;
+    
+    final participants = await _dbHelper.getGroupMemberNames(widget.groupId!);
+    
+    if (!mounted) return;
 
-      if (newMessages.isEmpty) {
-        setState(() => _hasMoreMessages = false);
-      } else {
-        // Get current user ID for comparison
-        final db = await _dbHelper.database;
-        final userProfile = await db.query('profile', limit: 1);
-        final currentUserId = userProfile.first['id'] as String?;
+    setState(() {
+      _messages = messages.map((message) {
+        // Convert isMe to integer (0 or 1) for database storage
+        final isMe = message['sender_id'].toString() == currentUserId;
+        final sender = participants.firstWhere(
+          (p) => p['name'] == message['sender_name'],
+          orElse: () => {'name': 'Unknown', 'role': 'member'},
+        );
+        
+        // Only set status to unread if it's not already set to read
+        final status = message['status'] ?? (isMe ? 'sent' : 'unread');
+        
+        return {
+          ...message,
+          'isMe': isMe ? 1 : 0,  // Store as integer
+          'status': status,
+          'message': message['media_path'] ?? message['message'] ?? message['content'] ?? '',
+          'type': message['type'] ?? message['message_type'] ?? 'text',
+          'reply_to_id': message['reply_to_id'],
+          'reply_to_message': message['reply_to_message'],
+          'isReply': message['reply_to_id'] != null,
+          'sender_name': sender['name'],
+          'sender_role': sender['role'],
+        };
+      }).toList();
 
-        setState(() {
-          // Process messages to set isMe flag and status correctly
-          final processedMessages = newMessages.map((message) {
-            final isMe = message['sender_id'].toString() == currentUserId;
-            return {
-              ...message,
-              'isMe': isMe ? 1 : 0,
-              'status': isMe ? (message['status'] ?? 'sent') : 'received',
-              'message': message['media_path'] ??
-                  message['message'] ??
-                  message['content'] ??
-                  '',
-              'type': message['type'] ?? message['message_type'] ?? 'text',
-              'reply_to_id': message['reply_to_id'],
-              'reply_to_message': message['reply_to_message'],
-              'isReply': message['reply_to_id'] != null,
-            };
-          }).toList();
+      _messages = MessageSort.sortMessagesByDate(_messages);
+      _groupedMessages = MessageSort.groupMessagesByDate(_messages);
+    });
 
-          _messages.addAll(processedMessages);
-          _messages = MessageSort.sortMessagesByDate(_messages);
-          _groupedMessages = MessageSort.groupMessagesByDate(_messages);
-          _currentPage++;
-        });
-      }
-    } catch (e) {
-      print('Error loading messages: $e');
+    // Update unread messages list
+    _updateUnreadMessages();
+
+    // Only scroll to bottom on first load
+    if (isInitialLoad) {
+      print('🔵 [DEBUG] First load, scrolling to first unread or bottom');
+      _scrollToFirstUnreadOrBottom();
+      _isInitialLoad = false;
+    }
+
+  } catch (e, stackTrace) {
+    print('🔴 [DEBUG] Error loading messages: $e');
+    print('🔴 [DEBUG] Stack trace: $stackTrace');
+    
+    if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error loading messages: $e")),
+        SnackBar(
+          content: Text("Error loading messages. Please try again."),
+          action: SnackBarAction(
+            label: 'Retry',
+            onPressed: () => _loadMessages(isInitialLoad: true),
+          ),
+        ),
       );
-    } finally {
+    }
+  } finally {
+    if (mounted) {
       setState(() => _isLoading = false);
-      if (_currentPage == 1) _scrollToBottom();
     }
   }
-
+}
   void _onScroll() {
     if (_scrollController.hasClients) {
       final double currentPosition = _scrollController.position.pixels;
       final double maxScrollExtent = _scrollController.position.maxScrollExtent;
+      
+      // Detect scroll direction
+      _isScrollingUp = currentPosition < _lastScrollPosition;
+      
+      // Detect if user is actively scrolling
+      if (_lastScrollPosition != currentPosition) {
+        _isUserScrolling = true;
+        _shouldAutoScroll = false;
+        
+        // Reset the debounce timer
+        _scrollDebounceTimer?.cancel();
+        _scrollDebounceTimer = Timer(const Duration(seconds: 2), () {
+          _isUserScrolling = false;
+        });
+      }
+      
+      _lastScrollPosition = currentPosition;
 
       // Calculate the approximate number of messages below the current view
-      // Assuming each message takes about 80 pixels (adjust this based on your MessageChat height)
-      final double viewportHeight =
-          _scrollController.position.viewportDimension;
+      final double viewportHeight = _scrollController.position.viewportDimension;
       final double remainingScrollDistance = maxScrollExtent - currentPosition;
-      final int messagesBelow =
-          (remainingScrollDistance / 80).ceil(); // Approximate messages below
+      final int messagesBelow = (remainingScrollDistance / 80).ceil();
 
       // Check if the user is at the bottom (within 10px tolerance)
       final bool isAtBottom = currentPosition >= maxScrollExtent - 10;
 
       setState(() {
-        // Show button only if there are 10 or more messages below and not at bottom
         _showScrollToBottomButton = messagesBelow >= 10 && !isAtBottom;
         _updateFloatingDateHeader();
       });
 
       // Load more messages if at the top and there are more to load
-      if (currentPosition == maxScrollExtent &&
-          !_isLoading &&
-          _hasMoreMessages) {
+      if (currentPosition == maxScrollExtent && !_isLoading && _hasMoreMessages) {
         _loadMessages();
       }
     }
+    _markVisibleMessagesAsRead();
   }
 
   void _updateFloatingDateHeader() {
@@ -287,14 +431,71 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
     }
   }
 
+  void _scrollToMessage(String messageId) {
+    print('🔵 [ChatScreen] Scrolling to message: $messageId');
+    // Find the message in the flattened messages list
+    final index = _messages.indexWhere((msg) => msg['id'].toString() == messageId);
+    if (index != -1) {
+      print('🔵 [ChatScreen] Found message at index: $index');
+      // Calculate the scroll position based on the message index
+      final scrollPosition = (_messages.length - index - 1) * 100.0;
+
+      // Get the viewport height
+      final viewportHeight = _scrollController.position.viewportDimension;
+
+      // Calculate the target position to center the message in the viewport
+      final targetPosition = scrollPosition -
+          (viewportHeight / 2) +
+          50; // 50 is half the approximate message height
+
+      // Ensure we don't scroll beyond the limits
+      final maxScroll = _scrollController.position.maxScrollExtent;
+      final minScroll = _scrollController.position.minScrollExtent;
+      final finalPosition = targetPosition.clamp(minScroll, maxScroll);
+
+      // Add a highlight effect to the message
+      setState(() {
+        // Remove any existing highlight
+        for (var msg in _messages) {
+          msg['isHighlighted'] = false;
+        }
+        // Add highlight to the target message
+        _messages[index]['isHighlighted'] = true;
+      });
+
+      // Scroll to the message
+      _scrollController.animateTo(
+        finalPosition,
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeInOut,
+      );
+
+      // Remove the highlight after a delay
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted) {
+          setState(() {
+            _messages[index]['isHighlighted'] = false;
+          });
+        }
+      });
+    } else {
+      print('🔵 [ChatScreen] Message not found: $messageId');
+    }
+  }
+
   void _setReplyMessage(Map<String, dynamic> message) {
+  
     setState(() {
       _replyingToMessage = {
         'id': message['id'],
-        'message': message['message'],
+        'message': message['message'], // Keep original message content
         'sender_id': message['sender_id'],
+        'type': message['type'] ?? 'text',
+        'local_path': message['local_path'],
+        'attachment_url': message['attachment_url'],
       };
     });
+    print('🔵 [ChatScreen] Reply message set: $_replyingToMessage');
   }
 
   Future<void> _getCurrentUserId() async {
@@ -421,7 +622,7 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
                                     ),
                                     child: const Text(
                                       "Pay Now",
-                                      style: TextStyle(fontSize: 10),
+                                      style: TextStyle(fontSize: 15),
                                     ),
                                   ),
                                 ],
@@ -439,32 +640,54 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
   }
 
   void _initializeWebSocket() {
-    print('DEBUG: Initializing WebSocket connection');
+    print('🔵 [DEBUG] Initializing WebSocket connection');
     
     // Set up message handler
     _wsService.onMessageReceived = (data) {
-      print('DEBUG: Received WebSocket message: $data');
+      if (!mounted) {
+        print('🔴 [DEBUG] Widget not mounted, ignoring message');
+        return;
+      }
       
-      if (data['type'] == 'initial_messages') {
-        _handleInitialMessages(data['messages']);
-      } else if (data['type'] == 'message' || data['type'] == 'new_message') {
-        print('DEBUG: Handling new message from WebSocket');
-        _handleNewMessage(data);
-      } else if (data['type'] == 'update_message_status') {
-        _handleMessageStatusUpdate(data);
-      } else if (data['type'] == 'message_id_update') {
-        _handleMessageIdUpdate(data);
-      } else if (data['type'] == 'typing') {
-        _handleTypingStatus(data['data']);
+      print('🔵 [DEBUG] Received WebSocket message: ${data['type']}');
+      
+      try {
+        if (data['type'] == 'initial_messages') {
+          _handleInitialMessages(data['messages']);
+        } else if (data['type'] == 'message' || data['type'] == 'new_message') {
+          print('🔵 [DEBUG] Handling new message from WebSocket');
+          _handleNewMessage(data);
+        } else if (data['type'] == 'update_message_status') {
+          _handleMessageStatusUpdate(data);
+        } else if (data['type'] == 'message_id_update') {
+          _handleMessageIdUpdate(data);
+        } else if (data['type'] == 'typing') {
+          _handleTypingStatus(data['data']);
+        }
+      } catch (e, stackTrace) {
+        print('🔴 [DEBUG] Error handling WebSocket message: $e');
+        print('🔴 [DEBUG] Stack trace: $stackTrace');
       }
     };
     
     // Initialize WebSocket connection
-    _wsService.initialize(widget.groupId.toString());
+    if (widget.groupId != null) {
+      print('🔵 [DEBUG] Connecting to group: ${widget.groupId}');
+      try {
+        _wsService.initialize(widget.groupId.toString());
+        print('🔵 [DEBUG] WebSocket initialization completed');
+      } catch (e, stackTrace) {
+        print('🔴 [DEBUG] Error initializing WebSocket: $e');
+        print('🔴 [DEBUG] Stack trace: $stackTrace');
+      }
+    } else {
+      print('🔴 [DEBUG] No group ID available for WebSocket connection');
+    }
   }
 
   void _handleInitialMessages(List<dynamic> messages) {
-    print('Handling initial messages: ${messages.length} messages');
+    if (!mounted) return; // Don't process if widget is disposed
+    print('🔵 [ChatScreen] Handling initial messages: ${messages.length} messages');
     setState(() {
       _messages = messages.map((message) {
         final isMe = message['sender_id'].toString() == _currentUserId;
@@ -482,101 +705,86 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
   }
 
   void _handleMessageIdUpdate(Map<String, dynamic> data) {
+    if (!mounted) return;
+    
     final oldId = data['old_id'].toString();
     final newId = data['new_id'].toString();
     final groupId = data['group_id'].toString();
     final status = data['status'];
 
-    if (groupId != widget.groupId.toString()) return;
+   
+
+    if (groupId != widget.groupId.toString()) {
+      print('🔵 [DEBUG] Group ID mismatch, skipping update');
+      return;
+    }
 
     setState(() {
       // First try to find by temp_id
       final index = _messages.indexWhere((msg) =>
           msg['temp_id']?.toString() == oldId || msg['id'].toString() == oldId);
 
+      print('🔵 [DEBUG] Found message at index: $index');
       if (index != -1) {
+    
+
+        // Update the existing message instead of creating a new one
         _messages[index]['id'] = newId;
+        _messages[index]['temp_id'] = null; // Clear temp_id to prevent duplicates
         if (status != null) {
           _messages[index]['status'] = status;
         }
+
+
         _groupedMessages = MessageSort.groupMessagesByDate(_messages);
+      } else {
+        print('🔵 [DEBUG] No matching message found for update');
       }
     });
   }
 
   void _handleMessageStatusUpdate(Map<String, dynamic> data) {
-    final messageId = data['message_id'].toString();
+    if (!mounted) return;
+    
+    final messageId = data['message_id']?.toString();
     final status = data['status'];
     final groupId = data['group_id']?.toString();
 
-    if (groupId != null && groupId != widget.groupId.toString()) return;
+    print('🔵 [DEBUG] Message Status Update:');
+    print('🔵 [DEBUG] Message ID: $messageId');
+    print('🔵 [DEBUG] New Status: $status');
+    print('🔵 [DEBUG] Group ID: $groupId');
+    print('🔵 [DEBUG] Current messages count: ${_messages.length}');
 
-    setState(() {
-      final index = _messages.indexWhere((msg) =>
-          msg['id'].toString() == messageId ||
-          msg['temp_id']?.toString() == messageId);
-
-      if (index != -1) {
-        _messages[index]['status'] = status;
-        _groupedMessages = MessageSort.groupMessagesByDate(_messages);
-      }
-    });
-  }
-
-  void _handleMessageStatus(Map<String, dynamic> status) {
-    if (!mounted) {
+    if (groupId != null && groupId != widget.groupId.toString()) {
+      print('🔵 [DEBUG] Group ID mismatch, skipping update');
       return;
     }
 
-    final messageId = status['message_id'].toString();
-
-    final messageIndex =
-        _messages.indexWhere((msg) => msg['id'].toString() == messageId);
-
-    if (messageIndex != -1) {
-      // Create a new list to force UI update
-      final updatedMessages = List<Map<String, dynamic>>.from(_messages);
-      updatedMessages[messageIndex] = {
-        ...updatedMessages[messageIndex],
-        'status': status['status'],
-      };
-
-      // Update both lists to ensure UI rebuilds
-      setState(() {
-        _messages = updatedMessages;
-        _groupedMessages = MessageSort.groupMessagesByDate(_messages);
-      });
-
-      // If message is now sent, remove it from the queue
-      if (status['status'] == 'sent') {
-        _wsService.removeFromQueue(messageId);
-      }
-    } else {}
-  }
-
-  void _handleMessageUpdate(Map<String, dynamic> update) {
     setState(() {
-      final messageId = update['message_id'].toString();
-      final messageIndex =
-          _messages.indexWhere((msg) => msg['id'].toString() == messageId);
-      if (messageIndex != -1) {
-        _messages[messageIndex] = {
-          ..._messages[messageIndex],
-          'message': update['content'],
-          'edited': true,
-          'edited_at': update['edited_at'],
-        };
+      final index = _messages.indexWhere((msg) =>
+          msg['id']?.toString() == messageId ||
+          msg['temp_id']?.toString() == messageId);
+
+      print('🔵 [DEBUG] Found message at index: $index');
+      if (index != -1) {
+        print('🔵 [DEBUG] Current message state:');
+        print('🔵 [DEBUG] ID: ${_messages[index]['id']}');
+        print('🔵 [DEBUG] Temp ID: ${_messages[index]['temp_id']}');
+        print('🔵 [DEBUG] Current Status: ${_messages[index]['status']}');
+
+        _messages[index]['status'] = status;
         _groupedMessages = MessageSort.groupMessagesByDate(_messages);
+      } else {
+        print('🔵 [DEBUG] No matching message found for status update');
       }
     });
-  }
 
-  void _handleMessageDelete(Map<String, dynamic> delete) {
-    setState(() {
-      final messageId = delete['message_id'].toString();
-      _messages.removeWhere((msg) => msg['id'].toString() == messageId);
-      _groupedMessages = MessageSort.groupMessagesByDate(_messages);
-    });
+    // Update badge count if the message status indicates it was read
+    if (status == 'read' && groupId != null && groupId == widget.groupId.toString()) {
+      print('🔵 [DEBUG] Updating badge count for read message');
+      NotificationService().updateBadgeCountFromDatabase();
+    }
   }
 
   void _sendTypingStatus(bool isTyping) async {
@@ -600,16 +808,16 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
   }
 
   Future<void> _sendMessage() async {
- 
-    
     if (_controller.text.trim().isEmpty || _currentUserId == null) {
-      
       return;
     }
 
     try {
       final tempId = DateTime.now().millisecondsSinceEpoch.toString();
       
+      print('🔵 [DEBUG] Sending new message:');
+      print('🔵 [DEBUG] Temp ID: $tempId');
+      print('🔵 [DEBUG] Content: ${_controller.text.trim()}');
 
       // Create the WebSocket message with the exact structure the server expects
       final Map<String, dynamic> wsMessage = {
@@ -629,14 +837,19 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
           'is_typing': false
         }
       };
-   
 
       // Add reply information if available
       if (_replyingToMessage != null) {
-       
         wsMessage['reply_to_id'] = _replyingToMessage!['id'];
-        wsMessage['reply_to_message'] = _replyingToMessage!['message'];
+        wsMessage['reply_to_message'] = _replyingToMessage!['message']; // Keep original message
         wsMessage['reply_to_type'] = _replyingToMessage!['type'] ?? 'text';
+        
+        // Add additional reply information for media messages
+        if (_replyingToMessage!['type'] == 'image') {
+          wsMessage['reply_to_media_type'] = 'image';
+          wsMessage['reply_to_media_url'] = _replyingToMessage!['attachment_url'];
+          wsMessage['reply_to_media_path'] = _replyingToMessage!['local_path'];
+        }
       }
 
       // Create the database message object
@@ -655,16 +868,26 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
         'attachment_url': null,
         'username': null
       };
-      
 
       // Add reply information to database message
       if (_replyingToMessage != null) {
-       
         dbMessage['reply_to_id'] = _replyingToMessage!['id'];
-        dbMessage['reply_to_message'] = _replyingToMessage!['message'];
+        dbMessage['reply_to_message'] = _replyingToMessage!['message']; // Keep original message
         dbMessage['reply_to_type'] = _replyingToMessage!['type'] ?? 'text';
+        
+        // Add additional reply information for media messages
+        if (_replyingToMessage!['type'] == 'image') {
+          dbMessage['reply_to_media_type'] = 'image';
+          dbMessage['reply_to_media_url'] = _replyingToMessage!['attachment_url'];
+          dbMessage['reply_to_media_path'] = _replyingToMessage!['local_path'];
+        }
       }
+
+      print('🔵 [DEBUG] Database message structure:');
+      print('🔵 [DEBUG] ${json.encode(dbMessage)}');
+
       await _dbHelper.insertMessage(dbMessage);
+      print('🔵 [DEBUG] Message inserted into database');
      
       setState(() {
         _messages.add(dbMessage);
@@ -672,18 +895,19 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
         _replyingToMessage = null;
       });
     
-
-    
       try {
+        print('🔵 [DEBUG] Sending message through WebSocket');
         await _wsService.sendMessage(wsMessage);
+        print('🔵 [DEBUG] Message sent successfully through WebSocket');
       
       } catch (e) {
-        print('ERROR in WebSocket send: $e');
-        print('ERROR stack trace: ${StackTrace.current}');
+        print('🔴 [DEBUG] Error in WebSocket send: $e');
+        print('🔴 [DEBUG] Stack trace: ${StackTrace.current}');
         
         setState(() {
           final index = _messages.indexWhere((msg) => msg['temp_id'] == tempId);
           if (index != -1) {
+            print('🔵 [DEBUG] Updating message status to failed');
             _messages[index]['status'] = 'failed';
             _groupedMessages = MessageSort.groupMessagesByDate(_messages);
           }
@@ -695,25 +919,25 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
         return;
       }
 
+      // After sending message, force scroll to bottom
+      _shouldAutoScroll = true;
+      _scrollToBottom();
+      
       _controller.clear();
-      _scrollToBottomIfAtBottom();
       widget.onMessageSent?.call();
       
     } catch (e) {
-      print('ERROR in WebSocket send: $e');
-      print('ERROR stack trace: ${StackTrace.current}');
+      print('🔴 [DEBUG] Error in _sendMessage: $e');
+      print('🔴 [DEBUG] Stack trace: ${StackTrace.current}');
       
-      // Update message status to failed in UI
       setState(() {
-        
-          _groupedMessages = MessageSort.groupMessagesByDate(_messages);
-        
+        _groupedMessages = MessageSort.groupMessagesByDate(_messages);
       });
       
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Failed to send message: $e")),
       );
-      return; // Exit the function on error
+      return;
     }
   }
 
@@ -779,7 +1003,7 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
     
       final wsMessage = {
         'type': 'send_message',
-        'content': localPath, // Send local path as content
+        'content': "image_message", // Send local path as content
         'sender_id': _currentUserId,
         'group_id': groupId,
         'conversation_id': groupId.toString(),
@@ -792,7 +1016,7 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
         'status': 'sending'
       };
      
-      await _wsService.sendMessage(wsMessage);
+       await _wsService.sendMessage(wsMessage);
 
 
       _replyingToMessage = null;
@@ -800,8 +1024,7 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
       widget.onMessageSent?.call();
   
     } catch (e) {
-      print('ERROR in _sendImageMessage: $e');
-      print('ERROR stack trace: ${StackTrace.current}');
+      
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Failed to send image: $e")),
       );
@@ -904,8 +1127,7 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
       widget.onMessageSent?.call();
      
     } catch (e) {
-      print('ERROR in _sendAudioMessage: $e');
-      print('ERROR stack trace: ${StackTrace.current}');
+      
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Failed to send audio: $e")),
       );
@@ -981,55 +1203,6 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
     }
   }
 
-  void _scrollToMessage(String messageId) {
-    // Find the message in the flattened messages list
-    final index =
-        _messages.indexWhere((msg) => msg['id'].toString() == messageId);
-    if (index != -1) {
-      // Calculate the scroll position based on the message index
-      final scrollPosition = (_messages.length - index - 1) * 100.0;
-
-      // Get the viewport height
-      final viewportHeight = _scrollController.position.viewportDimension;
-
-      // Calculate the target position to center the message in the viewport
-      final targetPosition = scrollPosition -
-          (viewportHeight / 2) +
-          50; // 50 is half the approximate message height
-
-      // Ensure we don't scroll beyond the limits
-      final maxScroll = _scrollController.position.maxScrollExtent;
-      final minScroll = _scrollController.position.minScrollExtent;
-      final finalPosition = targetPosition.clamp(minScroll, maxScroll);
-
-      // Add a highlight effect to the message
-      setState(() {
-        // Remove any existing highlight
-        for (var msg in _messages) {
-          msg['isHighlighted'] = false;
-        }
-        // Add highlight to the target message
-        _messages[index]['isHighlighted'] = true;
-      });
-
-      // Scroll to the message
-      _scrollController.animateTo(
-        finalPosition,
-        duration: const Duration(milliseconds: 500),
-        curve: Curves.easeInOut,
-      );
-
-      // Remove the highlight after a delay
-      Future.delayed(const Duration(seconds: 2), () {
-        if (mounted) {
-          setState(() {
-            _messages[index]['isHighlighted'] = false;
-          });
-        }
-      });
-    }
-  }
-
   void _handleTypingStatus(Map<String, dynamic> data) {
     setState(() {
       if (data['is_typing'] == true) {
@@ -1040,79 +1213,152 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
     });
   }
 
-  void _handleNewMessage(Map<String, dynamic> message) {
-    try {
-      print('DEBUG: Starting _handleNewMessage');
+void _handleNewMessage(Map<String, dynamic> data) {
+  if (!mounted) {
+    print('🔴 [ChatScreen] Widget not mounted, ignoring message');
+    return;
+  }
 
-      // Extract message data
-      final messageData = message['message'] ?? message;
-     
+  final messageData = data['message'] ?? data;
+  final groupId = messageData['group_id']?.toString() ?? messageData['room_id']?.toString();
+
+  if (groupId != widget.groupId.toString()) {
+    print('🔵 [DEBUG] Ignoring message for different group: $groupId');
+    return;
+  }
+
+  print('🔵 [DEBUG] Processing new message for current group');
+
+  // Create new message object with proper type conversion
+  final newMessage = {
+    'id': messageData['id']?.toString(),
+    'group_id': int.tryParse(groupId!) ?? widget.groupId,
+    'sender_id': messageData['sender_id']?.toString(),
+    'message': messageData['content'] ?? messageData['message'] ?? '',
+    'isMe': messageData['sender_id']?.toString() == _currentUserId ? 1 : 0,
+    'type': messageData['type'] ?? messageData['message_type'] ?? 'text',
+    'status': messageData['sender_id']?.toString() == _currentUserId ? 'sent' : 'unread',
+    'timestamp': messageData['timestamp'] ?? DateTime.now().toUtc().toIso8601String(),
+    'reply_to_id': messageData['reply_to_id'] != null ? 
+                  int.tryParse(messageData['reply_to_id'].toString()) : null,
+    'reply_to_message': messageData['reply_to_message']?.toString(),
+    'forwarded': messageData['forwarded'] is bool ? (messageData['forwarded'] ? 1 : 0) : 
+                messageData['forwarded'] is int ? messageData['forwarded'] : 0,
+    'edited': messageData['edited'] is bool ? (messageData['edited'] ? 1 : 0) : 
+             messageData['edited'] is int ? messageData['edited'] : 0,
+    'deleted': messageData['deleted'] is bool ? (messageData['deleted'] ? 1 : 0) : 
+              messageData['deleted'] is int ? messageData['deleted'] : 0,
+    'temp_id': messageData['temp_id']?.toString(),
+    'media_path': messageData['media_path']?.toString(),
+    'media_type': messageData['media_type']?.toString(),
+    'sender_name': messageData['sender_name'] ?? 'Unknown',
+    'sender_avatar': messageData['sender_avatar'] ?? '',
+    'sender_role': messageData['sender_role'] ?? 'member',
+  };
+
+  print('🔵 [DEBUG] Inserting new message: $newMessage');
+
+  // Insert message into database (stream will handle UI update)
+  _dbHelper.insertMessage(newMessage).catchError((e) {
+    print('🔴 [ChatScreen] Error inserting message to database: $e');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Failed to save message: $e')),
+    );
+  });
+}
+void _markVisibleMessagesAsRead() {
+  if (!_scrollController.hasClients) return;
+
+  final viewportHeight = _scrollController.position.viewportDimension;
+  final scrollOffset = _scrollController.offset;
+  final itemHeight = 80.0;
+
+  final firstVisibleIndex = (_messages.length - (scrollOffset / itemHeight).ceil() - 1).clamp(0, _messages.length - 1);
+  final lastVisibleIndex = (_messages.length - ((scrollOffset + viewportHeight) / itemHeight).floor()).clamp(0, _messages.length - 1);
+
+  // Create a batch of messages to mark as read
+  final messagesToMark = <String>[];
+  
+  for (int i = lastVisibleIndex; i <= firstVisibleIndex; i++) {
+    if (i < 0 || i >= _messages.length) continue;
+    final message = _messages[i];
+    // Convert isMe to boolean for comparison
+    if (message['isMe'] == 0 && message['status'] == 'unread') {
+      messagesToMark.add(message['id'].toString());
+    }
+  }
+
+  // Mark messages as read in batch
+  if (messagesToMark.isNotEmpty) {
+    for (final messageId in messagesToMark) {
+      _markMessageAsRead(messageId);
+    }
+  }
+}
+Future<void> _markMessageAsRead(String messageId) async {
+  print('🔵 [ChatScreen] Marking message as read: $messageId');
+  try {
+    // Update database (stream will handle UI update)
+    await _dbHelper.updateMessageStatus(messageId, 'read');
+
+    // Notify WebSocket
+    if (widget.groupId != null) {
+      _wsService.sendMessage({
+        'type': 'update_message_status',
+        'group_id': widget.groupId!,
+        'message_id': messageId,
+        'status': 'read',
+      });
+    }
+
+    NotificationService().updateBadgeCountFromDatabase();
+  } catch (e) {
+    print('🔴 [ChatScreen] Error marking message as read: $e');
+  }
+}
+
+  void _scrollToUnreadMessages() {
+    print('🔵 [ChatScreen] Scrolling to unread messages...');
+    if (_unreadMessageIds.isEmpty) {
+      print('🔵 [ChatScreen] No unread messages to scroll to');
+      return;
+    }
+
+    final unreadIndex = _messages.indexWhere((msg) => 
+      _unreadMessageIds.contains(msg['id'].toString())
+    );
+
+    if (unreadIndex != -1) {
+      print('🔵 [ChatScreen] Found unread message at index: $unreadIndex');
+      final scrollPosition = (_messages.length - unreadIndex - 1) * 100.0;
       
-      // Check if we're in the current chat
-      if (messageData['room_id']?.toString() == widget.groupId.toString()) {
-        
-        
-        // Check if message already exists in the UI
-        final messageExists = _messages.any((m) => 
-          m['id'].toString() == messageData['id'].toString() ||
-          m['temp_id']?.toString() == messageData['id'].toString()
-        );
+      _scrollController.animateTo(
+        scrollPosition,
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeInOut,
+      );
 
-        if (!messageExists) {
-          print('DEBUG: Adding new message to UI');
-          
-          // Create message object for UI
-        final dbMessage = {
-          'id': messageData['id']?.toString() ?? message['temp_id'],
-          'group_id': widget.groupId,
-          'sender_id': messageData['sender_id'],
-            'message': messageData['content'] ?? messageData['message'] ?? '',
-          'type': messageData['attachment_type'] ?? 'text',
-          'timestamp': messageData['timestamp'],
-          'status': messageData['status'] ?? 'received',
-          'isMe': 0,
-          'attachment_url': messageData['attachment_url'],
-          'attachment_type': messageData['attachment_type'],
-        };
-
-        // Add reply information if available
-        if (message['reply_to_id'] != null) {
-          dbMessage['reply_to_id'] = message['reply_to_id'];
-          dbMessage['reply_to_message'] = message['reply_to_message'];
-          dbMessage['reply_to_type'] = message['reply_to_type'] ?? 'text';
-        }
-
-          // Update UI immediately with the new message
-          setState(() {
-            _messages.insert(0, dbMessage);
-            _groupedMessages = MessageSort.groupMessagesByDate(_messages);
-          });
-
-          // Scroll to bottom if we're already near the bottom
-          if (_scrollController.hasClients) {
-            final isNearBottom = _scrollController.position.pixels >=
-                _scrollController.position.maxScrollExtent - 100;
-            if (isNearBottom) {
-              _scrollToBottom();
-            }
+      // Mark messages as read after scrolling
+      Future.delayed(const Duration(milliseconds: 500), () {
+        print('🔵 [ChatScreen] Marking messages as read after scroll');
+        for (var i = unreadIndex; i < _messages.length; i++) {
+          final messageId = _messages[i]['id'].toString();
+          if (_unreadMessageIds.contains(messageId)) {
+            print('🔵 [ChatScreen] Marking message as read: $messageId');
+            _markMessageAsRead(messageId);
           }
-
-          // Mark message as read
-          _dbHelper.updateMessageStatus(
-            messageData['id'].toString(),
-            'read'
-          );
-          
-          print('DEBUG: Message added to UI successfully');
-        } else {
-          print('DEBUG: Message already exists in UI');
         }
-      } else {
-        print('DEBUG: Message is not for current chat');
-      }
-    } catch (e) {
-      print('ERROR in _handleNewMessage: $e');
-      print('ERROR stack trace: ${StackTrace.current}');
+      });
+    } else {
+      print('🔵 [ChatScreen] Could not find unread message in messages list');
+    }
+  }
+
+  void _onMessageVisible(String messageId) {
+    print('🔵 [ChatScreen] Message became visible: $messageId');
+    if (_unreadMessageIds.contains(messageId)) {
+      print('🔵 [ChatScreen] Marking visible message as read: $messageId');
+      _markMessageAsRead(messageId);
     }
   }
 
@@ -1143,7 +1389,11 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
             ),
           );
         },
-        onBackPressed: () {
+        onBackPressed: () async {
+          // Mark messages as read before navigating back
+          if (widget.groupId != null) {
+            await _markMessagesAsRead(widget.groupId.toString());
+          }
           widget.onMessageSent?.call();
           Navigator.pop(context);
         },
@@ -1163,114 +1413,124 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
               return true;
             },
             child: AnimatedList(
-              key: _listKey,
-              controller: _scrollController,
-              reverse: true,
-              padding: const EdgeInsets.only(top: 16, bottom: 80),
-              initialItemCount: _groupedMessages.length + 1,
-              itemBuilder: (context, index, animation) {
-                if (index == _groupedMessages.length) {
-                  return _isLoading
-                      ? const Padding(
-                          padding: EdgeInsets.all(8.0),
-                          child: Center(child: Loader()),
-                        )
-                      : const SizedBox.shrink();
-                }
+  key: _listKey,
+  controller: _scrollController,
+  reverse: true,
+  padding: const EdgeInsets.only(top: 16, bottom: 80),
+  initialItemCount: _messages.length + 1,
+  itemBuilder: (context, index, animation) {
+    if (index == _messages.length) {
+      return _isLoading
+          ? const Padding(
+              padding: EdgeInsets.all(8.0),
+              child: Center(child: Loader()),
+            )
+          : const SizedBox.shrink();
+    }
 
-                final dateKey = _groupedMessages.keys.elementAt(index);
-                final messagesForDate = _groupedMessages[dateKey]!;
+    final message = _messages[index];
+    final messageDate = DateFormat('dd MMMM yyyy').format(DateTime.parse(message['timestamp']));
+    final isFirstUnread = _unreadMessageIds.contains(message['id']?.toString()) &&
+        _messages.indexWhere((m) => _unreadMessageIds.contains(m['id']?.toString())) == index;
+    final showDateHeader = index == _messages.length - 1 ||
+        DateFormat('dd MMMM yyyy').format(DateTime.parse(_messages[index + 1]['timestamp'])) != messageDate;
+    final isSameSender = index < _messages.length - 1 &&
+        _messages[index + 1]['isMe'] == message['isMe'] &&
+        _messages[index + 1]['type'] != 'notification';
 
-                return SlideTransition(
-                  position: animation.drive(
-                    Tween<Offset>(
-                      begin: const Offset(0, 0.1),
-                      end: Offset.zero,
-                    ).chain(CurveTween(curve: Curves.easeOut)),
+    return SlideTransition(
+      position: animation.drive(
+        Tween<Offset>(
+          begin: const Offset(0, 0.1),
+          end: Offset.zero,
+        ).chain(CurveTween(curve: Curves.easeOut)),
+      ),
+      child: FadeTransition(
+        opacity: animation,
+        child: Column(
+          children: [
+            if (showDateHeader)
+              Center(
+                key: ValueKey('date_$messageDate'),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  margin: const EdgeInsets.symmetric(vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[800]!.withOpacity(0.8),
+                    borderRadius: BorderRadius.circular(16),
                   ),
-                  child: FadeTransition(
-                    opacity: animation,
-                    child: Column(
+                  child: Text(
+                    messageDate,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ),
+            if (isFirstUnread && _hasUnreadMessages)
+              Container(
+                key: ValueKey('unread_divider_${_unreadMessageIds.length}'),
+                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Row(
                   children: [
-                    Center(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
-                        margin: const EdgeInsets.symmetric(vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.grey[800]!.withOpacity(0.8),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Text(
-                          dateKey,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
+                    Expanded(child: Divider(color: primaryTwo)),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: Text(
+                        'New Messages (${_unreadMessageIds.length})',
+                        style: TextStyle(color: primaryTwo, fontWeight: FontWeight.bold),
                       ),
                     ),
-                    ...messagesForDate.map((message) {
-                      final bool isSameSender = messagesForDate
-                                  .indexOf(message) >
-                              0 &&
-                          messagesForDate[messagesForDate.indexOf(message) - 1]
-                                  ["isMe"] ==
-                              message["isMe"] &&
-                          messagesForDate[messagesForDate.indexOf(message) - 1]
-                                  ["type"] !=
-                              "notification";
-                      return GestureDetector(
-                        onHorizontalDragEnd: (details) {
-                          if (details.primaryVelocity! > 0 &&
-                              message["type"] != "notification") {
-                            _setReplyMessage(message);
-                          }
-                        },
-                        child: MessageChat(
-                          senderAvatar: '', // Update with actual avatar logic
-                          senderName:
-                              'wasswa', // Update with actual sender name
-                          isMe: message["isMe"] == 1,
-                          message: message["message"],
-                          time: message["timestamp"],
-                          isSameSender: isSameSender,
-                          replyToId: message["reply_to_id"]?.toString(),
-                          replyTo: message["reply_to_message"],
-                          isAudio: message["type"] == "audio",
-                          isImage: message["type"] == "image",
-                          isNotification: message["type"] == "notification",
-                          onPlayAudio: _playAudio,
-                          isPlaying:
-                              _isPlayingMap[message["id"].toString()] ?? false,
-                          audioDuration:
-                              _audioDurationMap[message["id"].toString()] ??
-                                  Duration.zero,
-                          audioPosition:
-                              _audioPositionMap[message["id"].toString()] ??
-                                  Duration.zero,
-                          messageId: message["id"].toString(),
-                          onReply: (messageId, messageText) {
-                            _setReplyMessage({
-                              'id': messageId,
-                              'message': messageText,
-                              'sender_id': message["sender_id"],
-                            });
-                          },
-                          onReplyTap: _scrollToMessage,
-                          messageStatus: message["status"] ?? "sent",
-                          messageContent: _buildMessageContent(message),
-                          isHighlighted: message["isHighlighted"] ?? false,
-                        ),
-                      );
-                    }).toList(),
+                    Expanded(child: Divider(color: primaryTwo)),
                   ],
-                    ),
-                  ),
-                );
+                ),
+              ),
+            GestureDetector(
+              key: ValueKey(message['id']?.toString() ?? message['timestamp']),
+              onHorizontalDragEnd: (details) {
+                if (details.primaryVelocity! > 0 && message['type'] != 'notification') {
+                  print('🔵 [ChatScreen] Setting reply from gesture: $message');
+                  _setReplyMessage(message);
+                }
               },
+              child: MessageChat(
+                senderAvatar: message['sender_avatar'] ?? '',
+                senderName: message['sender_name'] ?? 'Unknown',
+                senderRole: message['sender_role'] ?? 'member',
+                isMe: message['isMe'] == 1,
+                message: message['message'],
+                time: message['timestamp'],
+                isSameSender: isSameSender,
+                replyToId: message['reply_to_id']?.toString(),
+                replyTo: message['reply_to_message'],
+                isAudio: message['type'] == 'audio',
+                isImage: message['type'] == 'image',
+                isNotification: message['type'] == 'notification',
+                onPlayAudio: _playAudio,
+                isPlaying: _isPlayingMap[message['id'].toString()] ?? false,
+                audioDuration: _audioDurationMap[message['id'].toString()] ?? Duration.zero,
+                audioPosition: _audioPositionMap[message['id'].toString()] ?? Duration.zero,
+                messageId: message['id'].toString(),
+                onReply: (messageId, messageText) {
+                  _setReplyMessage(message);
+                },
+                onReplyTap: (messageId) {
+                  _scrollToMessage(messageId);
+                },
+                messageStatus: message['status'] ?? 'sent',
+                messageContent: _buildMessageContent(message),
+                isHighlighted: message['isHighlighted'] ?? false,
+                isUnread: message['isMe'] == 0 && message['status'] == 'unread',
+              ),
             ),
+          ],
+        ),
+      ),
+    );
+  },
+),
           ),
           Positioned(
             top: 8,
@@ -1318,7 +1578,7 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
               right: 16,
               child: FloatingActionButton(
                 mini: true,
-                onPressed: _scrollToBottom,
+                onPressed: _manualScrollToBottom,
                 backgroundColor: primaryTwo,
                 child: Icon(Icons.arrow_downward, color: primaryColor),
               ),
@@ -1347,11 +1607,101 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
               onCancelRecording: _cancelRecording,
               replyToId: _replyingToMessage?['id']?.toString(),
               replyingToMessage: _replyingToMessage?['message'],
-              onCancelReply: () => setState(() => _replyingToMessage = null),
+              onCancelReply: () {
+                print('🔵 [ChatScreen] Cancelling reply');
+                setState(() => _replyingToMessage = null);
+              },
               audioFunctions: _audioFunctions,
               currentUserId: _currentUserId,
             ),
           ),
+          // Modify the unread messages badge
+          if (_hasUnreadMessages)
+            Positioned(
+              top: _calculateUnreadBadgePosition(),
+              left: 0,
+              right: 0,
+              child: Column(
+                children: [
+                  // Only show separator when not scrolling up
+                 
+                  const SizedBox(height: 8),
+                  // Unread badge
+                  AnimatedOpacity(
+                    opacity: _showUnreadBadge ? 1.0 : 0.0,
+                    duration: const Duration(milliseconds: 300),
+                    child: Center(
+                      child: Container(
+                        key: _unreadBadgeKey,
+                        margin: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Material(
+                          elevation: 8,
+                          borderRadius: BorderRadius.circular(20),
+                          child: InkWell(
+                            onTap: _scrollToUnreadMessages,
+                            borderRadius: BorderRadius.circular(20),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    primaryTwo,
+                                    primaryTwo.withOpacity(0.8),
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                borderRadius: BorderRadius.circular(20),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: primaryTwo.withOpacity(0.3),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(4),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    _unreadMessageIds.length == 1
+                                        ? 'New message'
+                                        : '${_unreadMessageIds.length} new messages',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  const Icon(
+                                    Icons.arrow_downward,
+                                    color: Colors.white,
+                                    size: 16,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );
@@ -1394,8 +1744,9 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
   }
 
   Widget _buildMessageContent(Map<String, dynamic> message) {
+    // Convert isMe to boolean for UI
+    final isMe = message['isMe'] == 1;
     
-
     if (message['type'] == 'image' || message['type'] == 'audio') {
       // If we have a local path, show the file
       if (message['local_path'] != null ||
@@ -1436,8 +1787,6 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
                 onPlay: () => _playAudio(message['id'], path),
               );
       } else if (message['attachment_url'] != null) {
-
-
         // Check if there's a download in progress
         final downloadProgress = _downloadProgress[message['id'].toString()];
         if (downloadProgress != null && downloadProgress < 1.0) {
@@ -1497,7 +1846,7 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
     return Text(
       message['message'] ?? '',
       style: TextStyle(
-        color: message['isMe'] == 1 ? Colors.white : Colors.black87,
+        color: isMe ? Colors.white : Colors.black87,
         fontSize: 15,
         fontFamily: 'Roboto',
       ),
@@ -1530,5 +1879,120 @@ class _MessageChatScreenState extends State<MessageChatScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _markMessagesAsRead(String groupId) async {
+    try {
+      print('🔵 [ChatScreen] Marking messages as read for group: $groupId');
+      final db = await _dbHelper.database;
+      
+      // Update all unread messages for this group
+      final result = await db.update(
+        'messages',
+        {'status': 'read'},
+        where: 'group_id = ? AND isMe = 0 AND status = ?',
+        whereArgs: [groupId, 'unread'],
+      );
+      print('🔵 [ChatScreen] Updated $result messages to read status');
+      
+      // Update UI immediately
+      setState(() {
+        _unreadMessageIds.clear();
+        _hasUnreadMessages = false;
+        _showUnreadBadge = false;
+        
+        // Update message status in the messages list
+        for (var message in _messages) {
+          if (message['group_id'].toString() == groupId && message['isMe'] == 0) {
+            message['status'] = 'read';
+          }
+        }
+        _groupedMessages = MessageSort.groupMessagesByDate(_messages);
+      });
+      
+      // Notify WebSocket service about the status update with numeric IDs
+      final numericGroupId = int.tryParse(groupId);
+      if (numericGroupId != null) {
+        ChatWebSocketService.instance.onMessageReceived?.call({
+          'type': 'update_message_status',
+          'group_id': numericGroupId,
+          'status': 'read',
+          'message_id': 'all'
+        });
+      }
+      
+      // Update app icon badge count
+      NotificationService().updateBadgeCountFromDatabase();
+
+    } catch (e, stackTrace) {
+      print('🔴 [ChatScreen] Error marking messages as read: $e');
+      print('🔴 [ChatScreen] Stack trace: $stackTrace');
+    }
+  }
+
+  // Add this new method for manual scroll to bottom
+  void _manualScrollToBottom() {
+    _shouldAutoScroll = true;
+    _scrollToBottom();
+  }
+
+  // Modify _initializeUnreadMessages to properly reset state
+Future<void> _initializeUnreadMessages() async {
+  print('🔵 [ChatScreen] Initializing unread messages...');
+  if (widget.groupId == null) return;
+  try {
+    final db = await _dbHelper.database;
+    final result = await db.rawQuery(
+      'SELECT id FROM messages WHERE group_id = ? AND isMe = 0 AND status = ? ORDER BY timestamp DESC',
+      [widget.groupId, 'unread'],
+    );
+    setState(() {
+      _unreadMessageIds = result.map((row) => row['id'].toString()).toList();
+      _hasUnreadMessages = _unreadMessageIds.isNotEmpty;
+      _showUnreadBadge = _hasUnreadMessages;
+    });
+    print('🔵 [ChatScreen] Found ${_unreadMessageIds.length} unread messages');
+  } catch (e) {
+    print('🔴 [ChatScreen] Error initializing unread messages: $e');
+  }
+}
+
+  // Modify _updateUnreadMessages to be more aggressive
+void _updateUnreadMessages() {
+  _unreadMessageIds = _messages
+      .asMap()
+      .entries
+      .where((entry) {
+        final message = entry.value;
+        return message['isMe'] == 0 &&
+            message['status'] == 'unread' &&
+            message['id'] != null;
+      })
+      .map((entry) => entry.value['id'].toString())
+      .toList();
+  _hasUnreadMessages = _unreadMessageIds.isNotEmpty;
+  _showUnreadBadge = _hasUnreadMessages;
+  print('🔵 [ChatScreen] Found ${_unreadMessageIds.length} unread messages');
+}
+
+  // Add this new method to calculate unread badge position
+  double _calculateUnreadBadgePosition() {
+    if (_unreadMessageIds.isEmpty) return 80.0; // Default top position
+    
+    // Find the first unread message
+    final firstUnreadIndex = _messages.indexWhere((msg) => 
+      _unreadMessageIds.contains(msg['id'].toString())
+    );
+    
+    if (firstUnreadIndex == -1) return 80.0;
+    
+    // Calculate position based on message index
+    // Each message is approximately 80 pixels tall
+    final messageHeight = 80.0;
+    final position = 80.0 + (firstUnreadIndex * messageHeight);
+    
+    // Ensure the badge is visible within the viewport
+    final maxPosition = MediaQuery.of(context).size.height - 200;
+    return position.clamp(80.0, maxPosition);
   }
 }

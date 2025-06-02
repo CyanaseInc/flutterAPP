@@ -54,10 +54,22 @@ class _InputAreaState extends State<InputArea> {
   final double _maxHeight = 120.0;
   bool _showEmojiPicker = false;
 
+  String _truncateReplyText(String text, {int maxLength = 30}) {
+    if (text.length <= maxLength) return text;
+    return '${text.substring(0, maxLength)}...';
+  }
+
   @override
   void initState() {
     super.initState();
     widget.controller.addListener(_onTextChanged);
+    _focusNode.addListener(() {
+      if (!_focusNode.hasFocus) {
+        setState(() {
+          _showEmojiPicker = false;
+        });
+      }
+    });
   }
 
   @override
@@ -124,8 +136,8 @@ class _InputAreaState extends State<InputArea> {
             children: [
               if (widget.replyingToMessage != null)
                 Container(
-                  padding: const EdgeInsets.all(12),
-                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(8),
+                  margin: const EdgeInsets.only(bottom: 4),
                   decoration: BoxDecoration(
                     color: Colors.grey[200],
                     borderRadius: BorderRadius.circular(12),
@@ -134,29 +146,14 @@ class _InputAreaState extends State<InputArea> {
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.reply, color: primaryColor),
+                      const Icon(Icons.reply, color: primaryColor, size: 18),
                       const SizedBox(width: 8),
                       Expanded(
-                        child: Row(
-                          children: [
-                            if (widget.replyingToMessage!.startsWith('/')) ...[
-                              // Check if it's an audio or image file
-                              if (widget.replyingToMessage!.endsWith('.m4a') ||
-                                  widget.replyingToMessage!.endsWith('.mp3'))
-                                const Icon(Icons.mic,
-                                    color: Colors.grey, size: 16)
-                              else if (widget.replyingToMessage!
-                                      .endsWith('.jpg') ||
-                                  widget.replyingToMessage!.endsWith('.png') ||
-                                  widget.replyingToMessage!.endsWith('.jpeg'))
-                                const Icon(Icons.image,
-                                    color: Colors.grey, size: 16)
-                              else
-                                const Icon(Icons.attach_file,
-                                    color: Colors.grey, size: 16),
-                              const SizedBox(width: 4),
-                              Text(
-                                widget.replyingToMessage!.endsWith('.m4a') ||
+                        child: Tooltip(
+                          message: widget.replyingToMessage!,
+                          child: Text(
+                            widget.replyingToMessage!.startsWith('/')
+                                ? widget.replyingToMessage!.endsWith('.m4a') ||
                                         widget.replyingToMessage!
                                             .endsWith('.mp3')
                                     ? "Audio"
@@ -167,35 +164,28 @@ class _InputAreaState extends State<InputArea> {
                                             widget.replyingToMessage!
                                                 .endsWith('.jpeg')
                                         ? "Image"
-                                        : "File",
-                                style: const TextStyle(
-                                  color: Colors.black54,
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ] else
-                              Text(
-                                widget.replyingToMessage!,
-                                style: const TextStyle(
-                                  color: Colors.black54,
-                                  fontSize: 14,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                          ],
+                                        : "File"
+                                : _truncateReplyText(widget.replyingToMessage!),
+                            style: const TextStyle(
+                              color: Colors.black54,
+                              fontSize: 14,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.close, color: primaryColor),
+                        icon: const Icon(Icons.close, 
+                            color: primaryColor, size: 18),
                         onPressed: widget.onCancelReply,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
                       ),
                     ],
                   ),
                 ),
-              if (widget.replyingToMessage != null) const SizedBox(height: 4),
 
-              // Add admin restriction notice
               if (widget.isAdminOnlyMode && !widget.isCurrentUserAdmin)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 4),
@@ -360,37 +350,6 @@ class _InputAreaState extends State<InputArea> {
                                                     }
                                                   },
                                                 ),
-                                                ListTile(
-                                                  leading: const Icon(
-                                                      Icons.insert_drive_file,
-                                                      color: primaryColor),
-                                                  title: const Text('Document'),
-                                                  onTap: () async {
-                                                    Navigator.pop(context);
-                                                    try {
-                                                      final file =
-                                                          await ImageFunctions()
-                                                              .pickDocument();
-                                                      if (file != null) {
-                                                        final filePath =
-                                                            await ImageFunctions()
-                                                                .saveFileToStorage(
-                                                                    file);
-                                                        widget
-                                                            .onSendImageMessage(
-                                                                filePath);
-                                                      }
-                                                    } catch (e) {
-                                                      ScaffoldMessenger.of(
-                                                              context)
-                                                          .showSnackBar(
-                                                        SnackBar(
-                                                            content: Text(
-                                                                'Error picking file: $e')),
-                                                      );
-                                                    }
-                                                  },
-                                                ),
                                               ],
                                             ),
                                           );
@@ -435,10 +394,10 @@ class _InputAreaState extends State<InputArea> {
           ),
         ),
         if (_showEmojiPicker)
-          Container(
+          SizedBox(
             height: 250,
             child: EmojiPicker(
-              onEmojiSelected: _onEmojiSelected,
+              onEmojiSelected: (category, emoji) => _onEmojiSelected(category, emoji),
               config: Config(
                 height: 250,
                 checkPlatformCompatibility: true,

@@ -1,70 +1,257 @@
-import 'package:awesome_notifications/awesome_notifications.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/material.dart';
-
+import 'dart:convert';
 import 'package:cyanase/helpers/endpoints.dart';
+import 'package:cyanase/helpers/database_helper.dart';
+
+
+// This needs to be a top-level function for background notifications
+@pragma('vm:entry-point')
+void notificationTapBackground(NotificationResponse notificationResponse) {
+  // Handle background notification tap
+  debugPrint('🔵 [NotificationService] Background notification tapped: ${notificationResponse.payload}');
+}
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
   factory NotificationService() => _instance;
   NotificationService._internal();
 
+  final FlutterLocalNotificationsPlugin _notifications = FlutterLocalNotificationsPlugin();
+  bool _isInitialized = false;
+  Function(NotificationResponse)? _notificationTapHandler;
+  int _badgeCount = 0;
+
   Future<void> initialize() async {
-    await AwesomeNotifications().initialize(
-      'resource://drawable/notification_icon',
-      [
-        NotificationChannel(
-          channelKey: 'basic_channel',
-          channelName: 'Basic Notifications',
-          channelDescription: 'Basic notification channel',
-          defaultColor: Colors.blue,
-          ledColor: Colors.blue,
-          importance: NotificationImportance.High,
-          channelShowBadge: true,
-          enableVibration: true,
-          enableLights: true,
-        ),
-        NotificationChannel(
-          channelKey: 'group_messages',
-          channelName: 'Group Messages',
-          channelDescription: 'Notifications for group messages',
-          defaultColor: Colors.green,
-          ledColor: Colors.green,
-          importance: NotificationImportance.High,
-          channelShowBadge: true,
-          enableVibration: true,
-          enableLights: true,
-        ),
-        NotificationChannel(
-          channelKey: 'goal_reminders',
-          channelName: 'Goal Reminders',
-          channelDescription: 'Notifications for goal reminders',
-          defaultColor: Colors.orange,
-          ledColor: Colors.orange,
-          importance: NotificationImportance.High,
-          channelShowBadge: true,
-          enableVibration: true,
-          enableLights: true,
-        ),
-        NotificationChannel(
-          channelKey: 'product_updates',
-          channelName: 'Product Updates',
-          channelDescription: 'Notifications for product updates',
-          defaultColor: Colors.purple,
-          ledColor: Colors.purple,
-          importance: NotificationImportance.High,
-          channelShowBadge: true,
-          enableVibration: true,
-          enableLights: true,
-        ),
-      ],
+    if (_isInitialized) {
+      debugPrint('🔵 [NotificationService] Already initialized');
+      return;
+    }
+
+    debugPrint('🔵 [NotificationService] Initializing notification service');
+
+    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const iosSettings = DarwinInitializationSettings(
+      requestAlertPermission: true,
+      requestBadgePermission: true,
+      requestSoundPermission: true,
+      requestCriticalPermission: true,
+      defaultPresentAlert: true,
+      defaultPresentBadge: true,
+      defaultPresentSound: true,
+    );
+    
+    const initSettings = InitializationSettings(
+      android: androidSettings,
+      iOS: iosSettings,
     );
 
-    // Request notification permissions
-    await AwesomeNotifications().isNotificationAllowed().then((isAllowed) {
-      if (!isAllowed) {
-        AwesomeNotifications().requestPermissionToSendNotifications();
+    try {
+      await _notifications.initialize(
+        initSettings,
+        onDidReceiveNotificationResponse: _handleNotificationTap,
+        onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
+      );
+      debugPrint('🔵 [NotificationService] Basic initialization complete');
+
+      // Request notification permissions for Android 13 and above
+      final androidPlugin = _notifications.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+      
+      if (androidPlugin != null) {
+        final granted = await androidPlugin.requestNotificationsPermission();
+        debugPrint('🔵 [NotificationService] Android notification permission granted: $granted');
+        
+        // Set up notification channels for Android
+        await androidPlugin.createNotificationChannel(
+          const AndroidNotificationChannel(
+            'chat_messages',
+            'Chat Messages',
+            description: 'Notifications for new chat messages',
+            importance: Importance.max,
+            playSound: true,
+            enableVibration: true,
+            showBadge: true,
+          ),
+        );
+        
+        await androidPlugin.createNotificationChannel(
+          const AndroidNotificationChannel(
+            'group_messages',
+            'Group Messages',
+            description: 'Notifications for group messages',
+            importance: Importance.max,
+            playSound: true,
+            enableVibration: true,
+            showBadge: true,
+          ),
+        );
       }
-    });
+
+      // Request notification permissions for iOS
+      final iosPlugin = _notifications.resolvePlatformSpecificImplementation<
+          IOSFlutterLocalNotificationsPlugin>();
+      if (iosPlugin != null) {
+        final granted = await iosPlugin.requestPermissions(
+          alert: true,
+          badge: true,
+          sound: true,
+          critical: true,
+        );
+        debugPrint('🔵 [NotificationService] iOS notification permission granted: $granted');
+      }
+
+      _isInitialized = true;
+      debugPrint('🔵 [NotificationService] Initialization complete');
+
+      // Update badge count from database on initialization
+      await updateBadgeCountFromDatabase();
+
+    } catch (e, stackTrace) {
+      debugPrint('🔴 [NotificationService] Error initializing: $e');
+      debugPrint('🔴 [NotificationService] Stack trace: $stackTrace');
+    }
+  }
+
+  void setNotificationTapHandler(Function(NotificationResponse) handler) {
+    debugPrint('🔵 [NotificationService] Setting notification tap handler');
+    _notificationTapHandler = handler;
+  }
+
+  void _handleNotificationTap(NotificationResponse response) {
+    debugPrint('🔵 [NotificationService] Notification tapped');
+    debugPrint('🔵 [NotificationService] Payload: ${response.payload}');
+    _notificationTapHandler?.call(response);
+    _decrementBadgeCount();
+  }
+
+  Future<void> updateBadgeCountFromDatabase() async {
+    debugPrint('🔵 [NotificationService] Updating badge count from database');
+    try {
+      final dbHelper = DatabaseHelper(); // Assuming DatabaseHelper is accessible or passed
+      final unreadCount = await dbHelper.getTotalUnreadMessageCount(); // Assuming this method exists
+      _badgeCount = unreadCount;
+      await _updateBadgeCount(); // Update platform badge
+      debugPrint('🔵 [NotificationService] Badge count updated to: $_badgeCount');
+    } catch (e) {
+      debugPrint('🔴 [NotificationService] Error updating badge count from database: $e');
+    }
+  }
+
+  Future<void> _incrementBadgeCount() async {
+    _badgeCount++;
+    await _updateBadgeCount();
+  }
+
+  Future<void> _decrementBadgeCount() async {
+    if (_badgeCount > 0) {
+      _badgeCount--;
+      await _updateBadgeCount();
+    }
+  }
+
+  Future<void> _updateBadgeCount() async {
+    try {
+      // For Android, we'll use the notification channel's badge count
+      final androidPlugin = _notifications.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+      if (androidPlugin != null) {
+        await androidPlugin.createNotificationChannel(
+          AndroidNotificationChannel(
+            'chat_messages',
+            'Chat Messages',
+            description: 'Notifications for new chat messages',
+            importance: Importance.max,
+            playSound: true,
+            enableVibration: true,
+            showBadge: true,
+          ),
+        );
+      }
+
+      // For iOS, we'll use the notification details
+      final iosPlugin = _notifications.resolvePlatformSpecificImplementation<
+          IOSFlutterLocalNotificationsPlugin>();
+      if (iosPlugin != null) {
+        await iosPlugin.requestPermissions(
+          alert: true,
+          badge: true,
+          sound: true,
+          critical: true,
+        );
+      }
+    } catch (e) {
+      debugPrint('🔴 [NotificationService] Error updating badge count: $e');
+    }
+  }
+
+  Future<void> showMessageNotification({
+    required String title,
+    required String body,
+    required String groupId,
+    String? payload,
+  }) async {
+ 
+
+    if (!_isInitialized) {
+      debugPrint('🔵 [NotificationService] Not initialized, initializing now');
+      await initialize();
+    }
+
+    try {
+      await _incrementBadgeCount();
+
+      final androidDetails = AndroidNotificationDetails(
+        'chat_messages',
+        'Chat Messages',
+        channelDescription: 'Notifications for new chat messages',
+        importance: Importance.max,
+        priority: Priority.high,
+        groupKey: 'chat_messages',
+        showWhen: true,
+        enableVibration: true,
+        playSound: true,
+        styleInformation: BigTextStyleInformation(''),
+        fullScreenIntent: true,
+        category: AndroidNotificationCategory.message,
+        visibility: NotificationVisibility.public,
+        color: Color(0xFF2196F3),
+        icon: '@mipmap/ic_launcher_foreground',
+        largeIcon: DrawableResourceAndroidBitmap('@mipmap/ic_launcher_foreground'),
+      );
+
+      final iosDetails = DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+        interruptionLevel: InterruptionLevel.critical,
+        threadIdentifier: 'chat_messages',
+        badgeNumber: _badgeCount,
+        sound: 'default',
+        attachments: null,
+        subtitle: 'New Message',
+      );
+
+      final details = NotificationDetails(
+        android: androidDetails,
+        iOS: iosDetails,
+      );
+
+      final id = DateTime.now().millisecondsSinceEpoch.remainder(100000);
+     
+
+      await _notifications.show(
+        id,
+        title,
+        body,
+        details,
+        payload: payload ?? groupId,
+      );
+      
+    } catch (e, stackTrace) {
+      debugPrint('🔴 [NotificationService] Error showing message notification: $e');
+      debugPrint('🔴 [NotificationService] Stack trace: $stackTrace');
+    }
   }
 
   Future<void> showGroupMessageNotification({
@@ -77,51 +264,93 @@ class NotificationService {
     String? messageImage,
     String? messageType,
   }) async {
-    // Determine notification layout based on message type
-    NotificationLayout layout = NotificationLayout.Default;
-    String? bigPicture;
-    String? largeIcon;
-
-    if (messageType == 'image' && messageImage != null) {
-      layout = NotificationLayout.BigPicture;
-      bigPicture = messageImage;
+    if (!_isInitialized) {
+      debugPrint('🔵 [NotificationService] Not initialized, initializing now');
+      await initialize();
     }
 
-    // Set group icon as large icon if available
-    if (groupIcon != null) {
-      largeIcon = groupIcon;
-    } else if (profilePic != null) {
-      largeIcon = profilePic;
-    }
+    try {
+      await _incrementBadgeCount();
 
-    // Ensure URLs are absolute
-    if (largeIcon != null && !largeIcon.startsWith('http')) {
-      largeIcon = '${ApiEndpoints.server}/$largeIcon';
-    }
-    if (bigPicture != null && !bigPicture.startsWith('http')) {
-      bigPicture = '${ApiEndpoints.server}/$bigPicture';
-    }
+      String? largeIcon;
+      String? bigPicture;
 
-    await AwesomeNotifications().createNotification(
-      content: NotificationContent(
-        id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
-        channelKey: 'group_messages',
-        title: '$groupName - $senderName',
-        body: message,
-        notificationLayout: layout,
-        category: NotificationCategory.Message,
-        wakeUpScreen: true,
-        fullScreenIntent: false,
-        criticalAlert: false,
-        bigPicture: bigPicture,
-        largeIcon: largeIcon,
-        payload: {
+      // Set group icon as large icon if available
+      if (groupIcon != null) {
+        largeIcon = groupIcon;
+        debugPrint('🔵 [NotificationService] Using group icon: $groupIcon');
+      } else if (profilePic != null) {
+        largeIcon = profilePic;
+        debugPrint('🔵 [NotificationService] Using profile pic: $profilePic');
+      }
+
+      // Ensure URLs are absolute
+      if (largeIcon != null && !largeIcon.startsWith('http')) {
+        largeIcon = '${ApiEndpoints.server}/$largeIcon';
+       
+      }
+      if (messageImage != null && !messageImage.startsWith('http')) {
+        bigPicture = '${ApiEndpoints.server}/$messageImage';
+        debugPrint('🔵 [NotificationService] Converted to absolute URL: $bigPicture');
+      }
+
+      final androidDetails = AndroidNotificationDetails(
+        'group_messages',
+        'Group Messages',
+        channelDescription: 'Notifications for group messages',
+        importance: Importance.max,
+        priority: Priority.high,
+        groupKey: 'group_messages',
+        showWhen: true,
+        enableVibration: true,
+        playSound: true,
+        styleInformation: BigTextStyleInformation(''),
+        largeIcon: (largeIcon != null && !largeIcon.startsWith('http'))
+            ? ByteArrayAndroidBitmap.fromBase64String(largeIcon)
+            : DrawableResourceAndroidBitmap('@mipmap/ic_launcher_foreground'),
+        fullScreenIntent: true,
+        category: AndroidNotificationCategory.message,
+        visibility: NotificationVisibility.public,
+        color: Color(0xFF2196F3),
+        icon: '@mipmap/ic_launcher_foreground',
+      );
+
+      final iosDetails = DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+        interruptionLevel: InterruptionLevel.critical,
+        threadIdentifier: 'group_messages',
+        badgeNumber: _badgeCount,
+        sound: 'default',
+        attachments: null,
+        subtitle: 'New Group Message',
+      );
+
+      final details = NotificationDetails(
+        android: androidDetails,
+        iOS: iosDetails,
+      );
+
+      final id = DateTime.now().millisecondsSinceEpoch.remainder(100000);
+      debugPrint('🔵 [NotificationService] Showing notification with ID: $id');
+
+      await _notifications.show(
+        id,
+        '$groupName - $senderName',
+        message,
+        details,
+        payload: jsonEncode({
           'type': 'group_message',
           'group_id': groupId,
           'message_type': messageType,
-        },
-      ),
-    );
+        }),
+      );
+      debugPrint('🔵 [NotificationService] Group message notification shown successfully');
+    } catch (e, stackTrace) {
+      debugPrint('🔴 [NotificationService] Error showing group message notification: $e');
+      debugPrint('🔴 [NotificationService] Stack trace: $stackTrace');
+    }
   }
 
   Future<void> showGoalReminderNotification({
@@ -135,23 +364,36 @@ class NotificationService {
       largeIcon = '${ApiEndpoints.server}/$goalIcon';
     }
 
-    await AwesomeNotifications().createNotification(
-      content: NotificationContent(
-        id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
-        channelKey: 'goal_reminders',
-        title: 'Goal Reminder: $goalName',
-        body: reminderMessage,
-        notificationLayout: NotificationLayout.Default,
-        category: NotificationCategory.Reminder,
-        wakeUpScreen: true,
-        fullScreenIntent: false,
-        criticalAlert: false,
-        largeIcon: largeIcon,
-        payload: {
-          'type': 'goal_reminder',
-          'goal_id': goalId,
-        },
-      ),
+    const androidDetails = AndroidNotificationDetails(
+      'goal_reminders',
+      'Goal Reminders',
+      channelDescription: 'Notifications for goal reminders',
+      importance: Importance.high,
+      priority: Priority.high,
+      groupKey: 'goal_reminders',
+      showWhen: true,
+    );
+
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+
+    const details = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
+
+    await _notifications.show(
+      DateTime.now().millisecondsSinceEpoch.remainder(100000),
+      'Goal Reminder: $goalName',
+      reminderMessage,
+      details,
+      payload: jsonEncode({
+        'type': 'goal_reminder',
+        'goal_id': goalId,
+      }),
     );
   }
 
@@ -161,33 +403,43 @@ class NotificationService {
     String? updateId,
     String? updateImage,
   }) async {
-    NotificationLayout layout = NotificationLayout.Default;
     String? bigPicture;
-
     if (updateImage != null) {
-      layout = NotificationLayout.BigPicture;
       bigPicture = updateImage.startsWith('http')
           ? updateImage
           : '${ApiEndpoints.server}/$updateImage';
     }
 
-    await AwesomeNotifications().createNotification(
-      content: NotificationContent(
-        id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
-        channelKey: 'product_updates',
-        title: title,
-        body: message,
-        notificationLayout: layout,
-        category: NotificationCategory.Social,
-        wakeUpScreen: true,
-        fullScreenIntent: false,
-        criticalAlert: false,
-        bigPicture: bigPicture,
-        payload: {
-          'type': 'product_update',
-          'update_id': updateId,
-        },
-      ),
+    const androidDetails = AndroidNotificationDetails(
+      'product_updates',
+      'Product Updates',
+      channelDescription: 'Notifications for product updates',
+      importance: Importance.high,
+      priority: Priority.high,
+      groupKey: 'product_updates',
+      showWhen: true,
+    );
+
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+
+    const details = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
+
+    await _notifications.show(
+      DateTime.now().millisecondsSinceEpoch.remainder(100000),
+      title,
+      message,
+      details,
+      payload: jsonEncode({
+        'type': 'product_update',
+        'update_id': updateId,
+      }),
     );
   }
 
@@ -202,71 +454,41 @@ class NotificationService {
       largeIcon = '${ApiEndpoints.server}/$icon';
     }
 
-    await AwesomeNotifications().createNotification(
-      content: NotificationContent(
-        id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
-        channelKey: 'basic_channel',
-        title: title,
-        body: message,
-        notificationLayout: NotificationLayout.Default,
-        category: NotificationCategory.Message,
-        wakeUpScreen: true,
-        fullScreenIntent: false,
-        criticalAlert: false,
-        largeIcon: largeIcon,
-        payload: {
-          'type': 'basic',
-          'data': payload,
-        },
-      ),
+    const androidDetails = AndroidNotificationDetails(
+      'basic_channel',
+      'Basic Notifications',
+      channelDescription: 'Basic notifications',
+      importance: Importance.high,
+      priority: Priority.high,
+      groupKey: 'basic_channel',
+      showWhen: true,
+    );
+
+    const iosDetails = DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+
+    const details = NotificationDetails(
+      android: androidDetails,
+      iOS: iosDetails,
+    );
+
+    await _notifications.show(
+      DateTime.now().millisecondsSinceEpoch.remainder(100000),
+      title,
+      message,
+      details,
+      payload: jsonEncode({
+        'type': 'basic',
+        'data': payload,
+      }),
     );
   }
 
-  // Handle notification actions
-  void setupNotificationActionHandlers(BuildContext context) {
-    AwesomeNotifications().setListeners(
-      onActionReceivedMethod: (ReceivedAction receivedAction) async {
-        final payload = receivedAction.payload;
-        if (payload == null) return;
-
-        switch (payload['type']) {
-          case 'group_message':
-            // Handle group message notification tap
-            final groupId = payload['group_id'];
-            if (groupId != null) {
-              // Navigate to the group chat
-              // You'll need to implement this navigation logic
-            }
-            break;
-
-          case 'goal_reminder':
-            // Handle goal reminder notification tap
-            final goalId = payload['goal_id'];
-            if (goalId != null) {
-              // Navigate to the goal details
-              // You'll need to implement this navigation logic
-            }
-            break;
-
-          case 'product_update':
-            // Handle product update notification tap
-            final updateId = payload['update_id'];
-            if (updateId != null) {
-              // Navigate to the update details
-              // You'll need to implement this navigation logic
-            }
-            break;
-
-          case 'basic':
-            // Handle basic notification tap
-            final data = payload['data'];
-            if (data != null) {
-              // Handle basic notification data
-              // You'll need to implement this logic
-            }
-            break;
-        }
-      },
-    );
+  Future<void> clearBadgeCount() async {
+    _badgeCount = 0;
+    await _updateBadgeCount();
   }
 }

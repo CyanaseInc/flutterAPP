@@ -1,9 +1,13 @@
 adb reverse tcp:8000 tcp:8000
-C:\Users\User\Downloads\Cyanase\code\api>c # Restart ADB in TCP/IP mode
-restarting in TCP mode port: 5555
+
 PS C:\Users\User\Downloads\Cyanase\code\api> adb connect 10.156.124.53
 connected to 10.156.124.53:5555
 
+
+\
+\
+\\
+\`
 1. ip route | grep default   wls
 
 cd /mnt/c/Users/User/Downloads/Cyanase/code/api
@@ -14,4 +18,4 @@ source venv/bin/activate
 
  impact fm savings  0776884201
 
-
+0772123100

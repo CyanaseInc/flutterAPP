@@ -355,11 +355,12 @@ class GoalCard extends StatelessWidget {
         goalAmount > 0 ? (totalDeposits / goalAmount).clamp(0.0, 1.0) : 0.0;
     final reminderSet = goalData['reminder_set'] as bool? ?? false;
 
-    final goalPicture = goalData['goal_picture'] != null
-        ? (goalData['goal_picture'].toString().startsWith('http')
-            ? goalData['goal_picture']
-            : ApiEndpoints.server + goalData['goal_picture'])
-        : null;
+   final goalPicture = goalData['goal_picture'] != null
+    ? (goalData['goal_picture'].toString().startsWith('http')
+        ? goalData['goal_picture']
+        : "${ApiEndpoints.server}/${goalData['goal_picture']}")
+    : null;
+
     final hasImage = goalPicture != null && goalPicture.isNotEmpty;
 
     // Create a NumberFormat instance for formatting numbers with commas

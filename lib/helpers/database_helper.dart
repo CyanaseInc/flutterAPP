@@ -1,5 +1,6 @@
-import 'package:path/path.dart';
+import 'dart:async';
 import 'package:sqflite/sqflite.dart';
+import 'package:path/path.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'package:permission_handler/permission_handler.dart';
@@ -13,6 +14,13 @@ class DatabaseHelper {
   static const String tableMedia = 'media';
   static const String tableMessages = 'messages';
   static const String tableContacts = 'contacts';
+
+  // StreamController for broadcasting message updates
+  final StreamController<Map<int, List<Map<String, dynamic>>>> _messageStreamController =
+      StreamController.broadcast();
+
+  // Stream of messages, keyed by groupId
+  Stream<Map<int, List<Map<String, dynamic>>>> get messageStream => _messageStreamController.stream;
 
   // Singleton constructor
   DatabaseHelper._internal();
@@ -34,46 +42,37 @@ class DatabaseHelper {
     // Request permissions for Android 10+
     await _requestPermissions();
 
-    // Get the external storage directory
-    final externalStorage = await getExternalStorageDirectory();
-    if (externalStorage == null) {
-      throw Exception('External storage not available');
-    }
-
-    // Define the app-specific folder path
-    final appSpecificPath = Directory(
-      '${externalStorage.path}/Android/data/com.cyanase.app/database',
-    );
-
-    // Create the directory if it doesn't exist
-    if (!await appSpecificPath.exists()) {
-      await appSpecificPath.create(recursive: true);
-    }
-
-    // Define the database path
-    final dbPath = join(appSpecificPath.path, 'app_database.db');
+    // Get the application documents directory instead of external storage
+    final appDir = await getApplicationDocumentsDirectory();
+    final dbPath = join(appDir.path, 'app_database.db');
     print('Database path: $dbPath');
 
-    // Open the database
+    // Open the database with proper configuration
     return await openDatabase(
       dbPath,
       version: 4,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
+      onConfigure: (Database db) async {
+        // Enable foreign keys
+        await db.execute('PRAGMA foreign_keys = ON');
+      },
     );
   }
 
   // Request permissions
   Future<void> _requestPermissions() async {
-    if (await Permission.storage.isDenied) {
-      await Permission.storage.request();
+    if (Platform.isAndroid) {
+      final status = await Permission.storage.request();
+      if (status.isDenied) {
+        print('Storage permission denied');
+      }
     }
   }
 
   Future<void> clearDatabase() async {
     final dbPath = join(await getDatabasesPath(), 'app_database.db');
     await deleteDatabase(dbPath);
-
     _database = null;
   }
 
@@ -81,7 +80,6 @@ class DatabaseHelper {
   Future<void> _onCreate(Database db, int version) async {
     await db.execute('''
       CREATE TABLE profile (
-
         id TEXT PRIMARY KEY,
         token TEXT NOT NULL,
         name TEXT NOT NULL,
@@ -109,7 +107,7 @@ class DatabaseHelper {
         created_at TEXT NOT NULL,
         created_by TEXT NOT NULL,
         last_activity TEXT,
-        settings TEXT
+        settings TEXT,
         requires_payment INTEGER,
         deposit_amount REAL,
         allows_subscription INTEGER,
@@ -117,7 +115,6 @@ class DatabaseHelper {
         subscription_amount TEXT,
         has_user_paid INTEGER,
         restrict_messages_to_admins INTEGER
-        
       )
     ''');
 
@@ -127,6 +124,7 @@ class DatabaseHelper {
         is_admin BOOLEAN NOT NULL DEFAULT TRUE,
         is_approved BOOLEAN NOT NULL DEFAULT TRUE,
         is_denied BOOLEAN NOT NULL DEFAULT FALSE,
+        profile_pic TEXT NOT NULL,
         is_removed INTEGER,
         user_name TEXT NOT NULL,
         group_id INTEGER NOT NULL,
@@ -165,9 +163,9 @@ class DatabaseHelper {
         timestamp TEXT NOT NULL,
         reply_to_id INTEGER,
         reply_to_message TEXT,
-        forwarded BOOLEAN NOT NULL DEFAULT FALSE,
-        edited BOOLEAN NOT NULL DEFAULT FALSE,
-        deleted BOOLEAN NOT NULL DEFAULT FALSE,
+        forwarded INTEGER NOT NULL DEFAULT 0,
+        edited INTEGER NOT NULL DEFAULT 0,
+        deleted INTEGER NOT NULL DEFAULT 0,
         temp_id TEXT,
         FOREIGN KEY (group_id) REFERENCES groups (id) ON DELETE CASCADE,
         FOREIGN KEY (sender_id) REFERENCES profile(id) ON DELETE CASCADE,
@@ -187,28 +185,24 @@ class DatabaseHelper {
     ''');
 
     // Add indexes for performance
-    await db
-        .execute('CREATE INDEX idx_messages_group_id ON messages(group_id)');
-    await db
-        .execute('CREATE INDEX idx_messages_timestamp ON messages(timestamp)');
+    await db.execute('CREATE INDEX idx_messages_group_id ON messages(group_id)');
+    await db.execute('CREATE INDEX idx_messages_timestamp ON messages(timestamp)');
   }
 
   // Handle schema upgrades
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
-      await db.execute(
-          'ALTER TABLE messages ADD COLUMN isMe INTEGER NOT NULL DEFAULT 0');
+      await db.execute('ALTER TABLE messages ADD COLUMN isMe INTEGER NOT NULL DEFAULT 0');
     }
-
     if (oldVersion < 3) {
       await db.execute('ALTER TABLE media ADD COLUMN thumbnail_path TEXT');
     }
-
     if (oldVersion < 4) {
       await db.execute('ALTER TABLE messages ADD COLUMN reply_to_message TEXT');
     }
   }
 
+  // Insert methods
   Future<int> insertUser(Map<String, dynamic> user) async {
     final db = await database;
     return await db.insert('profile', user);
@@ -221,33 +215,72 @@ class DatabaseHelper {
 
   Future<int> insertParticipant(Map<String, dynamic> participant) async {
     final db = await database;
-    return await db.insert('participants', participant);
-  }
+    try {
+      // First check if the group exists
+      final groupExists = await db.query(
+        'groups',
+        where: 'id = ?',
+        whereArgs: [participant['group_id']],
+        limit: 1,
+      );
 
-  Future<void> insertMessage(Map<String, dynamic> message) async {
-    final db = await database;
-    await db.insert(
-      'messages',
-      {
-        'group_id': message['group_id'],
-        'sender_id': message['sender_id'],
-        'message': message['message'],
-        'type': message['type'],
-        'timestamp': message['timestamp'],
-        'status': message['status'] ?? 'sent',
-        'isMe': message['isMe'],
-        'id': message['id'],
-        'temp_id': message['temp_id'],
-        'reply_to_id': message['reply_to_id'],
-        'reply_to_message': message['reply_to_message'],
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
-  }
+      if (groupExists.isEmpty) {
+        print('🔴 [DatabaseHelper] Group ${participant['group_id']} does not exist, creating it first');
+        // Create the group if it doesn't exist
+        await db.insert('groups', {
+          'id': participant['group_id'],
+          'name': 'Group ${participant['group_id']}', // Default name
+          'type': 'group',
+          'created_at': DateTime.now().toIso8601String(),
+          'created_by': participant['user_id'],
+          'amAdmin': participant['is_admin'] is bool ? (participant['is_admin'] ? 1 : 0) : 
+                    participant['is_admin'] is int ? participant['is_admin'] : 0,
+          'requires_payment': 0,
+          'deposit_amount': 0.0,
+          'allows_subscription': 0,
+          'subscription_frequency': null,
+          'subscription_amount': null,
+          'has_user_paid': 1,
+          'restrict_messages_to_admins': 0,
+        });
+      }
 
-  Future<int> insertContact(Map<String, dynamic> contact) async {
-    final db = await database;
-    return await db.insert('contacts', contact);
+      // Convert boolean fields to integers
+      final participantData = {
+        'group_id': participant['group_id'],
+        'user_id': participant['user_id'],
+        'user_name': participant['user_name'],
+        'role': participant['role'] ?? 'member',
+        'joined_at': participant['joined_at'] ?? DateTime.now().toIso8601String(),
+        'muted': participant['muted'] is bool ? (participant['muted'] ? 1 : 0) : 
+                participant['muted'] is int ? participant['muted'] : 0,
+        'is_admin': participant['is_admin'] is bool ? (participant['is_admin'] ? 1 : 0) : 
+                   participant['is_admin'] is int ? participant['is_admin'] : 0,
+        'is_approved': participant['is_approved'] is bool ? (participant['is_approved'] ? 1 : 0) : 
+                      participant['is_approved'] is int ? participant['is_approved'] : 0,
+        'is_denied': participant['is_denied'] is bool ? (participant['is_denied'] ? 1 : 0) : 
+                    participant['is_denied'] is int ? participant['is_denied'] : 0,
+        'is_removed': participant['is_removed'] is bool ? (participant['is_removed'] ? 1 : 0) : 
+                     participant['is_removed'] is int ? participant['is_removed'] : 0,
+        'profile_pic': participant['profile_pic'] ?? 'assets/images/avatar.png',
+      };
+
+      print('🔵 [DatabaseHelper] Inserting participant with data: $participantData');
+
+      // Now insert the participant
+      final result = await db.insert(
+        'participants',
+        participantData,
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+
+      print('🔵 [DatabaseHelper] Successfully inserted participant for group ${participant['group_id']}');
+      return result;
+    } catch (e, stackTrace) {
+      print('🔴 [DatabaseHelper] Error inserting participant: $e');
+      print('🔴 [DatabaseHelper] Stack trace: $stackTrace');
+      rethrow;
+    }
   }
 
   Future<void> insertContacts(List<Map<String, dynamic>> contacts) async {
@@ -320,6 +353,105 @@ class DatabaseHelper {
     );
   }
 
+  Future<void> insertMessage(Map<String, dynamic> message) async {
+    final db = await database;
+    try {
+      print('🔵 [DatabaseHelper] Inserting message with data: $message');
+      
+      // Convert all fields to their proper types
+      final messageData = {
+        'group_id': message['group_id'] is String ? int.tryParse(message['group_id']) : 
+                   message['group_id'] is int ? message['group_id'] : null,
+        'sender_id': message['sender_id']?.toString(),
+        'message': message['message']?.toString(),
+        'type': message['type']?.toString() ?? 'text',
+        'timestamp': message['timestamp']?.toString() ?? DateTime.now().toIso8601String(),
+        'status': message['status']?.toString() ?? 'sent',
+        'isMe': message['isMe'] is bool ? (message['isMe'] ? 1 : 0) : 
+                message['isMe'] is int ? message['isMe'] : 0,
+        'id': message['id'] is String ? int.tryParse(message['id']) : 
+              message['id'] is int ? message['id'] : null,
+        'temp_id': message['temp_id']?.toString(),
+        'reply_to_id': message['reply_to_id'] is String ? int.tryParse(message['reply_to_id']) : 
+                      message['reply_to_id'] is int ? message['reply_to_id'] : null,
+        'reply_to_message': message['reply_to_message']?.toString(),
+        'forwarded': message['forwarded'] is bool ? (message['forwarded'] ? 1 : 0) : 
+                    message['forwarded'] is int ? message['forwarded'] : 0,
+        'edited': message['edited'] is bool ? (message['edited'] ? 1 : 0) : 
+                 message['edited'] is int ? message['edited'] : 0,
+        'deleted': message['deleted'] is bool ? (message['deleted'] ? 1 : 0) : 
+                  message['deleted'] is int ? message['deleted'] : 0,
+      };
+
+      // Validate required fields
+      if (messageData['group_id'] == null) {
+        print('🔴 [DatabaseHelper] Invalid group_id: ${message['group_id']}');
+        return;
+      }
+
+      if (messageData['sender_id'] == null) {
+        print('🔴 [DatabaseHelper] Invalid sender_id: ${message['sender_id']}');
+        return;
+      }
+
+      // Ensure group exists
+      await ensureGroupExists(messageData['group_id'] as int, messageData['sender_id'] as String);
+
+      // Ensure sender exists in profile table
+      final senderExists = await db.query(
+        'profile',
+        where: 'id = ?',
+        whereArgs: [messageData['sender_id']],
+        limit: 1,
+      );
+
+      if (senderExists.isEmpty) {
+        print('🔵 [DatabaseHelper] Creating sender profile for ${messageData['sender_id']}');
+        await db.insert('profile', {
+          'id': messageData['sender_id'],
+          'token': '',
+          'name': 'User ${messageData['sender_id']}',
+          'profile_pic': 'assets/images/avatar.png',
+          'phone_number': '',
+          'country': '',
+          'email': '',
+          'last_seen': DateTime.now().toIso8601String(),
+          'status': 'offline',
+          'auto_save': 0,
+          'goals_alert': 0,
+          'created_at': DateTime.now().toIso8601String(),
+          'privacy_settings': '{}',
+        });
+      }
+
+      print('🔵 [DatabaseHelper] Processed message data: $messageData');
+      
+      final result = await db.insert(
+        'messages',
+        messageData,
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+
+      print('🔵 [DatabaseHelper] Successfully inserted message, row ID: $result');
+      
+      // Fetch updated messages for the group
+      final messages = await getMessages(groupId: messageData['group_id']);
+      print('🔵 [DatabaseHelper] Broadcasting ${messages.length} messages for group: ${messageData['group_id']}');
+      
+      // Broadcast updated messages
+      _messageStreamController.add({messageData['group_id'] as int: messages});
+    } catch (e, stackTrace) {
+      print('🔴 [DatabaseHelper] Error inserting message: $e, StackTrace: $stackTrace');
+      rethrow;
+    }
+  }
+
+  Future<int> insertContact(Map<String, dynamic> contact) async {
+    final db = await database;
+    return await db.insert('contacts', contact);
+  }
+
+  // Query methods
   Future<List<Map<String, dynamic>>> getContacts() async {
     final db = await database;
     return await db.query('contacts');
@@ -337,27 +469,42 @@ class DatabaseHelper {
 
   Future<List<Map<String, dynamic>>> getParticipants(int groupId) async {
     final db = await database;
-    return await db
-        .query('participants', where: 'group_id = ?', whereArgs: [groupId]);
+    return await db.query('participants', where: 'group_id = ?', whereArgs: [groupId]);
   }
 
   Future<List<Map<String, dynamic>>> getMessages({
-    int? groupId,
+    required int? groupId,
+    String? sinceTimestamp,
     int limit = 20,
     int offset = 0,
   }) async {
     final db = await database;
-
-    final result = await db.rawQuery('''
-      SELECT m.*, media.file_path as media_path, media.type as media_type
+    String query = '''
+      SELECT m.*, media.file_path as media_path, media.type as media_type,
+             p.user_name as sender_name, p.profile_pic as sender_avatar, p.role as sender_role
       FROM messages m
       LEFT JOIN media ON m.media_id = media.id
-      WHERE ${groupId != null ? 'm.group_id = ? AND m.deleted = 0' : 'm.deleted = 0'}
-      ORDER BY m.timestamp DESC
-      LIMIT ? OFFSET ?
-    ''', groupId != null ? [groupId, limit, offset] : [limit, offset]);
+      LEFT JOIN participants p ON m.sender_id = p.user_id AND m.group_id = p.group_id
+      WHERE m.group_id = ? AND m.deleted = 0
+    ''';
+    List<dynamic> args = [groupId];
 
-    return result;
+    if (sinceTimestamp != null) {
+      query += ' AND m.timestamp > ?';
+      args.add(sinceTimestamp);
+    }
+
+    query += ' ORDER BY m.timestamp DESC LIMIT ? OFFSET ?';
+    args.addAll([limit, offset]);
+
+    try {
+      final result = await db.rawQuery(query, args);
+     
+      return result;
+    } catch (e) {
+      print('🔴 [DatabaseHelper] Error fetching messages: $e');
+      return [];
+    }
   }
 
   Future<Map<String, dynamic>?> getMedia(int mediaId) async {
@@ -373,21 +520,21 @@ class DatabaseHelper {
   Future<List<Map<String, String>>> getGroupMemberNames(int groupId) async {
     final db = await database;
     final result = await db.rawQuery('''
-    SELECT *
-    FROM participants   
-    WHERE  participants.group_id = ?
-  ''', [groupId]);
+      SELECT user_name, role, profile_pic
+      FROM participants
+      WHERE group_id = ?
+    ''', [groupId]);
 
     return result
         .map((row) => {
               'name': row['user_name'] as String,
               'role': row['role'] as String? ?? 'Member',
+              'profile_pic': row['profile_pic'] as String? ?? '',
             })
         .toList();
   }
 
-  Future<void> updateMemberRole(
-      int groupId, String userId, String newRole) async {
+  Future<void> updateMemberRole(int groupId, String userId, String newRole) async {
     final db = await database;
     await db.update(
       'participants',
@@ -400,37 +547,44 @@ class DatabaseHelper {
   Future<int> insertNotification({
     required int groupId,
     required String message,
-    String? senderId, // Optional, for cases like "Admin added X"
+    String? senderId,
   }) async {
     final db = await database;
     final notification = {
       'group_id': groupId,
-      'sender_id':
-          senderId ?? 'system', // Use 'system' for automated notifications
+      'sender_id': senderId ?? 'system',
       'message': message,
       'type': 'notification',
       'status': 'delivered',
       'timestamp': DateTime.now().toIso8601String(),
-      'isMe': 0, // Notifications aren't "sent" by the user
+      'isMe': 0,
       'reply_to_id': null,
       'reply_to_message': null,
     };
-    return await db.insert(
+    final id = await db.insert(
       'messages',
       notification,
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
+    // Broadcast updated messages
+    final messages = await getMessages(groupId: groupId);
+    _messageStreamController.add({groupId: messages});
+    return id;
   }
 
+  // Delete methods
   Future<int> deleteUser(String userId) async {
     final db = await database;
     return await db.delete('profile', where: 'id = ?', whereArgs: [userId]);
   }
 
-  Future<int> removeMember(int groupID, String userId) async {
+  Future<int> removeMember(int groupId, String userId) async {
     final db = await database;
-    return await db
-        .delete('participants', where: 'id = ?', whereArgs: [userId]);
+    return await db.delete(
+      'participants',
+      where: 'group_id = ? AND user_id = ?',
+      whereArgs: [groupId, userId],
+    );
   }
 
   Future<int> deleteGroup(int groupId) async {
@@ -440,28 +594,41 @@ class DatabaseHelper {
 
   Future<int> deleteParticipant(int participantId) async {
     final db = await database;
-    return await db
-        .delete('participants', where: 'id = ?', whereArgs: [participantId]);
+    return await db.delete('participants', where: 'id = ?', whereArgs: [participantId]);
   }
 
   Future<int> deleteMessage(int messageId) async {
     final db = await database;
-    return await db.update(
+    final result = await db.update(
       'messages',
       {'deleted': true},
       where: 'id = ?',
       whereArgs: [messageId],
     );
+    // Broadcast updated messages
+    final groupId = (await db.query(
+      'messages',
+      columns: ['group_id'],
+      where: 'id = ?',
+      whereArgs: [messageId],
+    )).first['group_id'] as int;
+    final messages = await getMessages(groupId: groupId);
+    _messageStreamController.add({groupId: messages});
+    return result;
   }
 
   Future<int> clearMessages(int groupId) async {
     final db = await database;
-    return await db.update(
+    final result = await db.update(
       'messages',
       {'deleted': true},
       where: 'group_id = ?',
       whereArgs: [groupId],
     );
+    // Broadcast updated messages
+    final messages = await getMessages(groupId: groupId);
+    _messageStreamController.add({groupId: messages});
+    return result;
   }
 
   Future<List<Map<String, dynamic>>> getMediaForGroup(int groupId) async {
@@ -475,15 +642,27 @@ class DatabaseHelper {
 
   Future<int> deleteMedia(int mediaId) async {
     final db = await database;
-    return await db.update(
+    final result = await db.update(
       'media',
       {'deleted': true},
       where: 'id = ?',
       whereArgs: [mediaId],
     );
+    // Broadcast updated messages for affected groups
+    final messagesWithMedia = await db.query(
+      'messages',
+      where: 'media_id = ?',
+      whereArgs: [mediaId],
+    );
+    for (var message in messagesWithMedia) {
+      final groupId = message['group_id'] as int;
+      final messages = await getMessages(groupId: groupId);
+      _messageStreamController.add({groupId: messages});
+    }
+    return result;
   }
 
-  // Update message status
+  // Update methods
   Future<void> updateMessageStatus(String messageId, String status) async {
     final db = await database;
     await db.update(
@@ -492,6 +671,15 @@ class DatabaseHelper {
       where: 'id = ?',
       whereArgs: [messageId],
     );
+    // Broadcast updated messages
+    final message = (await db.query(
+      'messages',
+      where: 'id = ?',
+      whereArgs: [messageId],
+    )).first;
+    final groupId = message['group_id'] as int;
+    final messages = await getMessages(groupId: groupId);
+    _messageStreamController.add({groupId: messages});
   }
 
   Future<List<Map<String, dynamic>>> getPendingMessages() async {
@@ -506,16 +694,7 @@ class DatabaseHelper {
   Future<void> verifyDatabaseIntegrity() async {
     print('Verifying database integrity...');
     final db = await database;
-
-    // Check if tables exist
-    final tables = [
-      'profile',
-      'groups',
-      'participants',
-      'messages',
-      'media',
-      'contacts'
-    ];
+    final tables = ['profile', 'groups', 'participants', 'messages', 'media', 'contacts'];
     for (var table in tables) {
       try {
         final result = await db.query(table, limit: 1);
@@ -534,6 +713,15 @@ class DatabaseHelper {
       where: 'temp_id = ?',
       whereArgs: [tempId],
     );
+    // Broadcast updated messages
+    final message = (await db.query(
+      'messages',
+      where: 'id = ?',
+      whereArgs: [serverId],
+    )).first;
+    final groupId = message['group_id'] as int;
+    final messages = await getMessages(groupId: groupId);
+    _messageStreamController.add({groupId: messages});
   }
 
   Future<void> updateMessageMediaId(String messageId, int mediaId) async {
@@ -544,10 +732,18 @@ class DatabaseHelper {
       where: 'id = ?',
       whereArgs: [messageId],
     );
+    // Broadcast updated messages
+    final message = (await db.query(
+      'messages',
+      where: 'id = ?',
+      whereArgs: [messageId],
+    )).first;
+    final groupId = message['group_id'] as int;
+    final messages = await getMessages(groupId: groupId);
+    _messageStreamController.add({groupId: messages});
   }
 
-  Future<void> updateMessageLocalPath(
-      String messageId, String localPath) async {
+  Future<void> updateMessageLocalPath(String messageId, String localPath) async {
     final db = await database;
     await db.update(
       'messages',
@@ -555,5 +751,65 @@ class DatabaseHelper {
       where: 'id = ?',
       whereArgs: [messageId],
     );
+    // Broadcast updated messages
+    final message = (await db.query(
+      'messages',
+      where: 'id = ?',
+      whereArgs: [messageId],
+    )).first;
+    final groupId = message['group_id'] as int;
+    final messages = await getMessages(groupId: groupId);
+    _messageStreamController.add({groupId: messages});
+  }
+
+  Future<int> getTotalUnreadMessageCount() async {
+    final db = await database;
+    final result = await db.rawQuery('''
+      SELECT COUNT(*)
+      FROM messages
+      WHERE isMe = 0 AND status = 'unread'
+    ''');
+    return Sqflite.firstIntValue(result) ?? 0;
+  }
+
+  // Dispose stream controller
+  void dispose() {
+    _messageStreamController.close();
+    _database?.close();
+  }
+
+  // Add a method to ensure group exists
+  Future<void> ensureGroupExists(int groupId, String createdBy) async {
+    final db = await database;
+    try {
+      final groupExists = await db.query(
+        'groups',
+        where: 'id = ?',
+        whereArgs: [groupId],
+        limit: 1,
+      );
+
+      if (groupExists.isEmpty) {
+        print('🔵 [DatabaseHelper] Creating group $groupId');
+        await db.insert('groups', {
+          'id': groupId,
+          'name': 'Group $groupId',
+          'type': 'group',
+          'created_at': DateTime.now().toIso8601String(),
+          'created_by': createdBy,
+          'amAdmin': 0,
+          'requires_payment': 0,
+          'deposit_amount': 0.0,
+          'allows_subscription': 0,
+          'subscription_frequency': null,
+          'subscription_amount': null,
+          'has_user_paid': 1,
+          'restrict_messages_to_admins': 0,
+        });
+      }
+    } catch (e) {
+      print('🔴 [DatabaseHelper] Error ensuring group exists: $e');
+      rethrow;
+    }
   }
 }

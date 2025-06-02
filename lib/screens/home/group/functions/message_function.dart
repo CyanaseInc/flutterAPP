@@ -32,7 +32,7 @@ class MessageFunctions {
       return messages.map((msg) {
         return {
           ...msg,
-          "isMe": msg['sender_id'] == currentUserId,
+          "isMe": msg['sender_id'] == currentUserId ? 1 : 0,
           "isReply": msg['reply_to_id'] != null,
           "replyTo": msg['reply_to_id'] != null
               ? {
@@ -59,7 +59,7 @@ class MessageFunctions {
       final formattedMessages = messages.map((msg) {
         return {
           "id": msg['id'].toString(),
-          "isMe": msg['sender_id'] == currentUserId,
+          "isMe": msg['sender_id'] == currentUserId ? 1 : 0,
           "message": msg['message'],
           "time": msg['timestamp'],
           "replyTo": null,
@@ -75,7 +75,7 @@ class MessageFunctions {
         final formattedUpdatedMessages = updatedMessages.map((msg) {
           return {
             "id": msg['id'].toString(),
-            "isMe": msg['sender_id'] == currentUserId,
+            "isMe": msg['sender_id'] == currentUserId ? 1 : 0,
             "message": msg['message'],
             "time": msg['timestamp'],
             "replyTo": null,
@@ -97,7 +97,7 @@ class MessageFunctions {
     return messages.map((msg) {
       return {
         "id": msg['id'].toString(),
-        "isMe": msg['sender_id'] == currentUserId,
+        "isMe": msg['sender_id'] == currentUserId ? 1 : 0,
         "message": msg['message'],
         "time": msg['timestamp'],
         "replyTo": null,
@@ -125,7 +125,7 @@ class MessageFunctions {
         "message": message.trim(),
         "timestamp": DateTime.now().toIso8601String(),
         "type": "text",
-        "isMe": true,
+        "isMe": 1,
         "group_id": groupId.toString(),
       };
 

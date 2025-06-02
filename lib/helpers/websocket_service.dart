@@ -1,3 +1,4 @@
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -22,6 +23,9 @@ class WebSocketService {
   String? _token;
   StreamSubscription? _connectivitySubscription;
   bool _isNetworkAvailable = false;
+  final _messageStatusController = StreamController<Map<String, dynamic>>.broadcast();
+
+  Stream<Map<String, dynamic>> get messageStatusStream => _messageStatusController.stream;
 
   bool get isConnected => _isConnected;
 
@@ -56,7 +60,7 @@ class WebSocketService {
     if (_webSocket == null || _webSocket!.readyState != WebSocket.open) {
       final protocol = ApiEndpoints.server.startsWith('https') ? 'wss' : 'ws';
       final wsUrl =
-          '$protocol://${ApiEndpoints.myIp}/ws/chat/$groupId/?token=$_token';
+          '$protocol://${ApiEndpoints.myIp}/ws/chat-list/token=$_token';
 
       
       try {
@@ -248,6 +252,7 @@ class WebSocketService {
     try {
       final tempId = data['temp_id'].toString();
       final newId = data['id'].toString();
+      final groupId = data['room_id']?.toString();
       
       print('🔵 [STATUS] Updating sent message status');
       print('🔵 [STATUS] Temp ID: $tempId');
@@ -266,13 +271,13 @@ class WebSocketService {
         await _dbHelper.updateMessageId(tempId, newId);
         await _dbHelper.updateMessageStatus(newId, 'sent');
 
-        // Notify UI of ID update
-        onMessageReceived?.call({
+        // Notify UI through message status stream
+        _messageStatusController.add({
           'type': 'message_id_update',
           'old_id': tempId,
           'new_id': newId,
           'status': 'sent',
-          'group_id': data['room_id'],
+          'group_id': groupId,
         });
       } else {
         print('🔵 [STATUS] Message with ID $newId already exists, skipping update');
@@ -300,10 +305,11 @@ class WebSocketService {
         'isMe': 0,
       });
 
-      // Notify UI of new message
-      onMessageReceived?.call({
+      // Notify UI through message status stream
+      _messageStatusController.add({
         'type': 'new_message',
         'message': messageData,
+        'group_id': messageData['room_id'],
       });
 
       // Send delivered status
@@ -319,6 +325,7 @@ class WebSocketService {
       final status = data['status'];
       final userId = data['user_id']?.toString();
       final timestamp = data['timestamp'];
+      final groupId = data['group_id']?.toString();
 
       if (messageId == null || status == null) {
         print('🔴 [STATUS] Missing required fields for status update');
@@ -334,14 +341,14 @@ class WebSocketService {
       // Update status in database
       await _dbHelper.updateMessageStatus(messageId, status);
 
-      // Notify UI of status update
-      onMessageReceived?.call({
+      // Notify UI of status update through message status stream
+      _messageStatusController.add({
         'type': 'update_message_status',
         'message_id': messageId,
         'status': status,
         'user_id': userId,
         'timestamp': timestamp,
-        'group_id': _groupId,
+        'group_id': groupId,
       });
     } catch (e) {
       print('🔴 [STATUS] Error handling message status update: $e');
@@ -517,7 +524,7 @@ class WebSocketService {
             break;
           default:
             print('🔵 [WS] Unknown message type received: ${decoded['type']}');
-            print('🔵 [WS] Full message content: $decoded');
+           
         }
       }
     } catch (e) {

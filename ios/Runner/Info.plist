@@ -64,5 +64,26 @@
 		<string>NSUserActivityTypeBrowsingWeb</string>
 	</array>
 
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>remote-notification</string>
+	</array>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	</array>
+
+	<key>NSMicrophoneUsageDescription</key>
+	<string>We need access to your microphone to record audio messages</string>
+	<key>NSCameraUsageDescription</key>
+	<string>We need access to your camera to take photos for messages</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>We need access to your photo library to send images in messages</string>
+	<key>NSContactsUsageDescription</key>
+	<string>We need access to your contacts to help you connect with friends</string>
+	<key>NSUserNotificationsUsageDescription</key>
+	<string>We need to send you notifications for new messages and updates</string>
+
 </dict>
 </plist>

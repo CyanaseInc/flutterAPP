@@ -9,7 +9,7 @@ import 'package:cyanase/helpers/api_helper.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:cyanase/helpers/websocket_service.dart';
+import 'package:cyanase/helpers/chat_websocket_service.dart';
 import 'package:share_plus/share_plus.dart'; // Added for sharing
 import 'package:clipboard/clipboard.dart'; // Added for copying to clipboard
 
@@ -323,8 +323,8 @@ class _AddGroupMembersScreenState extends State<AddGroupMembersScreen>
                 'status': 'sending'
               };
               
-              if (WebSocketService.instance.isConnected) {
-                await WebSocketService.instance.sendMessage(wsMessage);
+              if ( ChatWebSocketService.instance.isConnected) {
+                await  ChatWebSocketService.instance.sendMessage(wsMessage);
               } else {
                 print('WebSocket not connected, skipping notification');
               }

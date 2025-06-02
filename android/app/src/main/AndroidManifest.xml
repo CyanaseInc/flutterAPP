@@ -16,11 +16,18 @@
     <uses-permission android:name="android.permission.READ_CONTACTS" />
     <uses-permission android:name="android.permission.WRITE_CONTACTS" />
     <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.BADGE_ICON_TYPE_SMALL"/>
+    <uses-permission android:name="android.permission.BADGE_ICON_TYPE_NONE"/>
+    <uses-permission android:name="android.permission.BADGE_ICON_TYPE_LAUNCHER"/>
+    <uses-permission android:name="android.permission.BADGE_COUNT_READ"/>
+    <uses-permission android:name="android.permission.BADGE_COUNT_WRITE"/>
 
     <application
         android:label="Cyanase"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="true">
 
         <activity
             android:name=".MainActivity"
@@ -66,6 +73,20 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
+        <!-- Notification badge support -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="chat_messages"/>
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@mipmap/ic_launcher_foreground"/>
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:value="#2196F3"/>
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_badge"
+            android:value="true"/>
     </application>
 
     <!-- Flutter text processing queries -->

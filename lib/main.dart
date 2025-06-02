@@ -21,6 +21,10 @@ class NotificationHandler {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // Initialize notification service first
+  await NotificationService().initialize();
+
+  // Initialize AwesomeNotifications for scheduled notifications only
   await AwesomeNotifications().initialize(
     null,
     [
@@ -40,10 +44,6 @@ void main() async {
     onActionReceivedMethod: NotificationHandler.onActionReceivedMethod,
   );
 
-  // Initialize notification service
-  final notificationService = NotificationService();
-  await notificationService.initialize();
-
   runApp(const MyApp());
 }
 
@@ -54,7 +54,7 @@ class MyApp extends StatefulWidget {
   State<MyApp> createState() => _MyAppState();
 }
 
-class _MyAppState extends State<MyApp> {
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   static final GlobalKey<NavigatorState> navigatorKey =
       GlobalKey<NavigatorState>();
   late DeepLinkHandler _deepLinkHandler;
@@ -62,21 +62,37 @@ class _MyAppState extends State<MyApp> {
   @override
   void initState() {
     super.initState();
-    debugPrint('Initializing MyApp, setting up DeepLinkHandler');
+    
     _deepLinkHandler = DeepLinkHandler(navigatorKey: navigatorKey);
     _deepLinkHandler.initDeepLinks();
+
+    // Add lifecycle observer
+    WidgetsBinding.instance.addObserver(this);
   }
 
   @override
   void dispose() {
-    debugPrint('Disposing MyApp, cleaning up DeepLinkHandler');
+    
     _deepLinkHandler.dispose();
+
+    // Remove lifecycle observer
+    WidgetsBinding.instance.removeObserver(this);
+
     super.dispose();
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    
+    if (state == AppLifecycleState.resumed) {
+      // App is coming to the foreground, update badge count from database
+      NotificationService().updateBadgeCountFromDatabase();
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    debugPrint('Building MyApp with navigatorKey');
+  
     return MaterialApp(
       title: 'Cyanase',
       theme: appTheme,
@@ -117,11 +133,12 @@ class _MyAppState extends State<MyApp> {
       case '/numeric_login':
         return const NumericLoginScreen();
       case '/home':
+        final args = arguments as Map<String, dynamic>?;
         return HomeScreen(
-          passcode: (arguments as Map<String, dynamic>?)?['passcode'],
-          email: (arguments as Map<String, dynamic>?)?['email'],
-          name: (arguments as Map<String, dynamic>?)?['name'],
-          picture: (arguments as Map<String, dynamic>?)?['picture'],
+          passcode: args?['passcode'],
+          email: args?['email'],
+          name: args?['name'],
+          picture: args?['picture'],
         );
       default:
         return const SplashScreenWrapper();

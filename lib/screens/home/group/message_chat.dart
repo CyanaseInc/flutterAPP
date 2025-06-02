@@ -9,27 +9,90 @@ import 'package:audioplayers/audioplayers.dart';
 class MessageTailPainter extends CustomPainter {
   final Color color;
   final bool isMe;
+  final bool isUnread;
 
-  MessageTailPainter({required this.color, required this.isMe});
+  MessageTailPainter({required this.color, required this.isMe, required this.isUnread});
 
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
+  ..color = isMe ? color : isUnread ? Colors.grey[300]! : color // Changed
+  ..style = PaintingStyle.fill;
 
     final path = Path();
-    if (isMe) {
-      path.moveTo(size.width, 0);
-      path.lineTo(size.width, size.height);
-      path.lineTo(0, size.height);
-    } else {
-      path.moveTo(0, 0);
-      path.lineTo(0, size.height);
-      path.lineTo(size.width, size.height);
-    }
-    path.close();
+    const double tailWidth = 12.0;
+    const double tailHeight = 16.0;
+    const double borderRadius = 16.0;
 
+    if (isMe) {
+      // Right side bubble (sent messages)
+      // Start from top-right
+      path.moveTo(size.width - borderRadius, 0);
+      
+      // Top edge
+      path.lineTo(borderRadius, 0);
+      path.quadraticBezierTo(0, 0, 0, borderRadius);
+      
+      // Left edge
+      path.lineTo(0, size.height - borderRadius);
+      path.quadraticBezierTo(0, size.height, borderRadius, size.height);
+      
+      // Bottom edge with tail
+      path.lineTo(size.width - tailWidth - borderRadius, size.height);
+      path.quadraticBezierTo(
+        size.width - tailWidth - borderRadius/2, size.height,
+        size.width - tailWidth, size.height - tailHeight/2
+      );
+      path.lineTo(size.width, size.height - tailHeight);
+      path.quadraticBezierTo(
+        size.width, size.height - tailHeight/2,
+        size.width - tailWidth, size.height - tailHeight
+      );
+      
+      // Right edge
+      path.lineTo(size.width - borderRadius, size.height - tailHeight);
+      path.quadraticBezierTo(
+        size.width, size.height - tailHeight,
+        size.width, size.height - tailHeight - borderRadius
+      );
+      path.lineTo(size.width, borderRadius);
+      path.quadraticBezierTo(size.width, 0, size.width - borderRadius, 0);
+    } else {
+      // Left side bubble (received messages)
+      // Start from top-left
+      path.moveTo(borderRadius, 0);
+      
+      // Top edge
+      path.lineTo(size.width - borderRadius, 0);
+      path.quadraticBezierTo(size.width, 0, size.width, borderRadius);
+      
+      // Right edge
+      path.lineTo(size.width, size.height - borderRadius);
+      path.quadraticBezierTo(size.width, size.height, size.width - borderRadius, size.height);
+      
+      // Bottom edge with tail
+      path.lineTo(tailWidth + borderRadius, size.height);
+      path.quadraticBezierTo(
+        tailWidth + borderRadius/2, size.height,
+        tailWidth, size.height - tailHeight/2
+      );
+      path.lineTo(0, size.height - tailHeight);
+      path.quadraticBezierTo(
+        0, size.height - tailHeight/2,
+        tailWidth, size.height - tailHeight
+      );
+      
+      // Left edge
+      path.lineTo(borderRadius, size.height - tailHeight);
+      path.quadraticBezierTo(
+        0, size.height - tailHeight,
+        0, size.height - tailHeight - borderRadius
+      );
+      path.lineTo(0, borderRadius);
+      path.quadraticBezierTo(0, 0, borderRadius, 0);
+    }
+
+    path.close();
     canvas.drawPath(path, paint);
   }
 
@@ -55,11 +118,13 @@ class MessageChat extends StatefulWidget {
   final String messageId;
   final String senderName;
   final String senderAvatar;
+  final String senderRole;
   final Function(String, String)? onReply;
   final Function(String)? onReplyTap;
   final String messageStatus;
   final Widget? messageContent;
   final bool isHighlighted;
+  final bool isUnread;
 
   const MessageChat({
     super.key,
@@ -80,11 +145,13 @@ class MessageChat extends StatefulWidget {
     required this.messageId,
     required this.senderName,
     required this.senderAvatar,
+    required this.senderRole,
     this.onReply,
     this.onReplyTap,
     required this.messageStatus,
     this.messageContent,
     this.isHighlighted = false,
+    this.isUnread = false,
   });
 
   @override
@@ -99,7 +166,7 @@ class _MessageChatState extends State<MessageChat>
   late AnimationController _animationController;
   late Animation<Offset> _slideAnimation;
   double _dragDistance = 0.0;
-  static const double _swipeThreshold = 50.0;
+  static const double _swipeThreshold = 70.0; // Increased threshold
   late String _currentStatus;
 
   @override
@@ -119,7 +186,7 @@ class _MessageChatState extends State<MessageChat>
     }
 
     _animationController = AnimationController(
-      duration: const Duration(milliseconds: 5),
+      duration: const Duration(milliseconds: 200), // Increased duration for better visual feedback
       vsync: this,
     );
 
@@ -151,7 +218,7 @@ class _MessageChatState extends State<MessageChat>
   }
 
   void _handleDragUpdate(DragUpdateDetails details) {
-    if (widget.isNotification) return; // Don't allow swipe for notifications
+    if (widget.isNotification) return;
 
     setState(() {
       _dragDistance += details.delta.dx;
@@ -170,8 +237,7 @@ class _MessageChatState extends State<MessageChat>
       }
     }
 
-    // Animate back to original position with faster animation
-    _animationController.duration = const Duration(milliseconds: 5);
+    // Animate back to original position
     _animationController.forward(from: 0.0).then((_) {
       setState(() {
         _dragDistance = 0.0;
@@ -192,7 +258,6 @@ class _MessageChatState extends State<MessageChat>
       await player.dispose();
       return duration ?? Duration.zero;
     } catch (e) {
-      print("Error getting audio duration: $e");
       return Duration.zero;
     }
   }
@@ -237,44 +302,55 @@ class _MessageChatState extends State<MessageChat>
       ),
       child: Align(
         alignment: widget.isMe ? Alignment.centerRight : Alignment.centerLeft,
-        child: GestureDetector(
-          onHorizontalDragUpdate: _handleDragUpdate,
-          onHorizontalDragEnd: _handleDragEnd,
-          child: Transform.translate(
-            offset: Offset(_dragDistance, 0),
-            child: Column(
-              crossAxisAlignment: widget.isMe
-                  ? CrossAxisAlignment.end
-                  : CrossAxisAlignment.start,
-              children: [
-                if (!widget.isSameSender)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 4.0),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
+        child: Column(
+          crossAxisAlignment: widget.isMe
+              ? CrossAxisAlignment.end
+              : CrossAxisAlignment.start,
+          children: [
+            if (!widget.isSameSender)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4.0),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (!widget.isMe)
+                      CircleAvatar(
+                        radius: 14,
+                        backgroundImage: FileImage(File(widget.senderAvatar)),
+                        backgroundColor: Colors.grey[300],
+                        onBackgroundImageError: (_, __) => Container(),
+                      ),
+                    if (!widget.isMe) const SizedBox(width: 8),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (!widget.isMe)
-                          CircleAvatar(
-                            radius: 14,
-                            backgroundImage:
-                                FileImage(File(widget.senderAvatar)),
-                            backgroundColor: Colors.grey[300],
-                            onBackgroundImageError: (_, __) => Container(),
-                          ),
-                        if (!widget.isMe) const SizedBox(width: 8),
                         Text(
                           widget.senderName,
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
-                            color:
-                                widget.isMe ? primaryColor : Colors.grey[700],
+                            color: widget.isMe ? primaryColor : Colors.grey[700],
+                          ),
+                        ),
+                        Text(
+                          widget.senderRole,
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.grey[600],
+                            fontStyle: FontStyle.italic,
                           ),
                         ),
                       ],
                     ),
-                  ),
-                Semantics(
+                  ],
+                ),
+              ),
+            GestureDetector(
+              onHorizontalDragUpdate: _handleDragUpdate,
+              onHorizontalDragEnd: _handleDragEnd,
+              child: Transform.translate(
+                offset: Offset(_dragDistance, 0),
+                child: Semantics(
                   label: widget.isMe ? "Sent message" : "Received message",
                   child: Stack(
                     children: [
@@ -289,13 +365,14 @@ class _MessageChatState extends State<MessageChat>
                           gradient: LinearGradient(
                             colors: widget.isMe
                                 ? [primaryTwo, primaryTwo.withOpacity(0.85)]
-                                : [Color(0xFFECECEC), Color(0xFFECECEC)],
+                                : widget.isUnread
+                                    ? [Colors.grey[300]!, Colors.grey[300]!.withOpacity(0.9)]
+                                    : [Color(0xFFECECEC), Color(0xFFECECEC)],
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                           ),
                           borderRadius: BorderRadius.only(
-                            topLeft: Radius.circular(
-                                widget.isMe || widget.isSameSender ? 12 : 0),
+                            topLeft: Radius.circular(widget.isMe || widget.isSameSender ? 12 : 0),
                             topRight: Radius.circular(widget.isMe ? 0 : 12),
                             bottomLeft: const Radius.circular(12),
                             bottomRight: const Radius.circular(12),
@@ -377,15 +454,16 @@ class _MessageChatState extends State<MessageChat>
                           painter: MessageTailPainter(
                             color: widget.isMe ? primaryTwo : Color(0xFFECECEC),
                             isMe: widget.isMe,
+                            isUnread: widget.isUnread,
                           ),
                         ),
                       ),
                     ],
                   ),
                 ),
-              ],
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );

@@ -37,7 +37,7 @@ class _GoalDetailsScreenState extends State<GoalDetailsScreen> {
     _nameController = TextEditingController(
       text: editableGoalData['goal_name'] as String? ?? 'Unnamed Goal',
     );
-    _goalPicture = editableGoalData['goal_picture'] as String?;
+    _goalPicture = "/${editableGoalData['goal_picture']}" as String?;
     _tempGoalPicture = ApiEndpoints.server + _goalPicture!;
   }
 
