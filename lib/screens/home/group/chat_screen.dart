@@ -1266,11 +1266,9 @@ void _handleNewMessage(Map<String, dynamic> data) async {
     );
 
     if (existingMessage.isEmpty) {
-      print('🔵 [DEBUG] Message is new, inserting into database');
+      print('🔵 [DEBUG] Message is new, updating UI only');
       
-      // Insert message into database
-      await _dbHelper.insertMessage(newMessage);
-      
+      // Don't insert into database here - let WebSocket service handle that
       if (!mounted) return;
       
       setState(() {
@@ -1297,12 +1295,12 @@ void _handleNewMessage(Map<String, dynamic> data) async {
         });
       }
     } else {
-      print('🔵 [DEBUG] Message already exists in database, skipping insert');
+      print('🔵 [DEBUG] Message already exists in database, skipping UI update');
     }
   } catch (e) {
     print('🔴 [ChatScreen] Error handling new message: $e');
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Failed to save message: $e')),
+      SnackBar(content: Text('Failed to handle message: $e')),
     );
   }
 }
