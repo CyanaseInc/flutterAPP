@@ -110,17 +110,18 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
   Future<void> _handleNewMessage(String groupId, Map<String, dynamic> message) async {
     try {
       final db = await _dbHelper.database;
-
+    print("my message recived is $message");
       // Check if message already exists
       final existingMessage = await db.query(
         'messages',
-        where: 'id = ? OR temp_id = ?',
-        whereArgs: [message['id']?.toString() ?? '', message['temp_id']?.toString() ?? ''],
+        where: 'id = ?',
+        whereArgs: [message['id']?? ''],
       );
 
       if (existingMessage.isEmpty) {
-        // Insert new message
+        
         await _dbHelper.insertMessage({
+          'id': message['id'],
           'group_id': groupId,
           'sender_id': message['sender_id']?.toString() ?? _userId,
           'message': message['content'] ?? '',

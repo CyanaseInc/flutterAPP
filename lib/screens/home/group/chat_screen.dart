@@ -943,7 +943,6 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
     try {
      
 
-
      
 
       final tempId = DateTime.now().millisecondsSinceEpoch.toString();
