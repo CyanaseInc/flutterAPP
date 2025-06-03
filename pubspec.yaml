@@ -55,6 +55,7 @@ dependencies:
   crypto: ^3.0.2
   encrypt: ^5.0.0
   http_parser: ^4.1.2
+  flutter_blurhash: ^0.9.1
 
   # Real-time and Deep Linking
   web_socket_channel: ^2.4.0
@@ -77,6 +78,7 @@ dependencies:
   web: ^1.1.1
   flutter_local_notifications: ^19.2.1
   socket_io_client: ^3.1.2
+  
 
 dev_dependencies:
   flutter_test:

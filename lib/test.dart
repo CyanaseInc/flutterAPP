@@ -1,150 +1,274 @@
-Widget build(BuildContext context) {
-  return Scaffold(
-    backgroundColor: Color(0xFFF5F5F5),
-    appBar: _buildAppBar(),
-    body: Stack(
-      children: [
-        Column(
+class _MessageChatState extends State<MessageChat> with SingleTickerProviderStateMixin {
+  // ... existing fields
+  bool _isDownloading = false;
+  double _downloadProgress = 0.0;
+  Map<String, dynamic>? _mediaData;
+
+  @override
+  void initState() {
+    super.initState();
+    // ... existing initState
+    _loadMediaData();
+  }
+
+  Future<void> _loadMediaData() async {
+    if (widget.isImage || widget.isAudio) {
+      final media = await DatabaseHelper().getMedia(int.parse(widget.messageId));
+      if (mounted) {
+        setState(() {
+          _mediaData = media;
+        });
+      }
+    }
+  }
+
+  Future<void> _downloadMedia() async {
+    if (_mediaData == null || _mediaData!['url'] == null) return;
+
+    setState(() {
+      _isDownloading = true;
+      _downloadProgress = 0.0;
+    });
+
+    final mediaInfo = await MediaDownloader.downloadMedia(
+      url: _mediaData!['url'],
+      type: widget.isImage ? 'image' : 'audio',
+      messageId: int.parse(widget.messageId),
+    );
+
+    if (mediaInfo != null && mounted) {
+      await DatabaseHelper().updateMedia(
+        messageId: int.parse(widget.messageId),
+        filePath: mediaInfo['file_path'],
+        isDownloaded: true,
+        fileSize: mediaInfo['file_size'],
+        duration: mediaInfo['duration'],
+      );
+      setState(() {
+        _mediaData = {
+          ..._mediaData!,
+          'file_path': mediaInfo['file_path'],
+          'is_downloaded': 1,
+          'file_size': mediaInfo['file_size'],
+          'duration': mediaInfo['duration'],
+        };
+        _isDownloading = false;
+      });
+    } else if (mounted) {
+      setState(() {
+        _isDownloading = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Download failed')),
+      );
+    }
+  }
+
+  Widget _buildImageViewer(BuildContext context) {
+    if (_mediaData == null || _mediaData!['is_downloaded'] == 0) {
+      return GestureDetector(
+        onTap: _isDownloading ? null : _downloadMedia,
+        child: Stack(
+          alignment: Alignment.center,
           children: [
-            Expanded(
-              child: AnimatedList(
-                key: _listKey,
-                controller: _scrollController,
-                reverse: true,
-                padding: const EdgeInsets.only(top: 16, bottom: 80),
-                initialItemCount: _messages.length + (_isLoading ? 1 : 0),
-                itemBuilder: (context, index, animation) {
-                  print('🔵 [DEBUG] Building AnimatedList item at index: $index, total messages: ${_messages.length}');
-
-                  // Handle loading indicator
-                  if (index == _messages.length) {
-                    return _isLoading
-                        ? const Padding(
-                            padding: EdgeInsets.all(8.0),
-                            child: Center(child: Loader()),
+            // Blurred placeholder
+            Container(
+              width: 180,
+              height: 180,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: _mediaData != null && _mediaData!['blurhash'] != null
+                    ? BlurHash(
+                        hash: _mediaData!['blurhash'],
+                        imageFit: BoxFit.cover,
+                      )
+                    : widget.message != null
+                        ? Image.file(
+                            File(widget.message!),
+                            fit: BoxFit.cover,
+                            color: Colors.black.withOpacity(0.5),
+                            colorBlendMode: BlendMode.darken,
+                            errorBuilder: (context, error, stackTrace) => Container(),
                           )
-                        : const SizedBox.shrink();
-                  }
-
-                  // Validate index
-                  if (index < 0 || index >= _messages.length) {
-                    print('🔴 [DEBUG] Invalid index: $index');
-                    return const SizedBox.shrink();
-                  }
-
-                  final message = _messages[index];
-                  final messageDate = DateFormat('dd MMMM yyyy').format(DateTime.parse(message['timestamp']));
-                  final isFirstUnread = _unreadMessageIds.contains(message['id']?.toString()) &&
-                      _messages.indexWhere((m) => _unreadMessageIds.contains(m['id']?.toString())) == index;
-                  final showDateHeader = index == _messages.length - 1 ||
-                      (index + 1 < _messages.length &&
-                          DateFormat('dd MMMM yyyy')
-                                  .format(DateTime.parse(_messages[index + 1]['timestamp'])) !=
-                              messageDate);
-                  final isSameSender = index < _messages.length - 1 &&
-                      _messages[index + 1]['isMe'] == message['isMe'] &&
-                      _messages[index + 1]['type'] != 'notification';
-
-                  return SlideTransition(
-                    position: animation.drive(
-                      Tween<Offset>(
-                        begin: const Offset(0, 0.1),
-                        end: Offset.zero,
-                      ).chain(CurveTween(curve: Curves.easeOut)),
-                    ),
-                    child: FadeTransition(
-                      opacity: animation,
-                      child: Column(
-                        children: [
-                          if (showDateHeader)
-                            Center(
-                              key: ValueKey('date_$messageDate'),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                margin: const EdgeInsets.symmetric(vertical: 8),
-                                decoration: BoxDecoration(
-                                  color: Colors.grey[800]!.withOpacity(0.8),
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                child: Text(
-                                  messageDate,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          if (isFirstUnread && _hasUnreadMessages)
-                            Container(
-                              key: ValueKey('unread_divider_${_unreadMessageIds.length}'),
-                              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                              child: Row(
-                                children: [
-                                  Expanded(child: Divider(color: primaryTwo)),
-                                  Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                                    child: Text(
-                                      'New Messages (${_unreadMessageIds.length})',
-                                      style: TextStyle(color: primaryTwo, fontWeight: FontWeight.bold),
-                                    ),
-                                  ),
-                                  Expanded(child: Divider(color: primaryTwo)),
-                                ],
-                              ),
-                            ),
-                          GestureDetector(
-                            key: ValueKey(message['id']?.toString() ?? message['timestamp']),
-                            onHorizontalDragEnd: (details) {
-                              if (details.primaryVelocity! > 0 && message['type'] != 'notification') {
-                                print('🔵 [ChatScreen] Setting reply from gesture: $message');
-                                _setReplyMessage(message);
-                              }
-                            },
-                            child: MessageChat(
-                              senderAvatar: message['sender_avatar'] ?? '',
-                              senderName: message['sender_name'] ?? 'Unknown',
-                              senderRole: message['sender_role'] ?? 'member',
-                              isMe: message['isMe'] == 1,
-                              message: message['message'],
-                              time: message['timestamp'],
-                              isSameSender: isSameSender,
-                              replyToId: message['reply_to_id']?.toString(),
-                              replyTo: message['reply_to_message'],
-                              isAudio: message['type'] == 'audio',
-                              isImage: message['type'] == 'image',
-                              isNotification: message['type'] == 'notification',
-                              onPlayAudio: _playAudio,
-                              isPlaying: _isPlayingMap[message['id'].toString()] ?? false,
-                              audioDuration: _audioDurationMap[message['id'].toString()] ?? Duration.zero,
-                              audioPosition: _audioPositionMap[message['id'].toString()] ?? Duration.zero,
-                              messageId: message['id'].toString(),
-                              onReply: (messageId, messageText) {
-                                _setReplyMessage(message);
-                              },
-                              onReplyTap: (messageId) {
-                                _scrollToMessage(messageId);
-                              },
-                              messageStatus: message['status'] ?? 'sent',
-                              messageContent: _buildMessageContent(message),
-                              isHighlighted: message['isHighlighted'] ?? false,
-                              isUnread: message['isMe'] == 0 && message['status'] == 'unread',
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
+                        : Container(),
               ),
             ),
-            _buildTypingIndicator(),
-            _buildMessageInput(),
+            // Download button or progress
+            _isDownloading
+                ? CircularProgressIndicator(
+                    value: _downloadProgress,
+                    color: Colors.white,
+                  )
+                : Semantics(
+                    button: true,
+                    label: 'Download image',
+                    child: Icon(
+                      Icons.download,
+                      size: 40,
+                      color: Colors.white.withOpacity(0.9),
+                    ),
+                  ),
           ],
         ),
-        // ... (other Positioned widgets like unread badge, floating date header)
-      ],
-    ),
-  );
+      );
+    }
+
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => FullScreenImage(imagePath: _mediaData!['file_path']),
+          ),
+        );
+      },
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Image.file(
+          File(_mediaData!['file_path']),
+          width: 180,
+          height: 180,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) {
+            return Center(
+              child: Icon(
+                Icons.image_not_supported,
+                size: 40,
+                color: widget.isMe ? primaryColor : Colors.grey[600],
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAudioPlayer(BuildContext context) {
+    if (_mediaData == null || _mediaData!['is_downloaded'] == 0) {
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+        decoration: BoxDecoration(
+          color: widget.isMe ? primaryColor : Colors.yellow[100],
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: Semantics(
+                button: true,
+                label: 'Download audio',
+                child: Icon(
+                  Icons.download,
+                  color: widget.isMe ? white : primaryColor,
+                  size: 24,
+                ),
+              ),
+              onPressed: _isDownloading ? null : _downloadMedia,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+            ),
+            const SizedBox(width: 8),
+            _isDownloading
+                ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Text(
+                    'Download',
+                    style: TextStyle(
+                      color: widget.isMe ? white : Colors.grey[600],
+                      fontSize: 12,
+                    ),
+                  ),
+            const SizedBox(width: 8),
+            Icon(
+              Icons.mic,
+              size: 20,
+              color: widget.isMe ? white : Colors.grey[600],
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+      decoration: BoxDecoration(
+        color: widget.isMe ? primaryColor : Colors.yellow[100],
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            icon: Icon(
+              widget.isPlaying ? Icons.pause_circle : Icons.play_circle,
+              color: widget.isMe ? white : primaryColor,
+              size: 28,
+            ),
+            onPressed: () {
+              if (_mediaData!['file_path'] != null && widget.onPlayAudio != null) {
+                widget.onPlayAudio!(widget.messageId, _mediaData!['file_path']);
+              }
+            },
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 18),
+                LinearProgressIndicator(
+                  value: _mediaData!['duration'] != null && _mediaData!['duration'] > 0
+                      ? widget.audioPosition.inSeconds / _mediaData!['duration']
+                      : 0.0,
+                  backgroundColor: white,
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    widget.isPlaying ? primaryTwo : Colors.grey[600]!,
+                  ),
+                  minHeight: 3,
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      widget.isPlaying
+                          ? _formatDuration(widget.audioPosition)
+                          : _formatDuration(Duration(seconds: _mediaData!['duration'] ?? 0)),
+                      style: TextStyle(
+                        color: widget.isMe ? white : Colors.grey[600],
+                        fontSize: 11,
+                      ),
+                    ),
+                    Icon(
+                      Icons.mic,
+                      size: 20,
+                      color: widget.isMe ? white : Colors.grey[600],
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatDuration(Duration duration) {
+    final minutes = duration.inMinutes;
+    final seconds = duration.inSeconds % 60;
+    return '$minutes:${seconds.toString().padLeft(2, '0')}';
+  }
+
+  // ... rest of MessageChatState
 }

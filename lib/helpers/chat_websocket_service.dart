@@ -201,8 +201,15 @@ class ChatWebSocketService {
               }
               break;
 
-            case 'message_status':
-              await _handleMessageStatusUpdate(data);
+            case 'update_message_status':
+              
+                await _handleMessageStatusUpdate({
+                  'message_id': data['message']['id'],
+                  'temp_id': data['message']['temp_id'],
+                  'status': data['message']['status'],
+                  'room_id': data['message']['room_id']
+                });
+            
               break;
 
             case 'typing':
@@ -288,6 +295,7 @@ class ChatWebSocketService {
     try {
       // Extract message data from either format
       final messageData = data['message'] ?? data;
+      final messageId = messageData['id'].toString();
       print('🔵 [ChatWebSocket] Processing received message: $messageData');
 
       // Check if message already exists in database
@@ -320,6 +328,23 @@ class ChatWebSocketService {
           'reply_to_type': messageData['reply_to_type']
         });
 
+ // Handle media for image or audio messages
+      if (messageData['message_type'] == 'image' || messageData['message_type'] == 'audio') {
+
+        if (messageData['attachment_url'] != null) {
+          
+          await _dbHelper.insertMedia(
+            messageId: int.parse(messageId),
+            type: messageData['message_type'],
+            url: messageData['attachment_url'], // Absolute URL
+            blurhash: messageData['thumbnail_id'], // Use blurhash if provided
+            mimeType: messageData['attachment_type'] == 'audio' ? 'audio/mpeg' : 'image/jpeg',
+          );
+          print('🔵 [ChatWebSocket] Inserted media for message $messageId');
+        } else {
+          print('🔴 [ChatWebSocket] Missing attachment_url for ${messageData['message_type']} message $messageId');
+        }
+      }
         // Get group info for notification
         final groupInfo = await db.query(
           'groups',
@@ -330,7 +355,7 @@ class ChatWebSocketService {
         final groupName = groupInfo.isNotEmpty ? groupInfo.first['name'] as String : 'Group';
 
         // Show notification for new message
-        final senderName = messageData['username'] ?? 'Unknown';
+        final senderName = messageData['full_name'] ?? 'Unknown';
         final messageContent = messageData['content'] ?? '';
         final messageType = messageData['message_type'] ?? 'text';
         final groupId = messageData['room_id'];
@@ -409,29 +434,23 @@ class ChatWebSocketService {
                 where: 'temp_id = ?',
                 whereArgs: [tempId],
             );
-            print('🔵 Updated message status by temp_id: $tempId to $status');
-        } else {
-            // If not found by temp_id, try to find by message_id
-            final messageById = await db.query(
-                'messages',
-                where: 'id = ?',
-                whereArgs: [messageId],
+                 await db.update(
+                'media',
+                {
+                    'message_id': messageId,
+                   
+                },
+                where: 'temp_id = ?',
+                whereArgs: [tempId],
             );
-
-            if (messageById.isNotEmpty) {
-                // Update just the status
-                await db.update(
-                    'messages',
-                    {'status': status},
-                    where: 'id = ?',
-                    whereArgs: [messageId],
-                );
-                print('🔵 Updated message status by id: $messageId to $status');
-            } else {
-                print('🔴 Message not found with temp_id: $tempId or id: $messageId');
-            }
-        }
-
+           
+        } 
+ _messageStatusController.add({
+            'type': 'update_message_status',
+            'message_id': messageId,
+            'status': status,
+            'group_id': groupId,
+        });
         // Notify UI of status update
         onMessageReceived?.call({
             'type': 'update_message_status',

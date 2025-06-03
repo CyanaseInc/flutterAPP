@@ -49,6 +49,9 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
   final StreamController<Map<String, dynamic>> _messageController = StreamController<Map<String, dynamic>>.broadcast();
   Map<String, int> _groupUnreadCounts = <String, int>{};
   bool _mounted = true;
+  Map<String, bool> _typingUsers = {};
+  Map<String, Timer> _typingTimers = {};
+  late AnimationController _typingAnimationController;
 
   @override
   void initState() {
@@ -60,6 +63,11 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
       duration: const Duration(seconds: 1),
     );
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(_animationController!);
+    _typingAnimationController = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    );
+    _typingAnimationController.repeat(reverse: true);
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!_mounted) return;
@@ -80,6 +88,8 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
     _channel?.sink.close();
     _animationController?.dispose();
     _searchController.dispose();
+    _typingAnimationController.dispose();
+    _typingTimers.values.forEach((timer) => timer.cancel());
     _mounted = false;
     super.dispose();
   }
@@ -110,15 +120,19 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
   Future<void> _handleNewMessage(String groupId, Map<String, dynamic> message) async {
     try {
       final db = await _dbHelper.database;
-    print("my message recived is $message");
+      
+      
       // Check if message already exists
       final existingMessage = await db.query(
         'messages',
-        where: 'id = ?',
-        whereArgs: [message['id']?? ''],
+        where: 'id = ? OR temp_id = ?',
+        whereArgs: [message['id'] ?? '', message['temp_id'] ?? ''],
       );
 
       if (existingMessage.isEmpty) {
+        // Insert new message with proper status
+        final isMe = message['sender_id']?.toString() == _userId;
+        final messageStatus = isMe ? 'sent' : 'unread';
         
         await _dbHelper.insertMessage({
           'id': message['id'],
@@ -127,148 +141,74 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
           'message': message['content'] ?? '',
           'timestamp': message['timestamp'] ?? DateTime.now().toIso8601String(),
           'type': message['message_type'] ?? 'text',
-          'isMe': 0,
-          'status': 'unread',
+          'isMe': isMe ? 1 : 0,
+          'status': messageStatus,
+          'sender_name': message['username'] ?? 'Unknown',
+          'sender_avatar': message['sender_info']?['profile_picture'] ?? '',
+          'sender_role': message['sender_info']?['role'] ?? 'member',
+           'is_edited': message['is_edited'] ?? false,
+        'is_deleted': message['is_deleted'] ?? false,
+        'is_forwarded': message['is_forwarded'] ?? false,
+        'reply_to_id': message['reply_to_id']?.toString(),
+        'reply_to_message': message['reply_to_message']?.toString(),
+        'reply_to_type': message['reply_to_type']?.toString() ?? 'text',
         });
 
-        // Update chat list
-        await _updateChatListForNewMessage(groupId, message);
-
-        // Show notification
-        final groupInfo = await db.query(
-          'groups',
-          where: 'id = ?',
-          whereArgs: [groupId],
-          columns: ['name'],
-        );
-        final groupName = groupInfo.isNotEmpty ? groupInfo.first['name'] as String : 'Group';
-        final senderName = message['username'] ?? 'Unknown';
-        final messageContent = message['content'] ?? '';
-        final messageType = message['message_type'] ?? 'text';
-        final senderInfo = message['sender_info'] ?? {};
-        final senderProfilePic = senderInfo['profile_pic'];
-
-        String notificationBody = messageContent;
-        if (messageType == 'image') {
-          notificationBody = '📷 Image';
-        } else if (messageType == 'audio') {
-          notificationBody = '🎵 Audio';
+        // Update chat list with new message
+        if (!isMe) {
+          final currentCount = _groupUnreadCounts[groupId] ?? 0;
+          _groupUnreadCounts[groupId] = currentCount + 1;
+          _totalUnreadCount++;
+          
+          setState(() {
+            final chatIndex = _allChats.indexWhere((chat) => chat['id'].toString() == groupId);
+            if (chatIndex != -1) {
+              _allChats[chatIndex] = {
+                ..._allChats[chatIndex],
+                'unreadCount': currentCount + 1,
+                'lastMessageStatus': 'unread',
+                'lastMessage': message['content'] ?? '',
+                'lastMessageTime': message['timestamp'] ?? DateTime.now().toIso8601String(),
+              };
+              _filteredChats = List.from(_allChats);
+            }
+          });
+          
+          _unreadCountController.add(_totalUnreadCount);
+          widget.onUnreadCountChanged?.call(_totalUnreadCount);
         }
 
-        await NotificationService().showGroupMessageNotification(
-          groupName: groupName,
-          senderName: senderName,
-          message: notificationBody,
-          groupId: groupId,
-          profilePic: senderProfilePic,
-        );
+        // Show notification for non-self messages
+        if (!isMe) {
+          final groupInfo = await db.query(
+            'groups',
+            where: 'id = ?',
+            whereArgs: [groupId],
+            columns: ['name'],
+          );
+          final groupName = groupInfo.isNotEmpty ? groupInfo.first['name'] as String : 'Group';
+          final senderName = message['username'] ?? 'Unknown';
+          final messageContent = message['content'] ?? '';
+          final messageType = message['message_type'] ?? 'text';
+
+          String notificationBody = messageContent;
+          if (messageType == 'image') {
+            notificationBody = '📷 Image';
+          } else if (messageType == 'audio') {
+            notificationBody = '🎵 Audio';
+          }
+
+          await NotificationService().showGroupMessageNotification(
+            groupName: groupName,
+            senderName: senderName,
+            message: notificationBody,
+            groupId: groupId,
+          );
+        }
       }
     } catch (e) {
       print('🔴 [ChatList] Error handling new message: $e');
     }
-  }
-
-  Future<void> _updateChatListForNewMessage(String groupId, Map<String, dynamic> message) async {
-    if (!_mounted) return;
-
-      final chatIndex = _allChats.indexWhere((chat) => chat['id'].toString() == groupId);
-      final currentCount = _groupUnreadCounts[groupId] ?? 0;
-      _groupUnreadCounts[groupId] = currentCount + 1;
-      _totalUnreadCount++;
-
-      final timestamp = message['timestamp'] ?? DateTime.now().toIso8601String();
-      final messageType = message['message_type'] ?? 'text';
-      final messageContent = message['content'] ?? '';
-
-      Widget lastMessagePreview;
-      switch (messageType) {
-        case 'image':
-          lastMessagePreview = Row(
-            children: const [
-              Icon(Icons.image, color: Colors.grey, size: 16),
-              SizedBox(width: 4),
-              Text("Image", style: TextStyle(color: Colors.grey)),
-            ],
-          );
-          break;
-        case 'audio':
-          lastMessagePreview = Row(
-            children: const [
-              Icon(Icons.mic, color: Colors.grey, size: 16),
-              SizedBox(width: 4),
-              Text("Audio", style: TextStyle(color: Colors.grey)),
-            ],
-          );
-          break;
-        case 'notification':
-          lastMessagePreview = Row(
-            children: [
-              const Icon(Icons.info, color: Colors.grey, size: 16),
-              const SizedBox(width: 4),
-              Text(
-                _truncateMessage(messageContent),
-                style: const TextStyle(color: Colors.grey, fontStyle: FontStyle.italic),
-              ),
-            ],
-          );
-          break;
-        default:
-          lastMessagePreview = Text(
-            _truncateMessage(messageContent),
-            style: const TextStyle(color: Colors.grey),
-          );
-          break;
-      }
-
-      if (chatIndex != -1) {
-        // Update existing chat
-        final updatedChat = {
-          ..._allChats[chatIndex],
-          'unreadCount': currentCount + 1,
-          'lastMessage': lastMessagePreview,
-          'time': _formatTime(timestamp),
-          'timestamp': timestamp,
-        };
-        _allChats.removeAt(chatIndex);
-        _allChats.insert(0, updatedChat); // Move to top
-      } else {
-        // Fetch group data if chat doesn't exist
-        final db = await _dbHelper.database;
-        final group = await db.query(
-          'groups',
-          where: 'id = ?',
-          whereArgs: [groupId],
-          limit: 1,
-        );
-        if (group.isNotEmpty) {
-          final newChat = {
-            'id': groupId,
-            'name': _toSentenceCase(group.first['name'] as String? ?? ''),
-            'description': group.first['description'] as String? ?? '',
-            'profilePic': group.first['profile_pic'] as String? ?? '',
-            'lastMessage': lastMessagePreview,
-            'lastMessageStatus': 'unread',
-            'time': _formatTime(timestamp),
-            'timestamp': timestamp,
-            'unreadCount': 1,
-            'isGroup': true,
-            'hasMessages': true,
-            'restrict_messages_to_admins': group.first['restrict_messages_to_admins'] == 1,
-            'amAdmin': group.first['amAdmin'] == 1,
-            'allows_subscription': group.first['allows_subscription'] == 1,
-            'has_user_paid': group.first['has_user_paid'] == 1,
-            'subscription_amount': _parseDouble(group.first['subscription_amount']),
-          };
-          _allChats.insert(0, newChat); // Add to top
-        }
-      }
-
-    setState(() {
-      _filteredChats = List.from(_allChats);
-      _unreadCountController.add(_totalUnreadCount);
-      widget.onUnreadCountChanged?.call(_totalUnreadCount);
-      _refreshController.add(null); // Trigger UI refresh
-    });
   }
 
   Future<void> _handleMessageStatusUpdate(String groupId) async {
@@ -278,9 +218,9 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
       final db = await _dbHelper.database;
       await db.update(
         'messages',
-        {'status': 'read'},
-        where: 'group_id = ? AND isMe = 0 AND status = ?',
-        whereArgs: [groupId, 'unread'],
+        {'status': 'sent'},
+        where: 'group_id = ? AND isMe = 1 AND status = ?',
+        whereArgs: [groupId, 'sending'],
       );
 
       setState(() {
@@ -293,7 +233,7 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
             _allChats[chatIndex] = {
               ..._allChats[chatIndex],
               'unreadCount': 0,
-              'lastMessageStatus': 'read',
+              'lastMessageStatus': 'sent',
             };
             _filteredChats = List.from(_allChats);
             _unreadCountController.add(_totalUnreadCount);
@@ -701,7 +641,8 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
               refreshStream: _refreshController.stream,
               loadChats: _loadChats,
               toSentenceCase: _toSentenceCase,
-              markMessagesAsRead: _markMessagesAsRead,
+              typingUsers: _typingUsers,
+              typingAnimationController: _typingAnimationController,
             ),
           ),
         ],
@@ -852,80 +793,6 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
     return _allChats;
   }
 
-  Future<void> _markMessagesAsRead(String groupId) async {
-    print('🔵 [ChatList] Attempting to mark messages as read for group: $groupId');
-    try {
-      final db = await _dbHelper.database;
-
-      // Count affected messages for debugging
-      final unreadMessages = await db.query(
-        'messages',
-        where: 'group_id = ? AND isMe = 0 AND status = ?',
-        whereArgs: [groupId, 'unread'],
-      );
-      print('🔵 [ChatList] Found ${unreadMessages.length} unread messages for group: $groupId');
-
-      // Update messages to 'read' status
-      final updatedRows = await db.update(
-        'messages',
-        {'status': 'read'},
-        where: 'group_id = ? AND isMe = 0 AND status = ?',
-        whereArgs: [groupId, 'unread'],
-      );
-      print('🔵 [ChatList] Updated $updatedRows messages to read for group: $groupId');
-
-      // Notify server of read status
-      if (_channel != null && _channel!.sink != null) {
-        try {
-          _channel!.sink.add(json.encode({
-            'type': 'update_message_status',
-            'group_id': groupId,
-            'status': 'read',
-          }));
-          print('🔵 [ChatList] Sent update_message_status to server for group: $groupId');
-        } catch (e) {
-          print('🔴 [ChatList] Error sending update_message_status to server: $e');
-        }
-      } else {
-        print('🔴 [ChatList] WebSocket channel is null or closed for group: $groupId');
-      }
-
-      // Update in-memory state and UI
-      setState(() {
-        final chatIndex = _allChats.indexWhere((chat) => chat['id'].toString() == groupId);
-        if (chatIndex != -1) {
-          final currentCount = _groupUnreadCounts[groupId] ?? 0;
-          print('🔵 [ChatList] Current unread count for group $groupId: $currentCount');
-          if (currentCount > 0) {
-            _groupUnreadCounts[groupId] = 0;
-            _totalUnreadCount -= currentCount;
-            _allChats[chatIndex] = {
-              ..._allChats[chatIndex],
-              'unreadCount': 0,
-              'lastMessageStatus': 'read',
-            };
-            _filteredChats = List.from(_allChats);
-            _unreadCountController.add(_totalUnreadCount);
-            widget.onUnreadCountChanged?.call(_totalUnreadCount);
-            _refreshController.add(null);
-            print('🔵 [ChatList] UI updated for group: $groupId, new total unread: $_totalUnreadCount');
-          } else {
-            print('🔵 [ChatList] No unread messages to clear for group: $groupId');
-          }
-        } else {
-          print('🔴 [ChatList] Chat not found in _allChats for group: $groupId');
-        }
-      });
-    } catch (e, stackTrace) {
-      print('🔴 [ChatList] Error marking messages as read for group $groupId: $e');
-      print('🔴 [ChatList] Stack trace: $stackTrace');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to mark messages as read: $e')),
-        );
-      }
-    }
-  }
 
   String _formatTime(String timestamp) {
     try {
@@ -982,6 +849,104 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
   void _reloadChats() {
     _refreshController.add(null);
   }
+
+  void _handleTypingStatus(String userId, bool isTyping) {
+    if (!mounted) return;
+    
+    setState(() {
+      if (isTyping) {
+        _typingUsers[userId] = true;
+        // Cancel existing timer if any
+        _typingTimers[userId]?.cancel();
+        // Set new timer to remove typing status after 3 seconds
+        _typingTimers[userId] = Timer(const Duration(seconds: 3), () {
+          if (mounted) {
+            setState(() {
+              _typingUsers.remove(userId);
+            });
+          }
+        });
+      } else {
+        _typingUsers.remove(userId);
+        _typingTimers[userId]?.cancel();
+      }
+    });
+  }
+
+  Widget _buildTypingIndicator(String groupId) {
+    if (_typingUsers.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.only(left: 12, bottom: 4),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 16,
+            height: 16,
+            child: AnimatedBuilder(
+              animation: _typingAnimationController,
+              builder: (context, child) {
+                return CustomPaint(
+                  painter: TypingIndicatorPainter(
+                    color: primaryColor.withOpacity(0.7),
+                    progress: _typingAnimationController.value,
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            _typingUsers.length == 1 
+                ? 'Someone is typing...'
+                : '${_typingUsers.length} people are typing...',
+            style: TextStyle(
+              color: Colors.grey[600],
+              fontSize: 12,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class TypingIndicatorPainter extends CustomPainter {
+  final Color color;
+  final double progress;
+
+  TypingIndicatorPainter({
+    required this.color,
+    required this.progress,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+
+    final dotRadius = size.width / 6;
+    final spacing = size.width / 3;
+    final centerY = size.height / 2;
+
+    for (var i = 0; i < 3; i++) {
+      final x = i * spacing + dotRadius;
+      final y = centerY + sin((progress + i * 0.3) * pi * 2) * dotRadius;
+      
+      canvas.drawCircle(
+        Offset(x, y),
+        dotRadius * (0.5 + 0.5 * sin((progress + i * 0.3) * pi * 2)),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(TypingIndicatorPainter oldDelegate) {
+    return oldDelegate.progress != progress || oldDelegate.color != color;
+  }
 }
 
 // Component for Chat List
@@ -992,7 +957,8 @@ class ChatListComponent extends StatefulWidget {
   final Stream<void> refreshStream;
   final Future<List<Map<String, dynamic>>> Function() loadChats;
   final String Function(String) toSentenceCase;
-  final Future<void> Function(String) markMessagesAsRead;
+  final Map<String, bool> typingUsers;
+  final AnimationController typingAnimationController;
 
   const ChatListComponent({
     Key? key,
@@ -1002,7 +968,8 @@ class ChatListComponent extends StatefulWidget {
     required this.refreshStream,
     required this.loadChats,
     required this.toSentenceCase,
-    required this.markMessagesAsRead,
+    required this.typingUsers,
+    required this.typingAnimationController,
   }) : super(key: key);
 
   @override
@@ -1093,7 +1060,8 @@ class _ChatListComponentState extends State<ChatListComponent> with TickerProvid
   Widget _buildChatItem(Map<String, dynamic> chat) {
     final chatId = chat['id'].toString();
     final hasUnreadMessages = chat["unreadCount"] > 0;
-  
+    final lastMessageStatus = chat["lastMessageStatus"];
+    final isTyping = widget.typingUsers.isNotEmpty;
 
     return Container(
       key: ValueKey('chat_${chatId}_${chat['timestamp']}'),
@@ -1114,23 +1082,10 @@ class _ChatListComponentState extends State<ChatListComponent> with TickerProvid
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
           onTap: () async {
-            print('🔵 [ChatList] Chat item tapped for group: $chatId');
-            print('🔵 [ChatList] Current unread count: ${chat["unreadCount"]}');
-            
-            // Mark messages as read before navigating
-            await widget.markMessagesAsRead(chatId);
-            print('🔵 [ChatList] After markMessagesAsRead for group: $chatId');
-            
-            if (!mounted) {
-              print('🔴 [ChatList] Widget not mounted after markMessagesAsRead');
-              return;
-            }
-            
             Navigator.push(
               context,
               MaterialPageRoute(
                 builder: (context) {
-                  print('🔵 [ChatList] Navigating to chat screen for group: $chatId');
                   return MessageChatScreen(
                     name: chat["name"],
                     isAdminOnlyMode: chat["restrict_messages_to_admins"],
@@ -1149,94 +1104,104 @@ class _ChatListComponentState extends State<ChatListComponent> with TickerProvid
           },
           child: Padding(
             padding: const EdgeInsets.all(12),
-            child: Row(
+            child: Column(
               children: [
-                Stack(
+                Row(
                   children: [
-                    _getAvatar(chat["name"], chat["profilePic"], chat["isGroup"]),
-                    if (hasUnreadMessages)
-                      Positioned(
-                        right: 0,
-                        bottom: 0,
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: primaryColor,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white, width: 2),
-                          ),
-                          child: Text(
-                            chat["unreadCount"].toString(),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: Text(
-                              chat["name"],
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          Text(
-                            chat["time"],
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: chat["lastMessage"],
-                          ),
-                          if (hasUnreadMessages)
-                            Container(
-                              width: 8,
-                              height: 8,
+                    Stack(
+                      children: [
+                        _getAvatar(chat["name"], chat["profilePic"], chat["isGroup"]),
+                        if (hasUnreadMessages)
+                          Positioned(
+                            right: 0,
+                            bottom: 0,
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
                               decoration: BoxDecoration(
                                 color: primaryColor,
                                 shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white, width: 2),
+                              ),
+                              child: Text(
+                                chat["unreadCount"].toString(),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
-                          if (!hasUnreadMessages && chat["lastMessageStatus"] != null && chat["isMe"] == 1)
-                            Padding(
-                              padding: const EdgeInsets.only(left: 4),
-                              child: Icon(
-                                chat["lastMessageStatus"] == 'read' 
-                                    ? Icons.done_all 
-                                    : Icons.done,
-                                size: 16,
-                                color: chat["lastMessageStatus"] == 'read' 
-                                    ? Colors.blue 
-                                    : Colors.grey,
+                          ),
+                      ],
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  chat["name"],
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
-                            ),
+                              Text(
+                                chat["time"],
+                                style: TextStyle(
+                                  color: Colors.grey[600],
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: isTyping 
+                                    ? _buildTypingIndicator(chatId)
+                                    : chat["lastMessage"],
+                              ),
+                              if (hasUnreadMessages)
+                                Container(
+                                  width: 8,
+                                  height: 8,
+                                  decoration: BoxDecoration(
+                                    color: primaryColor,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                              if (!hasUnreadMessages && lastMessageStatus != null)
+                                AnimatedSwitcher(
+                                  duration: const Duration(milliseconds: 300),
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(left: 4),
+                                    child: Icon(
+                                      lastMessageStatus == 'sent' 
+                                          ? Icons.done_all 
+                                          : Icons.done,
+                                      key: ValueKey(lastMessageStatus),
+                                      size: 16,
+                                      color: lastMessageStatus == 'sent' 
+                                          ? Colors.blue 
+                                          : Colors.grey,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
                         ],
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ],
             ),

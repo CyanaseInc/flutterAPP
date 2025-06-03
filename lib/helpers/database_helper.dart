@@ -136,19 +136,24 @@ class DatabaseHelper {
       )
     ''');
 
-    await db.execute('''
-      CREATE TABLE media (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        file_path TEXT NOT NULL UNIQUE,
-        type TEXT NOT NULL,
-        mime_type TEXT,
-        file_size INTEGER,
-        duration INTEGER,
-        thumbnail_path TEXT,
-        created_at TEXT NOT NULL,
-        deleted BOOLEAN NOT NULL DEFAULT FALSE
-      )
-    ''');
+   await db.execute('''
+  CREATE TABLE media (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    message_id INTEGER NOT NULL,
+    file_path TEXT, -- Nullable for undownloaded media
+    type TEXT NOT NULL, -- 'image', 'audio'
+    mime_type TEXT, -- e.g., 'image/jpeg', 'audio/mpeg'
+    file_size INTEGER, -- In bytes
+    duration INTEGER, -- In seconds for audio
+    thumbnail_path TEXT, -- For image thumbnails
+    url TEXT, -- Server URL for downloading
+    blurhash TEXT, -- For blurred image placeholders
+    is_downloaded INTEGER NOT NULL DEFAULT 0, -- 0: not downloaded, 1: downloaded
+    created_at TEXT NOT NULL,
+    deleted BOOLEAN NOT NULL DEFAULT FALSE
+  )
+''');
+
 
     await db.execute('''
       CREATE TABLE messages (
@@ -201,7 +206,84 @@ class DatabaseHelper {
       await db.execute('ALTER TABLE messages ADD COLUMN reply_to_message TEXT');
     }
   }
+  Future<void> insertMedia({
+    required int messageId,
+    required String type,
+    required String url,
+    String? filePath,
+    String? blurhash,
+    String? mimeType,
+    int? fileSize,
+    int? duration,
+    String? thumbnailPath,
+    bool isDownloaded = false,
+  }) async {
+    final db = await database;
+    try {
+      await db.insert(
+        'media',
+        {
+          'message_id': messageId,
+          'type': type,
+          'url': url,
+          'file_path': filePath,
+          'blurhash': blurhash,
+          'mime_type': mimeType,
+          'file_size': fileSize,
+          'duration': duration,
+          'thumbnail_path': thumbnailPath,
+          'is_downloaded': isDownloaded ? 1 : 0,
+          'created_at': DateTime.now().toIso8601String(),
+          'deleted': 0,
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+      print('🔵 [DatabaseHelper] Inserted media for message $messageId');
+    } catch (e) {
+      print('🔴 [DatabaseHelper] Error inserting media: $e');
+    }
+  }
 
+  Future<Map<String, dynamic>?> getMedia(int messageId) async {
+
+    print('🔵 [DatabaseHelper] Fetching media for message $messageId');
+    final db = await database;
+    final result = await db.query(
+      'media',
+      where: 'message_id = ? ',
+      whereArgs: [messageId],
+      limit: 1,
+    );
+    print('🔵 [DatabaseHelper] Media query result: $result');
+    return result.isNotEmpty ? result.first : null;
+  }
+
+  Future<void> updateMedia({
+    required int messageId,
+    String? filePath,
+    bool? isDownloaded,
+    String? thumbnailPath,
+    int? fileSize,
+    int? duration,
+  }) async {
+    final db = await database;
+    final updateData = <String, dynamic>{};
+    if (filePath != null) updateData['file_path'] = filePath;
+    if (isDownloaded != null) updateData['is_downloaded'] = isDownloaded ? 1 : 0;
+    if (thumbnailPath != null) updateData['thumbnail_path'] = thumbnailPath;
+    if (fileSize != null) updateData['file_size'] = fileSize;
+    if (duration != null) updateData['duration'] = duration;
+
+    if (updateData.isNotEmpty) {
+      await db.update(
+        'media',
+        updateData,
+        where: 'message_id = ?',
+        whereArgs: [messageId],
+      );
+      print('🔵 [DatabaseHelper] Updated media for message $messageId');
+    }
+  }
   // Insert methods
   Future<int> insertUser(Map<String, dynamic> user) async {
     final db = await database;
@@ -317,12 +399,14 @@ class DatabaseHelper {
     );
   }
 
-  Future<int> insertImageFile(String filePath) async {
+  Future<int> insertImageFile(String filePath, String messageId) async {
     final db = await database;
     return await db.insert(
       'media',
       {
+        'message_id': messageId, // No message ID for standalone images
         'file_path': filePath,
+        'url':  filePath, // No URL for local images
         'type': 'image',
         'mime_type': 'image/jpeg',
         'file_size': await File(filePath).length(),
@@ -424,7 +508,7 @@ class DatabaseHelper {
         });
       }
 
-      print('🔵 [DatabaseHelper] Processed message data: $messageData');
+     
       
       final result = await db.insert(
         'messages',
@@ -436,7 +520,7 @@ class DatabaseHelper {
       
       // Fetch updated messages for the group
       final messages = await getMessages(groupId: messageData['group_id']);
-      print('🔵 [DatabaseHelper] Broadcasting ${messages.length} messages for group: ${messageData['group_id']}');
+     
       
       // Broadcast updated messages
       _messageStreamController.add({messageData['group_id'] as int: messages});
@@ -507,15 +591,7 @@ class DatabaseHelper {
     }
   }
 
-  Future<Map<String, dynamic>?> getMedia(int mediaId) async {
-    final db = await database;
-    final media = await db.query(
-      'media',
-      where: 'id = ? AND deleted = 0',
-      whereArgs: [mediaId],
-    );
-    return media.isNotEmpty ? media.first : null;
-  }
+
 
   Future<List<Map<String, String>>> getGroupMemberNames(int groupId) async {
     final db = await database;

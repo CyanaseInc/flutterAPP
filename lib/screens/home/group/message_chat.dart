@@ -1,10 +1,14 @@
 import 'package:cyanase/helpers/loader.dart';
 import 'package:flutter/material.dart';
 import 'package:cyanase/theme/theme.dart';
-import 'package:cyanase/helpers/date_helper.dart';
+
+import 'package:flutter_blurhash/flutter_blurhash.dart';
 import 'dart:io';
 import 'full_screen_image_viewer.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:cyanase/helpers/database_helper.dart';
+import 'package:cyanase/helpers/download_helper.dart';
+
 
 class MessageTailPainter extends CustomPainter {
   final Color color;
@@ -165,6 +169,9 @@ class _MessageChatState extends State<MessageChat>
   late Future<Duration> _audioDuration;
   late AnimationController _animationController;
   late Animation<Offset> _slideAnimation;
+  bool _isDownloading = false;
+  double _downloadProgress = 0.0;
+  Map<String, dynamic>? _mediaData;
   double _dragDistance = 0.0;
   static const double _swipeThreshold = 70.0; // Increased threshold
   late String _currentStatus;
@@ -199,6 +206,7 @@ class _MessageChatState extends State<MessageChat>
     ));
 
     _currentStatus = widget.messageStatus;
+    _loadMediaData();
   }
 
   @override
@@ -249,7 +257,63 @@ class _MessageChatState extends State<MessageChat>
     final file = File(filePath);
     return await file.exists();
   }
+  Future<void> _loadMediaData() async {
 
+    if (widget.isImage || widget.isAudio) {
+      final media = await DatabaseHelper().getMedia(int.parse(widget.messageId));
+  
+   
+      if (mounted) {
+        setState(() {
+          _mediaData = media;
+        }); 
+      }
+    }
+  }
+
+ 
+  Future<void> _downloadMedia() async {
+    print("we got called");
+    if (_mediaData == null || _mediaData!['url'] == null) return;
+print("we got called 2");
+    setState(() {
+      _isDownloading = true;
+      _downloadProgress = 0.0;
+    });
+
+    final mediaInfo = await MediaDownloader.downloadMedia(
+      url: _mediaData!['url'],
+      type: widget.isImage ? 'image' : 'audio',
+      messageId: int.parse(widget.messageId),
+    );
+
+    if (mediaInfo != null && mounted) {
+      await DatabaseHelper().updateMedia(
+        messageId: int.parse(widget.messageId),
+        filePath: mediaInfo['file_path'],
+        isDownloaded: true,
+        fileSize: mediaInfo['file_size'],
+        duration: mediaInfo['duration'],
+      );
+      setState(() {
+        _mediaData = {
+          ..._mediaData!,
+          'file_path': mediaInfo['file_path'],
+          'is_downloaded': 1,
+          'file_size': mediaInfo['file_size'],
+          'duration': mediaInfo['duration'],
+        };
+        _isDownloading = false;
+      });
+    } else if (mounted) {
+      setState(() {
+        _isDownloading = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Download failed')),
+      );
+    }
+  }
   Future<Duration> _getAudioDuration(String path) async {
     try {
       final player = AudioPlayer();
@@ -469,101 +533,258 @@ class _MessageChatState extends State<MessageChat>
     );
   }
 
-  Widget _buildReplySection(BuildContext context) {
-    return FutureBuilder<bool>(
-      future: _replyFileExists,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const SizedBox(
-            height: 24,
-            child: Center(child: Loader()),
+Widget _buildReplySection(BuildContext context) {
+  return FutureBuilder<bool>(
+    future: _replyFileExists,
+    builder: (context, snapshot) {
+      if (snapshot.connectionState == ConnectionState.waiting) {
+        return const SizedBox(
+          height: 24,
+          child: Center(child: Loader()),
+        );
+      }
+      final fileExists = snapshot.data ?? false;
+
+      // Determine reply content and type
+      String replyContent = widget.replyTo ?? 'Original message unavailable';
+      final replyType = widget.replyToType ?? 'text';
+
+      // Define reply content based on type
+      Widget replyContentWidget;
+      switch (replyType) {
+        case 'image':
+          replyContentWidget = _buildReplyImage(context, fileExists, replyContent);
+          break;
+        case 'audio':
+          replyContentWidget = _buildReplyAudio(context, fileExists);
+          break;
+        default:
+          replyContentWidget = Text(
+            replyContent,
+            style: TextStyle(
+              color: widget.isMe ? Colors.white : Colors.black87,
+              fontSize: 12, // WhatsApp uses smaller font for replies
+              fontFamily: 'Roboto',
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           );
-        }
-        final fileExists = snapshot.data ?? false;
-        return GestureDetector(
-          onTap: () {
-            if (widget.replyToId != null && widget.onReplyTap != null) {
-              widget.onReplyTap!(widget.replyToId!);
-            }
-          },
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(8),
-            margin: const EdgeInsets.only(bottom: 5),
-            decoration: BoxDecoration(
-              color: widget.isMe ? Colors.white12 : Colors.grey[200],
-              borderRadius: BorderRadius.circular(5),
-              border: Border(
-                left: BorderSide(
-                  color: widget.isMe ? primaryTwo : Colors.grey[400]!,
-                  width: 3,
-                ),
+          break;
+      }
+
+      return GestureDetector(
+        onTap: () {
+          if (widget.replyToId != null && widget.onReplyTap != null) {
+            widget.onReplyTap!(widget.replyToId!);
+            print('🔵 [MessageChat] Tapped reply to message ID: ${widget.replyToId}');
+          }
+        },
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 6), // Space below reply
+          padding: const EdgeInsets.only(left: 4), // Space for left bar
+          decoration: BoxDecoration(
+            border: Border(
+              left: BorderSide(
+                color: widget.isMe ? primaryColor : primaryTwo!, // WhatsApp green for sent
+                width: 3,
               ),
             ),
-            child: Row(
+          ),
+          child: Container(
+            constraints: BoxConstraints(
+              maxWidth: MediaQuery.of(context).size.width * 0.55, // Slightly smaller than main bubble
+            ),
+            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+            decoration: BoxDecoration(
+              color: widget.isMe
+                  ? primaryTwoLight // Light green for sent replies
+                  : Colors.grey[100]!.withOpacity(0.8), // Light grey for received replies
+              borderRadius: BorderRadius.circular(6), // WhatsApp's tight radius
+            ),
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (widget.replyToType == "image" ||
-                    (widget.replyTo!.startsWith('/') &&
-                        (widget.replyTo!.endsWith('.jpg') ||
-                            widget.replyTo!.endsWith('.png') ||
-                            widget.replyTo!.endsWith('.jpeg'))))
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8.0),
-                    child: Icon(
-                      Icons.image,
-                      size: 24,
-                      color: widget.isMe ? Colors.white70 : Colors.grey[600],
-                    ),
-                  )
-                else if (widget.replyToType == "audio" ||
-                    (widget.replyTo!.startsWith('/') &&
-                        (widget.replyTo!.endsWith('.m4a') ||
-                            widget.replyTo!.endsWith('.mp3'))))
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8.0),
-                    child: Icon(
-                      Icons.mic,
-                      size: 24,
-                      color: widget.isMe ? Colors.white70 : Colors.grey[600],
-                    ),
+                // Sender name
+                Text(
+                  widget.isMe ? 'You' : widget.senderName,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: widget.isMe ? primaryColor: primaryTwo, // WhatsApp colors
+                    fontFamily: 'Roboto',
                   ),
-                Expanded(
-                  child: Text(
-                    widget.replyToType == "image" ||
-                            (widget.replyTo!.startsWith('/') &&
-                                (widget.replyTo!.endsWith('.jpg') ||
-                                    widget.replyTo!.endsWith('.png') ||
-                                    widget.replyTo!.endsWith('.jpeg')))
-                        ? "Image"
-                        : widget.replyToType == "audio" ||
-                                (widget.replyTo!.startsWith('/') &&
-                                    (widget.replyTo!.endsWith('.m4a') ||
-                                        widget.replyTo!.endsWith('.mp3')))
-                            ? "Audio"
-                            : widget.replyTo!,
-                    style: TextStyle(
-                      color: widget.isMe ? Colors.white70 : Colors.black54,
-                      fontSize: 13,
-                      fontStyle: FontStyle.italic,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
+                const SizedBox(height: 2), // Tight spacing
+                // Reply content
+                replyContentWidget,
               ],
             ),
           ),
-        );
-      },
+        ),
+      );
+    },
+  );
+}
+
+// Helper method for image replies
+Widget _buildReplyImage(BuildContext context, bool fileExists, String replyContent) {
+  if (!fileExists || widget.replyTo == null) {
+    return Row(
+      children: [
+        Icon(
+          Icons.image,
+          size: 16,
+          color: widget.isMe ? Colors.white70 : Colors.grey[600],
+        ),
+        const SizedBox(width: 4),
+        Text(
+          'Photo',
+          style: TextStyle(
+            fontSize: 12,
+            color: widget.isMe ? Colors.white70 : Colors.grey[600],
+            fontStyle: FontStyle.italic,
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _buildAudioPlayer(BuildContext context) {
+  return Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      ClipRRect(
+        borderRadius: BorderRadius.circular(4),
+        child: Stack(
+          children: [
+            Image.file(
+              File(widget.replyTo!),
+              width: 40, // WhatsApp thumbnail size
+              height: 40,
+              fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) {
+                return Container(
+                  width: 40,
+                  height: 40,
+                  color: Colors.grey[300],
+                  child: Icon(
+                    Icons.image_not_supported,
+                    size: 20,
+                    color: widget.isMe ? Colors.white70 : Colors.grey[600],
+                  ),
+                );
+              },
+            ),
+            Positioned(
+              bottom: 2,
+              right: 2,
+              child: Icon(
+                Icons.camera_alt,
+                size: 12,
+                color: Colors.white.withOpacity(0.7),
+              ),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(width: 6),
+      Expanded(
+        child: Text(
+          'Photo', // WhatsApp shows "Photo" next to thumbnail
+          style: TextStyle(
+            fontSize: 12,
+            color: widget.isMe ? Colors.white : Colors.black87,
+          ),
+        ),
+      ),
+    ],
+  );
+}
+
+// Helper method for audio replies
+Widget _buildReplyAudio(BuildContext context, bool fileExists) {
+  if (!fileExists || widget.replyTo == null) {
+    return Row(
+      children: [
+        Icon(
+          Icons.mic,
+          size: 16,
+          color: widget.isMe ? Colors.white70 : Colors.grey[600],
+        ),
+        const SizedBox(width: 4),
+        Text(
+          'Voice message',
+          style: TextStyle(
+            fontSize: 12,
+            color: widget.isMe ? Colors.white70 : Colors.grey[600],
+            fontStyle: FontStyle.italic,
+          ),
+        ),
+      ],
+    );
+  }
+
+  return Row(
+    children: [
+      Icon(
+        Icons.play_arrow,
+        size: 16,
+        color: widget.isMe ? Colors.white : Colors.grey[800],
+      ),
+      const SizedBox(width: 4),
+      FutureBuilder<Duration>(
+        future: _audioDuration,
+        builder: (context, snapshot) {
+          final duration = snapshot.data ?? Duration.zero;
+          return Text(
+            _formatDuration(duration),
+            style: TextStyle(
+              fontSize: 12,
+              color: widget.isMe ? Colors.white : Colors.black87,
+            ),
+          );
+        },
+      ),
+      const SizedBox(width: 4),
+      Icon(
+        Icons.mic,
+        size: 16,
+        color: widget.isMe ? Colors.white : Colors.grey[800],
+      ),
+    ],
+  );
+}
+
+ Widget _buildAudioPlayer(BuildContext context) {
+  print('🔵 [MessageChat] Building audio player for message ${widget.messageId}, _mediaData: $_mediaData');
+
+  // For sent messages, use file_path directly
+  if (widget.isMe && (_mediaData != null && _mediaData!['file_path'] != null)) {
+    final filePath = _mediaData!['file_path'];
+    final file = File(filePath);
+    if (!file.existsSync()) {
+      print('🔴 [MessageChat] Sent audio file not found: $filePath');
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+        decoration: BoxDecoration(
+          color: primaryColor,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Center(
+          child: Icon(
+            Icons.error,
+            size: 24,
+            color: white,
+          ),
+        ),
+      );
+    }
+
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
       decoration: BoxDecoration(
-        color: widget.isMe ? primaryColor : Colors.yellow[100],
+        color: primaryColor,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
@@ -572,12 +793,12 @@ class _MessageChatState extends State<MessageChat>
           IconButton(
             icon: Icon(
               widget.isPlaying ? Icons.pause_circle : Icons.play_circle,
-              color: widget.isMe ? white : primaryColor,
+              color: white,
               size: 28,
             ),
             onPressed: () {
-              if (widget.message != null && widget.onPlayAudio != null) {
-                widget.onPlayAudio!.call(widget.messageId, widget.message!);
+              if (widget.onPlayAudio != null) {
+                widget.onPlayAudio!(widget.messageId, filePath);
               }
             },
             padding: EdgeInsets.zero,
@@ -589,45 +810,35 @@ class _MessageChatState extends State<MessageChat>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 18),
-                FutureBuilder<Duration>(
-                  future: _audioDuration,
-                  builder: (context, snapshot) {
-                    final totalDuration = snapshot.data ?? Duration.zero;
-                    final progress = totalDuration.inSeconds > 0
-                        ? widget.audioPosition.inSeconds /
-                            totalDuration.inSeconds
-                        : 0.0;
-
-                    return LinearProgressIndicator(
-                      value: progress,
-                      backgroundColor: white,
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        widget.isPlaying ? primaryTwo : Colors.grey[600]!,
-                      ),
-                      minHeight: 3,
-                    );
-                  },
+                LinearProgressIndicator(
+                  value: _mediaData!['duration'] != null && _mediaData!['duration'] > 0
+                      ? widget.audioPosition.inSeconds / _mediaData!['duration']
+                      : 0.0,
+                  backgroundColor: white,
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    widget.isPlaying ? primaryTwo : Colors.grey[600]!,
+                  ),
+                  minHeight: 3,
                 ),
                 const SizedBox(height: 4),
-                FutureBuilder<Duration>(
-                  future: _audioDuration,
-                  builder: (context, snapshot) {
-                    final duration = snapshot.data ?? Duration.zero;
-                    return Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          widget.isPlaying
-                              ? _formatDuration(widget.audioPosition)
-                              : _formatDuration(duration),
-                          style: TextStyle(
-                            color: widget.isMe ? white : Colors.grey[600],
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
-                    );
-                  },
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      widget.isPlaying
+                          ? _formatDuration(widget.audioPosition)
+                          : _formatDuration(Duration(seconds: _mediaData!['duration'] ?? 0)),
+                      style: const TextStyle(
+                        color: white,
+                        fontSize: 11,
+                      ),
+                    ),
+                    const Icon(
+                      Icons.mic,
+                      size: 20,
+                      color: white,
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -637,56 +848,390 @@ class _MessageChatState extends State<MessageChat>
     );
   }
 
-  Widget _buildImageViewer(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        if (widget.message != null) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => FullScreenImage(imagePath: widget.message!),
+  // For received messages
+  if (!widget.isMe && (_mediaData == null || _mediaData!['is_downloaded'] == 0)) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.yellow[100],
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            icon: Semantics(
+              button: true,
+              label: 'Download audio',
+              child: Icon(
+                Icons.download,
+                color: primaryColor,
+                size: 24,
+              ),
             ),
-          );
-        }
-      },
-      child: FutureBuilder<bool>(
-        future: _messageFileExists,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const SizedBox(
-              width: 180,
-              height: 180,
-              child: Center(child: Loader()),
-            );
-          }
-          final fileExists = snapshot.data ?? false;
-          if (!fileExists) {
-            return Center(
-              child: Icon(Icons.image_not_supported,
-                  size: 40,
-                  color: widget.isMe ? primaryColor : Colors.grey[600]),
-            );
-          }
-          return ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Image.file(
-              File(widget.message!),
-              width: 180,
-              height: 180,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                return Center(
-                  child: Icon(Icons.image_not_supported,
-                      size: 40,
-                      color: widget.isMe ? primaryColor : Colors.grey[600]),
-                );
-              },
-            ),
-          );
-        },
+            onPressed: _isDownloading ? null : _downloadMedia,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+          ),
+          const SizedBox(width: 8),
+          _isDownloading
+              ? const SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: Loader(),
+                )
+              : Text(
+                  'Download',
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontSize: 12,
+                  ),
+                ),
+          const SizedBox(width: 8),
+          Icon(
+            Icons.mic,
+            size: 20,
+            color: Colors.grey[600],
+          ),
+        ],
       ),
     );
   }
+
+  // For received messages that are downloaded
+  final filePath = _mediaData!['file_path'];
+  final file = File(filePath);
+  if (!file.existsSync()) {
+    print('🔴 [MessageChat] Received audio file not found: $filePath');
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.yellow[100],
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: GestureDetector(
+        onTap: _downloadMedia,
+        child: const Center(
+          child: Icon(
+            Icons.error,
+            size: 24,
+            color: Colors.red,
+          ),
+        ),
+      ),
+    );
+  }
+
+  return Container(
+    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+    decoration: BoxDecoration(
+      color: Colors.yellow[100],
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          icon: Icon(
+            widget.isPlaying ? Icons.pause_circle : Icons.play_circle,
+            color: primaryColor,
+            size: 28,
+          ),
+          onPressed: () {
+            if (widget.onPlayAudio != null) {
+              widget.onPlayAudio!(widget.messageId, filePath);
+            }
+          },
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 18),
+              LinearProgressIndicator(
+                value: _mediaData!['duration'] != null && _mediaData!['duration'] > 0
+                    ? widget.audioPosition.inSeconds / _mediaData!['duration']
+                    : 0.0,
+                backgroundColor: white,
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  widget.isPlaying ? primaryTwo : Colors.grey[600]!,
+                ),
+                minHeight: 3,
+              ),
+              const SizedBox(height: 4),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    widget.isPlaying
+                        ? _formatDuration(widget.audioPosition)
+                        : _formatDuration(Duration(seconds: _mediaData!['duration'] ?? 0)),
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 11,
+                    ),
+                  ),
+                  Icon(
+                    Icons.mic,
+                    size: 20,
+                    color: Colors.grey[600],
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+Widget _buildImageViewer(BuildContext context) {
+
+  // For sent messages, use file_path directly (should exist locally)
+  if (widget.isMe) {
+    final filePath = widget.message;
+    if (filePath == null) {
+      print('🔴 [MessageChat] Sent image file path is null');
+      return Container(
+        width: 180,
+        height: 180,
+        decoration: BoxDecoration(
+          color: Colors.grey[300],
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Center(
+          child: Icon(
+            Icons.error,
+            size: 40,
+            color: Colors.red,
+          ),
+        ),
+      );
+    }
+
+    final file = File(filePath);
+    if (!file.existsSync()) {
+      print('🔴 [MessageChat] Sent image file not found: $filePath');
+      return Container(
+        width: 180,
+        height: 180,
+        decoration: BoxDecoration(
+          color: Colors.grey[300],
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Center(
+          child: Icon(
+            Icons.error,
+            size: 40,
+            color: Colors.red,
+          ),
+        ),
+      );
+    }
+
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => FullScreenImage(imagePath: filePath),
+          ),
+        );
+      },
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Image.file(
+          file,
+          width: 180,
+          height: 180,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) {
+            print('🔴 [MessageChat] Error loading sent image for message ${widget.messageId}: $error');
+            return const Center(
+              child: Icon(
+                Icons.image_not_supported,
+                size: 40,
+                color: primaryColor,
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  // For received messages
+  if (!widget.isMe) {
+    // If media data is not loaded yet, show loading state
+    if (_mediaData == null) {
+      return Container(
+        width: 180,
+        height: 180,
+        decoration: BoxDecoration(
+          color: Colors.grey[300],
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Center(
+          child: Loader(),
+        ),
+      );
+    }
+
+    // If media is not downloaded yet
+    if (_mediaData!['is_downloaded'] == 0) {
+      return GestureDetector(
+        onTap: _isDownloading ? null : _downloadMedia,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Container(
+              width: 180,
+              height: 180,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: _mediaData!['blurhash'] != null
+                    ? SizedBox(
+                        width: 180,
+                        height: 180,
+                        child: BlurHash(
+                          hash: _mediaData!['blurhash'],
+                          imageFit: BoxFit.cover,
+                        ),
+                      )
+                    : Container(
+                        color: Colors.black.withOpacity(0.5),
+                        child: const Center(
+                          child: Icon(
+                            Icons.image,
+                            size: 40,
+                            color: Colors.white70,
+                          ),
+                        ),
+                      ),
+              ),
+            ),
+            _isDownloading
+                ? const Loader()
+                : Semantics(
+                    button: true,
+                    label: 'Download image',
+                    child: Icon(
+                      Icons.download,
+                      size: 40,
+                      color: Colors.white.withOpacity(0.9),
+                    ),
+                  ),
+          ],
+        ),
+      );
+    }
+
+    // For downloaded media
+    final filePath = _mediaData!['file_path'];
+    if (filePath == null) {
+      print('🔴 [MessageChat] Downloaded image file path is null');
+      return GestureDetector(
+        onTap: _downloadMedia,
+        child: Container(
+          width: 180,
+          height: 180,
+          decoration: BoxDecoration(
+            color: Colors.grey[300],
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Center(
+            child: Icon(
+              Icons.error,
+              size: 40,
+              color: Colors.red,
+            ),
+          ),
+        ),
+      );
+    }
+
+    final file = File(filePath);
+    if (!file.existsSync()) {
+      print('🔴 [MessageChat] Downloaded image file not found: $filePath');
+      return GestureDetector(
+        onTap: _downloadMedia,
+        child: Container(
+          width: 180,
+          height: 180,
+          decoration: BoxDecoration(
+            color: Colors.grey[300],
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Center(
+            child: Icon(
+              Icons.error,
+              size: 40,
+              color: Colors.red,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => FullScreenImage(imagePath: filePath),
+          ),
+        );
+      },
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Image.file(
+          file,
+          width: 180,
+          height: 180,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) {
+            print('🔴 [MessageChat] Error loading downloaded image for message ${widget.messageId}: $error');
+            return GestureDetector(
+              onTap: _downloadMedia,
+              child: const Center(
+                child: Icon(
+                  Icons.image_not_supported,
+                  size: 40,
+                  color: Colors.grey,
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  // Fallback for any other case
+  return Container(
+    width: 180,
+    height: 180,
+    decoration: BoxDecoration(
+      color: Colors.grey[300],
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: const Center(
+      child: Icon(
+        Icons.error,
+        size: 40,
+        color: Colors.red,
+      ),
+    ),
+  );
+}
 
   String _formatDuration(Duration duration) {
     final seconds = duration.inSeconds;

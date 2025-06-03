@@ -881,9 +881,7 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
         }
       }
 
-      print('🔵 [DEBUG] Database message structure:');
-      print('🔵 [DEBUG] ${json.encode(dbMessage)}');
-
+    
       await _dbHelper.insertMessage(dbMessage);
       print('🔵 [DEBUG] Message inserted into database');
      
@@ -941,32 +939,24 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
 
   Future<void> _sendImageMessage(String imagePath) async {
     try {
-     
-
-     
-
       final tempId = DateTime.now().millisecondsSinceEpoch.toString();
       final fileName = 'image_${DateTime.now().millisecondsSinceEpoch}.jpg';
-     
 
       // Create a copy in the app's documents directory
-     
-      final appDir = await getApplicationDocumentsDirectory();
-      final mediaDir = Directory('${appDir.path}/media');
+      final extDir = await getExternalStorageDirectory();
+      final mediaDir = Directory('${extDir!.path}/Pictures/Cyanase');
       if (!await mediaDir.exists()) {
-       
         await mediaDir.create(recursive: true);
       }
 
       final localPath = '${mediaDir.path}/$fileName';
-     
       await File(imagePath).copy(localPath);
 
       final bytes = await File(imagePath).readAsBytes();
       final base64Image = base64Encode(bytes);
 
       // Insert into media table
-      final mediaId = await _dbHelper.insertImageFile(localPath);
+      final mediaId = await _dbHelper.insertImageFile(localPath, tempId);
 
       final groupId = widget.groupId!;
 
@@ -990,14 +980,13 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
       // Store in database
       await _dbHelper.insertMessage(message);
 
-      // Update UI immediately
+      // Update UI immediately with temp message
       setState(() {
         _messages.add(message);
         _messages = MessageSort.sortMessagesByDate(_messages);
         _groupedMessages = MessageSort.groupMessagesByDate(_messages);
       });
 
-    
       final wsMessage = {
         'type': 'send_message',
         'content': "image_message", // Send local path as content
@@ -1013,15 +1002,14 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
         'status': 'sending'
       };
      
-       await _wsService.sendMessage(wsMessage);
-
+      await _wsService.sendMessage(wsMessage);
 
       _replyingToMessage = null;
       _scrollToBottomIfAtBottom();
       widget.onMessageSent?.call();
   
     } catch (e) {
-      
+       print("Failed to send image: $e");
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Failed to send image: $e")),
       );
@@ -1045,8 +1033,8 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
 
       // Create a copy in the app's documents directory
      
-      final appDir = await getApplicationDocumentsDirectory();
-      final mediaDir = Directory('${appDir.path}/media');
+      final extDir = await getExternalStorageDirectory();
+      final mediaDir = Directory('${extDir!.path}/Pictures/Cyanase');
       if (!await mediaDir.exists()) {
    
         await mediaDir.create(recursive: true);
@@ -1271,18 +1259,30 @@ void _handleNewMessage(Map<String, dynamic> data) async {
       if (!mounted) return;
       
       setState(() {
-        // Add new message to the list
-        _messages.add(newMessage);
-        // Sort messages by date
-        _messages = MessageSort.sortMessagesByDate(_messages);
-        // Update grouped messages
-        _groupedMessages = MessageSort.groupMessagesByDate(_messages);
-        
-        // Update unread messages
-        if (newMessage['isMe'] == 0 && newMessage['status'] == 'unread') {
-          _unreadMessageIds.add(newMessage['id'].toString());
-          _hasUnreadMessages = true;
-          _showUnreadBadge = true;
+        // Check if message with same temp_id already exists in UI
+        final existingIndex = _messages.indexWhere((m) => 
+          m['temp_id'] == newMessage['temp_id'] || m['id'] == newMessage['id']
+        );
+
+        if (existingIndex == -1) {
+          // Add new message to the list
+          _messages.add(newMessage);
+          // Sort messages by date
+          _messages = MessageSort.sortMessagesByDate(_messages);
+          // Update grouped messages
+          _groupedMessages = MessageSort.groupMessagesByDate(_messages);
+          
+          // Update unread messages
+          if (newMessage['isMe'] == 0 && newMessage['status'] == 'unread') {
+            _unreadMessageIds.add(newMessage['id'].toString());
+            _hasUnreadMessages = true;
+            _showUnreadBadge = true;
+          }
+        } else {
+          // Update existing message instead of adding a new one
+          _messages[existingIndex] = newMessage;
+          _messages = MessageSort.sortMessagesByDate(_messages);
+          _groupedMessages = MessageSort.groupMessagesByDate(_messages);
         }
       });
 

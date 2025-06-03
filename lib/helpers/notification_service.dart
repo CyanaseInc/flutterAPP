@@ -132,7 +132,7 @@ class NotificationService {
       final unreadCount = await dbHelper.getTotalUnreadMessageCount(); // Assuming this method exists
       _badgeCount = unreadCount;
       await _updateBadgeCount(); // Update platform badge
-      debugPrint('🔵 [NotificationService] Badge count updated to: $_badgeCount');
+      
     } catch (e) {
       debugPrint('🔴 [NotificationService] Error updating badge count from database: $e');
     }
@@ -218,6 +218,7 @@ class NotificationService {
         color: Color(0xFF2196F3),
         icon: '@mipmap/ic_launcher_foreground',
         largeIcon: DrawableResourceAndroidBitmap('@mipmap/ic_launcher_foreground'),
+
       );
 
       final iosDetails = DarwinNotificationDetails(
