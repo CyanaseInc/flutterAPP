@@ -16,6 +16,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:cyanase/helpers/chat_websocket_service.dart';
 import 'package:cyanase/helpers/notification_service.dart';
 import 'package:intl/intl.dart';
+import 'package:cyanase/screens/home/group/typing.dart';
 
 import 'dart:io';
 import 'dart:convert';
@@ -88,8 +89,7 @@ String? _lastMessageTimestamp;
 
   bool _isTyping = false;
   Timer? _typingTimer;
-  Map<String, String> _typingUsers =
-      {}; // Map of user_id to username who are typing
+  Map<String, Set<String>> _typingUsers = {}; // Map of group_id to set of usernames who are typing
 
   String? _token;
 
@@ -648,7 +648,8 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
       }
       
       print('🔵 [DEBUG] Received WebSocket message: ${data['type']}');
-      
+       print('🔵 [DEBUG] nnnnn ${data}');
+       
       try {
         if (data['type'] == 'initial_messages') {
           _handleInitialMessages(data['messages']);
@@ -660,7 +661,8 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
         } else if (data['type'] == 'message_id_update') {
           _handleMessageIdUpdate(data);
         } else if (data['type'] == 'typing') {
-          _handleTypingStatus(data['data']);
+          print('🔵 [DEBUG] Handling typing status from WebSocket with data: $data');
+          _handleTypingStatus(data);
         }
       } catch (e, stackTrace) {
         print('🔴 [DEBUG] Error handling WebSocket message: $e');
@@ -752,7 +754,6 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
     print('🔵 [DEBUG] Message ID: $messageId');
     print('🔵 [DEBUG] New Status: $status');
     print('🔵 [DEBUG] Group ID: $groupId');
-    print('🔵 [DEBUG] Current messages count: ${_messages.length}');
 
     if (groupId != null && groupId != widget.groupId.toString()) {
       print('🔵 [DEBUG] Group ID mismatch, skipping update');
@@ -760,22 +761,19 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
     }
 
     setState(() {
-      final index = _messages.indexWhere((msg) =>
-          msg['id']?.toString() == messageId ||
-          msg['temp_id']?.toString() == messageId);
-
-      print('🔵 [DEBUG] Found message at index: $index');
-      if (index != -1) {
-        print('🔵 [DEBUG] Current message state:');
-        print('🔵 [DEBUG] ID: ${_messages[index]['id']}');
-        print('🔵 [DEBUG] Temp ID: ${_messages[index]['temp_id']}');
-        print('🔵 [DEBUG] Current Status: ${_messages[index]['status']}');
-
-        _messages[index]['status'] = status;
-        _groupedMessages = MessageSort.groupMessagesByDate(_messages);
-      } else {
-        print('🔵 [DEBUG] No matching message found for status update');
+      // Update all messages with matching ID or temp_id
+      for (int i = 0; i < _messages.length; i++) {
+        if (_messages[i]['id']?.toString() == messageId || 
+            _messages[i]['temp_id']?.toString() == messageId) {
+          print('🔵 [DEBUG] Updating message status at index $i');
+          _messages[i]['status'] = status;
+          break;
+        }
       }
+      
+      // Re-sort and regroup messages to ensure proper display
+      _messages = MessageSort.sortMessagesByDate(_messages);
+      _groupedMessages = MessageSort.groupMessagesByDate(_messages);
     });
 
     // Update badge count if the message status indicates it was read
@@ -785,24 +783,15 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
     }
   }
 
-  void _sendTypingStatus(bool isTyping) async {
-    if (_currentUserId == null) return;
+  void _sendTypingStatus(bool isTyping) {
+    if (widget.groupId == null) return;
 
-    // Only send typing status through WebSocket, no database operations
-    final typingMessage = {
+    _wsService.sendTypingStatus({
       'type': 'typing',
-      'user_id': _currentUserId,
-      'group_id': widget.groupId.toString(),
-      'is_typing': isTyping,
-      'timestamp': DateTime.now().toIso8601String(),
-    };
-
-    try {
-      // Use the new method that doesn't save to database
-      await _wsService.sendTypingStatus(typingMessage);
-    } catch (e) {
-      print('Error sending typing status: $e');
-    }
+      'room_id': widget.groupId.toString(),
+      'username': _currentUserId,
+      'isTyping': isTyping,
+    });
   }
 
   Future<void> _sendMessage() async {
@@ -839,10 +828,9 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
       // Add reply information if available
       if (_replyingToMessage != null) {
         wsMessage['reply_to_id'] = _replyingToMessage!['id'];
-        wsMessage['reply_to_message'] = _replyingToMessage!['message']; // Keep original message
+        wsMessage['reply_to_message'] = _replyingToMessage!['message'];
         wsMessage['reply_to_type'] = _replyingToMessage!['type'] ?? 'text';
         
-        // Add additional reply information for media messages
         if (_replyingToMessage!['type'] == 'image') {
           wsMessage['reply_to_media_type'] = 'image';
           wsMessage['reply_to_media_url'] = _replyingToMessage!['attachment_url'];
@@ -870,10 +858,9 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
       // Add reply information to database message
       if (_replyingToMessage != null) {
         dbMessage['reply_to_id'] = _replyingToMessage!['id'];
-        dbMessage['reply_to_message'] = _replyingToMessage!['message']; // Keep original message
+        dbMessage['reply_to_message'] = _replyingToMessage!['message'];
         dbMessage['reply_to_type'] = _replyingToMessage!['type'] ?? 'text';
         
-        // Add additional reply information for media messages
         if (_replyingToMessage!['type'] == 'image') {
           dbMessage['reply_to_media_type'] = 'image';
           dbMessage['reply_to_media_url'] = _replyingToMessage!['attachment_url'];
@@ -881,12 +868,13 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
         }
       }
 
-    
+      // Insert into database and update UI immediately
       await _dbHelper.insertMessage(dbMessage);
       print('🔵 [DEBUG] Message inserted into database');
      
       setState(() {
         _messages.add(dbMessage);
+        _messages = MessageSort.sortMessagesByDate(_messages);
         _groupedMessages = MessageSort.groupMessagesByDate(_messages);
         _replyingToMessage = null;
       });
@@ -895,6 +883,16 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
         print('🔵 [DEBUG] Sending message through WebSocket');
         await _wsService.sendMessage(wsMessage);
         print('🔵 [DEBUG] Message sent successfully through WebSocket');
+        
+        // Update status to 'sent' after successful WebSocket send
+        setState(() {
+          final index = _messages.indexWhere((msg) => msg['temp_id'] == tempId);
+          if (index != -1) {
+            _messages[index]['status'] = 'sent';
+            _messages = MessageSort.sortMessagesByDate(_messages);
+            _groupedMessages = MessageSort.groupMessagesByDate(_messages);
+          }
+        });
       
       } catch (e) {
         print('🔴 [DEBUG] Error in WebSocket send: $e');
@@ -905,6 +903,7 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
           if (index != -1) {
             print('🔵 [DEBUG] Updating message status to failed');
             _messages[index]['status'] = 'failed';
+            _messages = MessageSort.sortMessagesByDate(_messages);
             _groupedMessages = MessageSort.groupMessagesByDate(_messages);
           }
         });
@@ -1188,15 +1187,41 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
     }
   }
 
-  void _handleTypingStatus(Map<String, dynamic> data) {
+ void _handleTypingStatus(Map<String, dynamic> data) {
+  print('🔵 [ChatScreen] Handling typing status: $data');
+    final groupId = data['room_id']?.toString();
+    final username = data['username']?.toString();
+    final isTyping = data['isTyping'] as bool? ?? false;
+
+    if (groupId == null || username == null || groupId != widget.groupId?.toString()) return;
+
     setState(() {
-      if (data['is_typing'] == true) {
-        _typingUsers[data['user_id']] = data['username'] ?? 'Someone';
+      _typingUsers[groupId] ??= {};
+      if (isTyping) {
+        _typingUsers[groupId]!.add(username);
       } else {
-        _typingUsers.remove(data['user_id']);
+        _typingUsers[groupId]!.remove(username);
+        if (_typingUsers[groupId]!.isEmpty) {
+          _typingUsers.remove(groupId);
+        }
       }
     });
+
+    _typingTimer?.cancel();
+    if (isTyping) {
+      _typingTimer = Timer(const Duration(seconds: 3), () {
+        if (mounted) {
+          setState(() {
+            _typingUsers[groupId]?.remove(username);
+            if (_typingUsers[groupId]?.isEmpty ?? false) {
+              _typingUsers.remove(groupId);
+            }
+          });
+        }
+      });
+    }
   }
+
 
 void _handleNewMessage(Map<String, dynamic> data) async {
   if (!mounted) {
@@ -1535,8 +1560,10 @@ Future<void> _markMessageAsRead(String messageId) async {
                         isNotification: message['type'] == 'notification',
                         onPlayAudio: _playAudio,
                         isPlaying: _isPlayingMap[message['id'].toString()] ?? false,
-                        audioDuration: _audioDurationMap[message['id'].toString()] ?? Duration.zero,
-                        audioPosition: _audioPositionMap[message['id'].toString()] ?? Duration.zero,
+                        audioDuration: _audioDurationMap[message['id'].toString()] ??
+                            Duration.zero,
+                        audioPosition: _audioPositionMap[message['id'].toString()] ??
+                            Duration.zero,
                         messageId: message['id'].toString(),
                         onReply: (messageId, messageText) {
                           _setReplyMessage(message);
@@ -1601,16 +1628,19 @@ Future<void> _markMessageAsRead(String messageId) async {
               right: 16,
               child: FloatingActionButton(
                 mini: true,
-                onPressed: _manualScrollToBottom,
+                onPressed: _scrollToBottom,
                 backgroundColor: primaryTwo,
                 child: Icon(Icons.arrow_downward, color: primaryColor),
               ),
             ),
           Positioned(
-            bottom: 80, // Adjust based on your input area height
+            bottom: 0,
             left: 0,
             right: 0,
-            child: _buildTypingIndicator(),
+            child: TypingIndicator(
+              typingUsers: _typingUsers[widget.groupId?.toString()] ?? {},
+              groupId: widget.groupId?.toString() ?? '',
+            ),
           ),
           Positioned(
             bottom: 0,
@@ -1730,38 +1760,14 @@ Future<void> _markMessageAsRead(String messageId) async {
     );
   }
 
-  Widget _buildTypingIndicator() {
-    if (_typingUsers.isEmpty) return const SizedBox.shrink();
-
-    final typingText = _typingUsers.length == 1
-        ? '${_typingUsers.values.first} is typing...'
-        : '${_typingUsers.length} people are typing...';
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Text(
-        typingText,
-        style: TextStyle(
-          color: Colors.grey[600],
-          fontSize: 12,
-          fontStyle: FontStyle.italic,
-        ),
-      ),
-    );
-  }
+ 
 
   void _onTextChanged() {
-    if (_typingTimer?.isActive ?? false) {
-      _typingTimer?.cancel();
-    }
-
-    if (_controller.text.isNotEmpty) {
-      // Only send typing status, no message status
+    if (_controller.text.isNotEmpty && !_isTyping) {
+      _isTyping = true;
       _sendTypingStatus(true);
-      _typingTimer = Timer(const Duration(seconds: 2), () {
-        _sendTypingStatus(false);
-      });
-    } else {
+    } else if (_controller.text.isEmpty && _isTyping) {
+      _isTyping = false;
       _sendTypingStatus(false);
     }
   }

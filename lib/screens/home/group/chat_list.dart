@@ -49,9 +49,6 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
   final StreamController<Map<String, dynamic>> _messageController = StreamController<Map<String, dynamic>>.broadcast();
   Map<String, int> _groupUnreadCounts = <String, int>{};
   bool _mounted = true;
-  Map<String, bool> _typingUsers = {};
-  Map<String, Timer> _typingTimers = {};
-  late AnimationController _typingAnimationController;
 
   @override
   void initState() {
@@ -63,11 +60,6 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
       duration: const Duration(seconds: 1),
     );
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(_animationController!);
-    _typingAnimationController = AnimationController(
-      duration: const Duration(milliseconds: 1500),
-      vsync: this,
-    );
-    _typingAnimationController.repeat(reverse: true);
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!_mounted) return;
@@ -88,8 +80,6 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
     _channel?.sink.close();
     _animationController?.dispose();
     _searchController.dispose();
-    _typingAnimationController.dispose();
-    _typingTimers.values.forEach((timer) => timer.cancel());
     _mounted = false;
     super.dispose();
   }
@@ -218,9 +208,9 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
       final db = await _dbHelper.database;
       await db.update(
         'messages',
-        {'status': 'sent'},
-        where: 'group_id = ? AND isMe = 1 AND status = ?',
-        whereArgs: [groupId, 'sending'],
+        {'status': 'read'},
+        where: 'group_id = ? AND isMe = 0 AND status = ?',
+        whereArgs: [groupId, 'unread'],
       );
 
       setState(() {
@@ -233,7 +223,7 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
             _allChats[chatIndex] = {
               ..._allChats[chatIndex],
               'unreadCount': 0,
-              'lastMessageStatus': 'sent',
+              'lastMessageStatus': 'read',
             };
             _filteredChats = List.from(_allChats);
             _unreadCountController.add(_totalUnreadCount);
@@ -641,8 +631,7 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
               refreshStream: _refreshController.stream,
               loadChats: _loadChats,
               toSentenceCase: _toSentenceCase,
-              typingUsers: _typingUsers,
-              typingAnimationController: _typingAnimationController,
+            
             ),
           ),
         ],
@@ -849,104 +838,6 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
   void _reloadChats() {
     _refreshController.add(null);
   }
-
-  void _handleTypingStatus(String userId, bool isTyping) {
-    if (!mounted) return;
-    
-    setState(() {
-      if (isTyping) {
-        _typingUsers[userId] = true;
-        // Cancel existing timer if any
-        _typingTimers[userId]?.cancel();
-        // Set new timer to remove typing status after 3 seconds
-        _typingTimers[userId] = Timer(const Duration(seconds: 3), () {
-          if (mounted) {
-            setState(() {
-              _typingUsers.remove(userId);
-            });
-          }
-        });
-      } else {
-        _typingUsers.remove(userId);
-        _typingTimers[userId]?.cancel();
-      }
-    });
-  }
-
-  Widget _buildTypingIndicator(String groupId) {
-    if (_typingUsers.isEmpty) return const SizedBox.shrink();
-
-    return Container(
-      margin: const EdgeInsets.only(left: 12, bottom: 4),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 16,
-            height: 16,
-            child: AnimatedBuilder(
-              animation: _typingAnimationController,
-              builder: (context, child) {
-                return CustomPaint(
-                  painter: TypingIndicatorPainter(
-                    color: primaryColor.withOpacity(0.7),
-                    progress: _typingAnimationController.value,
-                  ),
-                );
-              },
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            _typingUsers.length == 1 
-                ? 'Someone is typing...'
-                : '${_typingUsers.length} people are typing...',
-            style: TextStyle(
-              color: Colors.grey[600],
-              fontSize: 12,
-              fontStyle: FontStyle.italic,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class TypingIndicatorPainter extends CustomPainter {
-  final Color color;
-  final double progress;
-
-  TypingIndicatorPainter({
-    required this.color,
-    required this.progress,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
-
-    final dotRadius = size.width / 6;
-    final spacing = size.width / 3;
-    final centerY = size.height / 2;
-
-    for (var i = 0; i < 3; i++) {
-      final x = i * spacing + dotRadius;
-      final y = centerY + sin((progress + i * 0.3) * pi * 2) * dotRadius;
-      
-      canvas.drawCircle(
-        Offset(x, y),
-        dotRadius * (0.5 + 0.5 * sin((progress + i * 0.3) * pi * 2)),
-        paint,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(TypingIndicatorPainter oldDelegate) {
-    return oldDelegate.progress != progress || oldDelegate.color != color;
-  }
 }
 
 // Component for Chat List
@@ -957,8 +848,7 @@ class ChatListComponent extends StatefulWidget {
   final Stream<void> refreshStream;
   final Future<List<Map<String, dynamic>>> Function() loadChats;
   final String Function(String) toSentenceCase;
-  final Map<String, bool> typingUsers;
-  final AnimationController typingAnimationController;
+
 
   const ChatListComponent({
     Key? key,
@@ -968,8 +858,7 @@ class ChatListComponent extends StatefulWidget {
     required this.refreshStream,
     required this.loadChats,
     required this.toSentenceCase,
-    required this.typingUsers,
-    required this.typingAnimationController,
+    
   }) : super(key: key);
 
   @override
@@ -1060,8 +949,7 @@ class _ChatListComponentState extends State<ChatListComponent> with TickerProvid
   Widget _buildChatItem(Map<String, dynamic> chat) {
     final chatId = chat['id'].toString();
     final hasUnreadMessages = chat["unreadCount"] > 0;
-    final lastMessageStatus = chat["lastMessageStatus"];
-    final isTyping = widget.typingUsers.isNotEmpty;
+  
 
     return Container(
       key: ValueKey('chat_${chatId}_${chat['timestamp']}'),
@@ -1082,10 +970,13 @@ class _ChatListComponentState extends State<ChatListComponent> with TickerProvid
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
           onTap: () async {
+            
+         
             Navigator.push(
               context,
               MaterialPageRoute(
                 builder: (context) {
+
                   return MessageChatScreen(
                     name: chat["name"],
                     isAdminOnlyMode: chat["restrict_messages_to_admins"],
@@ -1104,104 +995,94 @@ class _ChatListComponentState extends State<ChatListComponent> with TickerProvid
           },
           child: Padding(
             padding: const EdgeInsets.all(12),
-            child: Column(
+            child: Row(
               children: [
-                Row(
+                Stack(
                   children: [
-                    Stack(
-                      children: [
-                        _getAvatar(chat["name"], chat["profilePic"], chat["isGroup"]),
-                        if (hasUnreadMessages)
-                          Positioned(
-                            right: 0,
-                            bottom: 0,
-                            child: Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: BoxDecoration(
-                                color: primaryColor,
-                                shape: BoxShape.circle,
-                                border: Border.all(color: Colors.white, width: 2),
-                              ),
-                              child: Text(
-                                chat["unreadCount"].toString(),
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
+                    _getAvatar(chat["name"], chat["profilePic"], chat["isGroup"]),
+                    if (hasUnreadMessages)
+                      Positioned(
+                        right: 0,
+                        bottom: 0,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: primaryColor,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2),
+                          ),
+                          child: Text(
+                            chat["unreadCount"].toString(),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
-                      ],
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  chat["name"],
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
+                          Expanded(
+                            child: Text(
+                              chat["name"],
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
                               ),
-                              Text(
-                                chat["time"],
-                                style: TextStyle(
-                                  color: Colors.grey[600],
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: isTyping 
-                                    ? _buildTypingIndicator(chatId)
-                                    : chat["lastMessage"],
-                              ),
-                              if (hasUnreadMessages)
-                                Container(
-                                  width: 8,
-                                  height: 8,
-                                  decoration: BoxDecoration(
-                                    color: primaryColor,
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                              if (!hasUnreadMessages && lastMessageStatus != null)
-                                AnimatedSwitcher(
-                                  duration: const Duration(milliseconds: 300),
-                                  child: Padding(
-                                    padding: const EdgeInsets.only(left: 4),
-                                    child: Icon(
-                                      lastMessageStatus == 'sent' 
-                                          ? Icons.done_all 
-                                          : Icons.done,
-                                      key: ValueKey(lastMessageStatus),
-                                      size: 16,
-                                      color: lastMessageStatus == 'sent' 
-                                          ? Colors.blue 
-                                          : Colors.grey,
-                                    ),
-                                  ),
-                                ),
-                            ],
+                          Text(
+                            chat["time"],
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontSize: 12,
+                            ),
                           ),
                         ],
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: chat["lastMessage"],
+                          ),
+                          if (hasUnreadMessages)
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: BoxDecoration(
+                                color: primaryColor,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                          if (!hasUnreadMessages && chat["lastMessageStatus"] != null && chat["isMe"] == 1)
+                            Padding(
+                              padding: const EdgeInsets.only(left: 4),
+                              child: Icon(
+                                chat["lastMessageStatus"] == 'read' 
+                                    ? Icons.done_all 
+                                    : Icons.done,
+                                size: 16,
+                                color: chat["lastMessageStatus"] == 'read' 
+                                    ? Colors.blue 
+                                    : Colors.grey,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),

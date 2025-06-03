@@ -202,35 +202,31 @@ class ChatWebSocketService {
               break;
 
             case 'update_message_status':
-              
-                await _handleMessageStatusUpdate({
-                  'message_id': data['message']['id'],
-                  'temp_id': data['message']['temp_id'],
-                  'status': data['message']['status'],
-                  'room_id': data['message']['room_id']
-                });
-            
+              await _handleMessageStatusUpdate({
+                'message_id': data['message']['id'],
+                'temp_id': data['message']['temp_id'],
+                'status': data['message']['status'],
+                'room_id': data['message']['room_id']
+              });
               break;
 
             case 'typing':
               onMessageReceived?.call(data);
               break;
 
+            case 'error':
+              print('🔴 [ChatWebSocket] Error from server: ${data['message']}');
+              break;
+
             default:
-              print('Unknown message type: ${data['type']}');
+              print('🔵 [ChatWebSocket] Unhandled message type: ${data['type']}');
           }
         } catch (e) {
-          print('Error processing ChatWebSocket message: $e');
+          print('🔴 [ChatWebSocket] Error processing message: $e');
         }
       },
       onError: (error) {
-        print('ChatWebSocket error: $error');
-        _isConnected = false;
-        onConnectionStatusChanged?.call(false);
-        _startRetryTimer();
-      },
-      onDone: () {
-        print('ChatWebSocket connection closed');
+        print('🔴 [ChatWebSocket] WebSocket error: $error');
         _isConnected = false;
         onConnectionStatusChanged?.call(false);
         _startRetryTimer();
@@ -497,7 +493,7 @@ class ChatWebSocketService {
         'type': 'delivery_receipt',
         'message_id': messageId,
         'user_id': senderId,
-        'conversation_id': _groupId,
+        'room/-id': _groupId,
         'timestamp': DateTime.now().toIso8601String(),
       };
 
@@ -531,7 +527,7 @@ class ChatWebSocketService {
       final typingMessage = {
         'type': 'typing',
         'data': {
-          'conversation_id': message['group_id'],
+          'room_id': message['group_id'],
           'sender_id': senderId,
           'is_typing': message['is_typing'],
         }
@@ -544,25 +540,39 @@ class ChatWebSocketService {
   }
 
   Future<void> sendMessage(Map<String, dynamic> message) async {
-    print("We got ot  sendMessage Function");
+    print("We got to sendMessage Function");
     try {
-      // First check if message with temp_id already exists
+      print('my message is $message');
       
-       print('my message is $message');
-      
-     
-     
-   
-        // If WebSocket is not connected, add to queue
-        if (!_isConnected || _webSocket == null) {
-          _messageQueue.add(message);
-        
-          return;
-        }
+      // If WebSocket is not connected, add to queue
+      if (!_isConnected || _webSocket == null) {
+        _messageQueue.add(message);
+        return;
+      }
   
-        // Send through WebSocket
-        await _sendMessageInternal(message);
-     
+      // Send through WebSocket
+      await _sendMessageInternal(message);
+      
+      // Immediately update message status to 'sent' in database
+      if (message['id'] != null) {
+        await _dbHelper.updateMessageStatus(message['id'].toString(), 'sent');
+        
+        // Notify UI of immediate status update
+        _messageStatusController.add({
+          'type': 'update_message_status',
+          'message_id': message['id'].toString(),
+          'status': 'sent',
+          'group_id': message['room_id'],
+        });
+        
+        // Also notify through onMessageReceived for backward compatibility
+        onMessageReceived?.call({
+          'type': 'update_message_status',
+          'message_id': message['id'].toString(),
+          'status': 'sent',
+          'group_id': message['room_id'],
+        });
+      }
     } catch (e) {
       print('Error sending message: $e');
       rethrow;

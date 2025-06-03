@@ -173,7 +173,7 @@ class _MessageChatState extends State<MessageChat>
   double _downloadProgress = 0.0;
   Map<String, dynamic>? _mediaData;
   double _dragDistance = 0.0;
-  static const double _swipeThreshold = 70.0; // Increased threshold
+  static const double _swipeThreshold = 70.0;
   late String _currentStatus;
 
   @override
@@ -193,7 +193,7 @@ class _MessageChatState extends State<MessageChat>
     }
 
     _animationController = AnimationController(
-      duration: const Duration(milliseconds: 200), // Increased duration for better visual feedback
+      duration: const Duration(milliseconds: 200),
       vsync: this,
     );
 
@@ -257,6 +257,9 @@ class _MessageChatState extends State<MessageChat>
     final file = File(filePath);
     return await file.exists();
   }
+
+
+  
   Future<void> _loadMediaData() async {
 
     if (widget.isImage || widget.isAudio) {
@@ -1242,7 +1245,8 @@ Widget _buildImageViewer(BuildContext context) {
     IconData icon;
     Color color;
 
-    switch (_currentStatus) {
+    // Use the widget's messageStatus directly instead of _currentStatus
+    switch (widget.messageStatus) {
       case 'sending':
         icon = Icons.access_time;
         color = Colors.grey;
@@ -1272,7 +1276,7 @@ Widget _buildImageViewer(BuildContext context) {
       mainAxisSize: MainAxisSize.min,
       children: [
         Icon(icon, size: 16, color: color),
-        if (_currentStatus == 'failed')
+        if (widget.messageStatus == 'failed')
           TextButton(
             onPressed: () {
               // Implement retry logic here
