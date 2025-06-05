@@ -379,14 +379,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     print('🔵 [HomeScreen] Setting up notification handler');
     // Initialize notification service
     NotificationService().initialize().then((_) {
-      print('🔵 [HomeScreen] Notification service initialized');
+      
       // Set up notification tap handler
       NotificationService().setNotificationTapHandler((response) {
-        print('🔵 [HomeScreen] Notification tapped');
-        print('🔵 [HomeScreen] Payload: ${response.payload}');
+     
         _handleNotificationTap(response);
       });
-      print('🔵 [HomeScreen] Notification tap handler set up');
+     
     }).catchError((error) {
       print('🔴 [HomeScreen] Error initializing notification service: $error');
     });

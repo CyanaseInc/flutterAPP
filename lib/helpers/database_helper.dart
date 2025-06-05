@@ -22,6 +22,9 @@ class DatabaseHelper {
   // Stream of messages, keyed by groupId
   Stream<Map<int, List<Map<String, dynamic>>>> get messageStream => _messageStreamController.stream;
 
+  final _unreadCountController = StreamController<Map<String, int>>.broadcast();
+  Stream<Map<String, int>> get unreadCountStream => _unreadCountController.stream;
+
   // Singleton constructor
   DatabaseHelper._internal();
 
@@ -140,6 +143,7 @@ class DatabaseHelper {
   CREATE TABLE media (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     message_id INTEGER NOT NULL,
+    temp_id INTEGER,
     file_path TEXT, -- Nullable for undownloaded media
     type TEXT NOT NULL, -- 'image', 'audio'
     mime_type TEXT, -- e.g., 'image/jpeg', 'audio/mpeg'
@@ -254,7 +258,7 @@ class DatabaseHelper {
       whereArgs: [messageId],
       limit: 1,
     );
-    print('🔵 [DatabaseHelper] Media query result: $result');
+    
     return result.isNotEmpty ? result.first : null;
   }
 
@@ -382,14 +386,17 @@ class DatabaseHelper {
     }
   }
 
-  Future<int> insertAudioFile(String filePath) async {
+  Future<int> insertAudioFile(String filePath, String messageId) async {
     final db = await database;
     return await db.insert(
       'media',
       {
+        'message_id': messageId, 
+        'temp_id': messageId, // No message ID for standalone images
         'file_path': filePath,
-        'type': 'audio',
-        'mime_type': 'audio/m4a',
+        'url':  filePath, // No URL for local images
+        'type': 'image',
+        'mime_type': 'image/jpeg',
         'file_size': await File(filePath).length(),
         'duration': 0,
         'thumbnail_path': null,
@@ -404,7 +411,8 @@ class DatabaseHelper {
     return await db.insert(
       'media',
       {
-        'message_id': messageId, // No message ID for standalone images
+        'message_id': messageId, 
+        'temp_id': messageId, // No message ID for standalone images
         'file_path': filePath,
         'url':  filePath, // No URL for local images
         'type': 'image',
@@ -481,35 +489,7 @@ class DatabaseHelper {
       // Ensure group exists
       await ensureGroupExists(messageData['group_id'] as int, messageData['sender_id'] as String);
 
-      // Ensure sender exists in profile table
-      final senderExists = await db.query(
-        'profile',
-        where: 'id = ?',
-        whereArgs: [messageData['sender_id']],
-        limit: 1,
-      );
-
-      if (senderExists.isEmpty) {
-        print('🔵 [DatabaseHelper] Creating sender profile for ${messageData['sender_id']}');
-        await db.insert('profile', {
-          'id': messageData['sender_id'],
-          'token': '',
-          'name': 'User ${messageData['sender_id']}',
-          'profile_pic': 'assets/images/avatar.png',
-          'phone_number': '',
-          'country': '',
-          'email': '',
-          'last_seen': DateTime.now().toIso8601String(),
-          'status': 'offline',
-          'auto_save': 0,
-          'goals_alert': 0,
-          'created_at': DateTime.now().toIso8601String(),
-          'privacy_settings': '{}',
-        });
-      }
-
-     
-      
+      // Insert the message
       final result = await db.insert(
         'messages',
         messageData,
@@ -518,12 +498,23 @@ class DatabaseHelper {
 
       print('🔵 [DatabaseHelper] Successfully inserted message, row ID: $result');
       
+      // Update group's last_activity
+      await db.update(
+        'groups',
+        {'last_activity': messageData['timestamp']},
+        where: 'id = ?',
+        whereArgs: [messageData['group_id']],
+      );
+      
       // Fetch updated messages for the group
-      final messages = await getMessages(groupId: messageData['group_id']);
-     
+      final messages = await getMessages(groupId: messageData['group_id'] as int);
       
       // Broadcast updated messages
       _messageStreamController.add({messageData['group_id'] as int: messages});
+      
+      // Immediately get and broadcast updated unread counts
+      final unreadCounts = await getGroupUnreadCounts();
+      _unreadCountController.add(unreadCounts);
     } catch (e, stackTrace) {
       print('🔴 [DatabaseHelper] Error inserting message: $e, StackTrace: $stackTrace');
       rethrow;
@@ -548,7 +539,10 @@ class DatabaseHelper {
 
   Future<List<Map<String, dynamic>>> getGroups() async {
     final db = await database;
-    return await db.query('groups');
+    return await db.query(
+      'groups',
+      orderBy: 'last_activity DESC',
+    );
   }
 
   Future<List<Map<String, dynamic>>> getParticipants(int groupId) async {
@@ -747,15 +741,8 @@ class DatabaseHelper {
       where: 'id = ?',
       whereArgs: [messageId],
     );
-    // Broadcast updated messages
-    final message = (await db.query(
-      'messages',
-      where: 'id = ?',
-      whereArgs: [messageId],
-    )).first;
-    final groupId = message['group_id'] as int;
-    final messages = await getMessages(groupId: groupId);
-    _messageStreamController.add({groupId: messages});
+    _notifyMessageUpdate();
+    _notifyUnreadCountUpdate();
   }
 
   Future<List<Map<String, dynamic>>> getPendingMessages() async {
@@ -886,6 +873,82 @@ class DatabaseHelper {
     } catch (e) {
       print('🔴 [DatabaseHelper] Error ensuring group exists: $e');
       rethrow;
+    }
+  }
+
+  void _notifyMessageUpdate() async {
+    final db = await database;
+    final messages = await db.query('messages', orderBy: 'timestamp DESC');
+    
+    final Map<int, List<Map<String, dynamic>>> groupMessages = {};
+    for (var message in messages) {
+      final groupId = message['group_id'] as int;
+      groupMessages[groupId] ??= [];
+      groupMessages[groupId]!.add(message);
+    }
+    
+    _messageStreamController.add(groupMessages);
+  }
+
+  Future<Map<String, int>> getGroupUnreadCounts() async {
+    final db = await database;
+    final result = await db.rawQuery('''
+      SELECT group_id, COUNT(*) as count 
+      FROM messages 
+      WHERE isMe = 0 AND status = 'unread' 
+      GROUP BY group_id
+    ''');
+    
+    final Map<String, int> unreadCounts = {};
+    for (var row in result) {
+      unreadCounts[row['group_id'].toString()] = row['count'] as int;
+    }
+    return unreadCounts;
+  }
+
+  Future<int> getGroupUnreadCount(String groupId) async {
+    final db = await database;
+    final result = await db.rawQuery('''
+      SELECT COUNT(*)
+      FROM messages
+      WHERE group_id = ? AND isMe = 0 AND status = 'unread'
+    ''', [groupId]);
+    return Sqflite.firstIntValue(result) ?? 0;
+  }
+
+  Future<void> _notifyUnreadCountUpdate() async {
+    final unreadCounts = await getGroupUnreadCounts();
+    _unreadCountController.add(unreadCounts);
+  }
+
+  Future<void> markMessagesAsRead(String groupId, {String? messageId}) async {
+    final db = await database;
+    try {
+      if (messageId != null) {
+        await db.update(
+          'messages',
+          {'status': 'read'},
+          where: 'id = ?',
+          whereArgs: [messageId],
+        );
+      } else {
+        await db.update(
+          'messages',
+          {'status': 'read'},
+          where: 'group_id = ? AND isMe = 0 AND status = ?',
+          whereArgs: [groupId, 'unread'],
+        );
+      }
+      
+      // Immediately get updated unread counts and notify listeners
+      final unreadCounts = await getGroupUnreadCounts();
+      _unreadCountController.add(unreadCounts);
+      
+      // Also update message stream to reflect read status
+      final messages = await getMessages(groupId: int.parse(groupId));
+      _messageStreamController.add({int.parse(groupId): messages});
+    } catch (e) {
+      print('🔴 Error marking messages as read: $e');
     }
   }
 }

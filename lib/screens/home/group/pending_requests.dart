@@ -605,8 +605,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
                     padding: const EdgeInsets.all(8),
                     itemCount: _pendingRequests.length,
                     itemBuilder: (context, index) {
-                      debugPrint(
-                          'Building item $index: ${_pendingRequests[index]}');
+                     
                       return _buildRequestItem(_pendingRequests[index]);
                     },
                   ),

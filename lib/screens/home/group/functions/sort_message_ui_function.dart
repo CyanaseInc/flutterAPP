@@ -20,7 +20,7 @@ class MessageSort {
     
     for (var message in messages) {
       final date = DateTime.parse(message['timestamp'] ?? '');
-      final dateKey = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+      final dateKey = _getDateKey(date);
       
       if (!grouped.containsKey(dateKey)) {
         grouped[dateKey] = [];
@@ -53,9 +53,11 @@ class MessageSort {
     } else if (messageDay.isAtSameMomentAs(yesterday)) {
       return "Yesterday";
     } else if (difference.inDays < 7) {
-      return DateFormat('EEEE').format(date); // e.g., "Tuesday"
+      // Show weekday name for messages within the last week
+      return DateFormat('EEEE').format(date); // e.g., "Monday", "Tuesday", etc.
     } else {
-      return DateFormat('d MMM yyyy').format(date); // e.g., "2 Feb 2025"
+      // For older messages, show date in DD.MM.YYYY format
+      return DateFormat('dd.MM.yyyy').format(date); // e.g., "24.01.2024"
     }
   }
 }

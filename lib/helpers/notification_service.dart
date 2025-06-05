@@ -1,3 +1,4 @@
+
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/material.dart';
 import 'dart:convert';
@@ -40,7 +41,7 @@ class NotificationService {
       defaultPresentBadge: true,
       defaultPresentSound: true,
     );
-    
+
     const initSettings = InitializationSettings(
       android: androidSettings,
       iOS: iosSettings,
@@ -61,14 +62,14 @@ class NotificationService {
       if (androidPlugin != null) {
         final granted = await androidPlugin.requestNotificationsPermission();
         debugPrint('🔵 [NotificationService] Android notification permission granted: $granted');
-        
+
         // Set up notification channels for Android
         await androidPlugin.createNotificationChannel(
           const AndroidNotificationChannel(
-            'chat_messages',
-            'Chat Messages',
-            description: 'Notifications for new chat messages',
-            importance: Importance.max,
+          'chat_messages',
+          'Chat Messages',
+          description: 'Notifications for new chat messages',
+          importance: Importance.max,
             playSound: true,
             enableVibration: true,
             showBadge: true,
@@ -77,10 +78,10 @@ class NotificationService {
         
         await androidPlugin.createNotificationChannel(
           const AndroidNotificationChannel(
-            'group_messages',
-            'Group Messages',
-            description: 'Notifications for group messages',
-            importance: Importance.max,
+          'group_messages',
+          'Group Messages',
+          description: 'Notifications for group messages',
+          importance: Importance.max,
             playSound: true,
             enableVibration: true,
             showBadge: true,

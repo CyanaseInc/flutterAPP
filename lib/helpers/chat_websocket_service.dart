@@ -291,7 +291,7 @@ class ChatWebSocketService {
     try {
       // Extract message data from either format
       final messageData = data['message'] ?? data;
-      final messageId = messageData['id'].toString();
+      final messageId = messageData['id']?.toString();
       print('🔵 [ChatWebSocket] Processing received message: $messageData');
 
       // Check if message already exists in database
@@ -299,64 +299,64 @@ class ChatWebSocketService {
       final existingMessage = await db.query(
         'messages',
         where: 'id = ? OR temp_id = ?',
-        whereArgs: [messageData['id'].toString(), messageData['temp_id']?.toString() ?? ''],
+        whereArgs: [messageId, messageData['temp_id']?.toString() ?? ''],
       );
 
       // Only save if message doesn't exist
       if (existingMessage.isEmpty) {
         // Save message to database with 'unread' status
         await _dbHelper.insertMessage({
-          'id': messageData['id'].toString(),
-          'group_id': messageData['room_id'],
-          'sender_id': messageData['sender_id'],
-          'message': messageData['content'],
-          'type': messageData['message_type'] ?? 'text',
-          'timestamp': messageData['timestamp'],
+          'id': messageId,
+          'group_id': messageData['room_id']?.toString(),
+          'sender_id': messageData['sender_id']?.toString(),
+          'message': messageData['content']?.toString(),
+          'type': messageData['message_type']?.toString() ?? 'text',
+          'timestamp': messageData['timestamp']?.toString(),
           'status': 'unread',
           'isMe': 0,
-          'username': messageData['username'],
+          'username': messageData['username']?.toString(),
           'sender_info': messageData['sender_info'],
           'is_edited': messageData['is_edited'] ?? false,
           'is_deleted': messageData['is_deleted'] ?? false,
           'is_forwarded': messageData['is_forwarded'] ?? false,
-          'reply_to_id': messageData['reply_to_id'],
-          'reply_to_message': messageData['reply_to_message'],
-          'reply_to_type': messageData['reply_to_type']
+          'reply_to_id': messageData['reply_to_id']?.toString(),
+          'reply_to_message': messageData['reply_to_message']?.toString(),
+          'reply_to_type': messageData['reply_to_type']?.toString(),
+          'temp_id': messageData['temp_id']?.toString(),
         });
 
- // Handle media for image or audio messages
-      if (messageData['message_type'] == 'image' || messageData['message_type'] == 'audio') {
-
-        if (messageData['attachment_url'] != null) {
-          
-          await _dbHelper.insertMedia(
-            messageId: int.parse(messageId),
-            type: messageData['message_type'],
-            url: messageData['attachment_url'], // Absolute URL
-            blurhash: messageData['thumbnail_id'], // Use blurhash if provided
-            mimeType: messageData['attachment_type'] == 'audio' ? 'audio/mpeg' : 'image/jpeg',
-          );
-          print('🔵 [ChatWebSocket] Inserted media for message $messageId');
-        } else {
-          print('🔴 [ChatWebSocket] Missing attachment_url for ${messageData['message_type']} message $messageId');
+        // Handle media for image or audio messages
+        if (messageData['message_type'] == 'image' || messageData['message_type'] == 'audio') {
+          if (messageData['attachment_url'] != null) {
+            await _dbHelper.insertMedia(
+              messageId: int.parse(messageId ?? '0'),
+              type: messageData['message_type']?.toString() ?? 'text',
+              url: messageData['attachment_url']?.toString() ?? '',
+              blurhash: messageData['thumbnail_id']?.toString(),
+              mimeType: messageData['attachment_type'] == 'audio' ? 'audio/mpeg' : 'image/jpeg',
+            );
+            print('🔵 [ChatWebSocket] Inserted media for message $messageId');
+          } else {
+            print('🔴 [ChatWebSocket] Missing attachment_url for ${messageData['message_type']} message $messageId');
+          }
         }
-      }
+
         // Get group info for notification
         final groupInfo = await db.query(
           'groups',
           where: 'id = ?',
-          whereArgs: [messageData['room_id']],
+          whereArgs: [messageData['room_id']?.toString()],
           columns: ['name'],
         );
         final groupName = groupInfo.isNotEmpty ? groupInfo.first['name'] as String : 'Group';
 
         // Show notification for new message
-        final senderName = messageData['full_name'] ?? 'Unknown';
-        final messageContent = messageData['content'] ?? '';
-        final messageType = messageData['message_type'] ?? 'text';
-        final groupId = messageData['room_id'];
+        final senderName = messageData['username']?.toString() ?? 'Unknown';
+        final messageContent = messageData['content']?.toString() ?? '';
+        final messageType = messageData['message_type']?.toString() ?? 'text';
+        final groupId = messageData['room_id']?.toString();
         final senderInfo = messageData['sender_info'] ?? {};
-        final senderProfilePic = senderInfo['profile_pic'];
+        final senderProfilePic = senderInfo['profile_pic']?.toString();
 
         // Show notification based on message type
         String notificationBody = messageContent;
@@ -371,7 +371,7 @@ class ChatWebSocketService {
           groupName: groupName,
           senderName: senderName,
           message: notificationBody,
-          groupId: groupId,
+          groupId: groupId ?? '',
           profilePic: senderProfilePic,
         );
 
@@ -382,20 +382,23 @@ class ChatWebSocketService {
         });
 
         // Send delivered status
-        await sendDeliveredStatus(messageData['id'].toString());
+        if (messageId != null) {
+          await sendDeliveredStatus(messageId);
+        }
 
         // Update message status stream
         _messageStatusController.add({
           'type': 'update_message_status',
-          'message_id': messageData['id'].toString(),
+          'message_id': messageId,
           'status': 'unread',
           'group_id': groupId,
         });
       } else {
         print('🔵 [ChatWebSocket] Message already exists in database, skipping save');
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
       print('🔴 [ChatWebSocket] Error handling received message: $e');
+      print('🔴 [ChatWebSocket] Stack trace: $stackTrace');
     }
   }
 
@@ -493,7 +496,7 @@ class ChatWebSocketService {
         'type': 'delivery_receipt',
         'message_id': messageId,
         'user_id': senderId,
-        'room/-id': _groupId,
+        'room_id': _groupId,
         'timestamp': DateTime.now().toIso8601String(),
       };
 

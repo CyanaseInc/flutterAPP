@@ -8,6 +8,7 @@ import 'full_screen_image_viewer.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:cyanase/helpers/database_helper.dart';
 import 'package:cyanase/helpers/download_helper.dart';
+import 'package:intl/intl.dart';
 
 
 class MessageTailPainter extends CustomPainter {
@@ -261,15 +262,33 @@ class _MessageChatState extends State<MessageChat>
 
   
   Future<void> _loadMediaData() async {
+    if (!widget.isImage && !widget.isAudio) return;
 
-    if (widget.isImage || widget.isAudio) {
-      final media = await DatabaseHelper().getMedia(int.parse(widget.messageId));
-  
-   
+    try {
+      if (widget.messageId.isEmpty) {
+        print('🔴 [MessageChat] Message ID is empty');
+        return;
+      }
+
+      final messageId = int.tryParse(widget.messageId);
+      if (messageId == null) {
+        print('🔴 [MessageChat] Invalid message ID: ${widget.messageId}');
+        return;
+      }
+
+      final media = await DatabaseHelper().getMedia(messageId);
+      
       if (mounted) {
         setState(() {
           _mediaData = media;
-        }); 
+        });
+      }
+    } catch (e) {
+      print('🔴 [MessageChat] Error loading media data: $e');
+      if (mounted) {
+        setState(() {
+          _mediaData = null;
+        });
       }
     }
   }
@@ -325,6 +344,7 @@ print("we got called 2");
       await player.dispose();
       return duration ?? Duration.zero;
     } catch (e) {
+      print('🔴 [MessageChat] Error getting audio duration: $e');
       return Duration.zero;
     }
   }
@@ -332,23 +352,49 @@ print("we got called 2");
   String _formatTime(String timestamp) {
     final dateTime = DateTime.parse(timestamp);
     final now = DateTime.now();
-    final difference = now.difference(dateTime);
+    final today = DateTime(now.year, now.month, now.day);
+    final messageDay = DateTime(dateTime.year, dateTime.month, dateTime.day);
 
-    // If message is from today, show time only
-    if (difference.inDays == 0) {
-      return TimeOfDay.fromDateTime(dateTime).format(context);
+    // If message is from today, show only time
+    if (messageDay.isAtSameMomentAs(today)) {
+      return DateFormat('HH:mm').format(dateTime); // e.g., "14:30"
     }
     // If message is from yesterday, show "Yesterday"
-    else if (difference.inDays == 1) {
+    else if (messageDay.isAtSameMomentAs(today.subtract(const Duration(days: 1)))) {
       return "Yesterday";
+    }
+    // If message is from this week, show day name
+    else if (now.difference(messageDay).inDays < 7) {
+      return DateFormat('EEEE').format(dateTime); // e.g., "Monday"
     }
     // If message is from this year, show date without year
     else if (dateTime.year == now.year) {
-      return "${dateTime.day}/${dateTime.month}";
+      return DateFormat('dd.MM').format(dateTime); // e.g., "24.01"
     }
     // If message is from previous years, show full date
     else {
-      return "${dateTime.day}/${dateTime.month}/${dateTime.year}";
+      return DateFormat('dd.MM.yyyy').format(dateTime); // e.g., "24.01.2024"
+    }
+  }
+
+  String _getDayName(int weekday) {
+    switch (weekday) {
+      case DateTime.monday:
+        return "Monday";
+      case DateTime.tuesday:
+        return "Tuesday";
+      case DateTime.wednesday:
+        return "Wednesday";
+      case DateTime.thursday:
+        return "Thursday";
+      case DateTime.friday:
+        return "Friday";
+      case DateTime.saturday:
+        return "Saturday";
+      case DateTime.sunday:
+        return "Sunday";
+      default:
+        return "";
     }
   }
 
@@ -760,237 +806,303 @@ Widget _buildReplyAudio(BuildContext context, bool fileExists) {
 }
 
  Widget _buildAudioPlayer(BuildContext context) {
-  print('🔵 [MessageChat] Building audio player for message ${widget.messageId}, _mediaData: $_mediaData');
-
-  // For sent messages, use file_path directly
-  if (widget.isMe && (_mediaData != null && _mediaData!['file_path'] != null)) {
-    final filePath = _mediaData!['file_path'];
-    final file = File(filePath);
-    if (!file.existsSync()) {
-      print('🔴 [MessageChat] Sent audio file not found: $filePath');
+    // Show loading state while media data is being fetched
+    if (_mediaData == null) {
       return Container(
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
         decoration: BoxDecoration(
-          color: primaryColor,
+          color: widget.isMe ? primaryColor : Colors.yellow[100],
           borderRadius: BorderRadius.circular(12),
         ),
         child: const Center(
-          child: Icon(
-            Icons.error,
-            size: 24,
-            color: white,
-          ),
+          child: Loader(),
         ),
       );
     }
 
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-      decoration: BoxDecoration(
-        color: primaryColor,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          IconButton(
-            icon: Icon(
-              widget.isPlaying ? Icons.pause_circle : Icons.play_circle,
-              color: white,
-              size: 28,
-            ),
-            onPressed: () {
-              if (widget.onPlayAudio != null) {
-                widget.onPlayAudio!(widget.messageId, filePath);
-              }
-            },
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
+    // For sent messages, use file_path directly
+    if (widget.isMe && _mediaData!['file_path'] != null) {
+      final filePath = _mediaData!['file_path'];
+      final file = File(filePath);
+      if (!file.existsSync()) {
+        print('🔴 [MessageChat] Sent audio file not found: $filePath');
+        return Container(
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+          decoration: BoxDecoration(
+            color: primaryColor,
+            borderRadius: BorderRadius.circular(12),
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          child: const Center(
+            child: Icon(
+              Icons.error,
+              size: 24,
+              color: white,
+            ),
+          ),
+        );
+      }
+
+      return FutureBuilder<Duration>(
+        future: _getAudioDuration(filePath),
+        builder: (context, snapshot) {
+          final duration = snapshot.data ?? Duration.zero;
+          
+          return Container(
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+            decoration: BoxDecoration(
+              color: primaryColor,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                const SizedBox(height: 18),
-                LinearProgressIndicator(
-                  value: _mediaData!['duration'] != null && _mediaData!['duration'] > 0
-                      ? widget.audioPosition.inSeconds / _mediaData!['duration']
-                      : 0.0,
-                  backgroundColor: white,
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    widget.isPlaying ? primaryTwo : Colors.grey[600]!,
+                IconButton(
+                  icon: Icon(
+                    widget.isPlaying ? Icons.pause_circle : Icons.play_circle,
+                    color: white,
+                    size: 28,
                   ),
-                  minHeight: 3,
+                  onPressed: () {
+                    if (widget.onPlayAudio != null) {
+                      widget.onPlayAudio!(widget.messageId, filePath);
+                    }
+                  },
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
                 ),
-                const SizedBox(height: 4),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      widget.isPlaying
-                          ? _formatDuration(widget.audioPosition)
-                          : _formatDuration(Duration(seconds: _mediaData!['duration'] ?? 0)),
-                      style: const TextStyle(
-                        color: white,
-                        fontSize: 11,
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 18),
+                      LinearProgressIndicator(
+                        value: duration.inSeconds > 0
+                            ? widget.audioPosition.inSeconds / duration.inSeconds
+                            : 0.0,
+                        backgroundColor: white,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          widget.isPlaying ? primaryTwo : Colors.grey[600]!,
+                        ),
+                        minHeight: 3,
                       ),
-                    ),
-                    const Icon(
-                      Icons.mic,
-                      size: 20,
-                      color: white,
-                    ),
-                  ],
+                      const SizedBox(height: 4),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            widget.isPlaying
+                                ? _formatDuration(widget.audioPosition)
+                                : _formatDuration(duration),
+                            style: const TextStyle(
+                              color: white,
+                              fontSize: 11,
+                            ),
+                          ),
+                          const Icon(
+                            Icons.mic,
+                            size: 20,
+                            color: white,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
-          ),
-        ],
-      ),
-    );
-  }
+          );
+        },
+      );
+    }
 
-  // For received messages
-  if (!widget.isMe && (_mediaData == null || _mediaData!['is_downloaded'] == 0)) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-      decoration: BoxDecoration(
-        color: Colors.yellow[100],
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          IconButton(
-            icon: Semantics(
-              button: true,
-              label: 'Download audio',
-              child: Icon(
-                Icons.download,
-                color: primaryColor,
-                size: 24,
-              ),
-            ),
-            onPressed: _isDownloading ? null : _downloadMedia,
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(),
+    // For received messages
+    if (!widget.isMe) {
+      // If media is not downloaded yet
+      if (_mediaData!['is_downloaded'] == 0) {
+        return Container(
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+          decoration: BoxDecoration(
+            color: Colors.yellow[100],
+            borderRadius: BorderRadius.circular(12),
           ),
-          const SizedBox(width: 8),
-          _isDownloading
-              ? const SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: Loader(),
-                )
-              : Text(
-                  'Download',
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 12,
-                  ),
-                ),
-          const SizedBox(width: 8),
-          Icon(
-            Icons.mic,
-            size: 20,
-            color: Colors.grey[600],
-          ),
-        ],
-      ),
-    );
-  }
-
-  // For received messages that are downloaded
-  final filePath = _mediaData!['file_path'];
-  final file = File(filePath);
-  if (!file.existsSync()) {
-    print('🔴 [MessageChat] Received audio file not found: $filePath');
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-      decoration: BoxDecoration(
-        color: Colors.yellow[100],
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: GestureDetector(
-        onTap: _downloadMedia,
-        child: const Center(
-          child: Icon(
-            Icons.error,
-            size: 24,
-            color: Colors.red,
-          ),
-        ),
-      ),
-    );
-  }
-
-  return Container(
-    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-    decoration: BoxDecoration(
-      color: Colors.yellow[100],
-      borderRadius: BorderRadius.circular(12),
-    ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        IconButton(
-          icon: Icon(
-            widget.isPlaying ? Icons.pause_circle : Icons.play_circle,
-            color: primaryColor,
-            size: 28,
-          ),
-          onPressed: () {
-            if (widget.onPlayAudio != null) {
-              widget.onPlayAudio!(widget.messageId, filePath);
-            }
-          },
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints(),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              const SizedBox(height: 18),
-              LinearProgressIndicator(
-                value: _mediaData!['duration'] != null && _mediaData!['duration'] > 0
-                    ? widget.audioPosition.inSeconds / _mediaData!['duration']
-                    : 0.0,
-                backgroundColor: white,
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  widget.isPlaying ? primaryTwo : Colors.grey[600]!,
+              IconButton(
+                icon: Semantics(
+                  button: true,
+                  label: 'Download audio',
+                  child: Icon(
+                    Icons.download,
+                    color: primaryColor,
+                    size: 24,
+                  ),
                 ),
-                minHeight: 3,
+                onPressed: _isDownloading ? null : _downloadMedia,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
               ),
-              const SizedBox(height: 4),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    widget.isPlaying
-                        ? _formatDuration(widget.audioPosition)
-                        : _formatDuration(Duration(seconds: _mediaData!['duration'] ?? 0)),
-                    style: TextStyle(
-                      color: Colors.grey[600],
-                      fontSize: 11,
+              const SizedBox(width: 8),
+              _isDownloading
+                  ? const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: Loader(),
+                    )
+                  : Text(
+                      'Download',
+                      style: TextStyle(
+                        color: Colors.grey[600],
+                        fontSize: 12,
+                      ),
                     ),
-                  ),
-                  Icon(
-                    Icons.mic,
-                    size: 20,
-                    color: Colors.grey[600],
-                  ),
-                ],
+              const SizedBox(width: 8),
+              Icon(
+                Icons.mic,
+                size: 20,
+                color: Colors.grey[600],
               ),
             ],
           ),
+        );
+      }
+
+      // For received messages that are downloaded
+      final filePath = _mediaData!['file_path'];
+      if (filePath == null) {
+        print('🔴 [MessageChat] Downloaded audio file path is null');
+        return Container(
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+          decoration: BoxDecoration(
+            color: Colors.yellow[100],
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: GestureDetector(
+            onTap: _downloadMedia,
+            child: const Center(
+              child: Icon(
+                Icons.error,
+                size: 24,
+                color: Colors.red,
+              ),
+            ),
+          ),
+        );
+      }
+
+      final file = File(filePath);
+      if (!file.existsSync()) {
+        print('🔴 [MessageChat] Downloaded audio file not found: $filePath');
+        return Container(
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+          decoration: BoxDecoration(
+            color: Colors.yellow[100],
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: GestureDetector(
+            onTap: _downloadMedia,
+            child: const Center(
+              child: Icon(
+                Icons.error,
+                size: 24,
+                color: Colors.red,
+              ),
+            ),
+          ),
+        );
+      }
+
+      return FutureBuilder<Duration>(
+        future: _getAudioDuration(filePath),
+        builder: (context, snapshot) {
+          final duration = snapshot.data ?? Duration.zero;
+          
+          return Container(
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+            decoration: BoxDecoration(
+              color: Colors.yellow[100],
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: Icon(
+                    widget.isPlaying ? Icons.pause_circle : Icons.play_circle,
+                    color: primaryColor,
+                    size: 28,
+                  ),
+                  onPressed: () {
+                    if (widget.onPlayAudio != null) {
+                      widget.onPlayAudio!(widget.messageId, filePath);
+                    }
+                  },
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 18),
+                      LinearProgressIndicator(
+                        value: duration.inSeconds > 0
+                            ? widget.audioPosition.inSeconds / duration.inSeconds
+                            : 0.0,
+                        backgroundColor: white,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          widget.isPlaying ? primaryTwo : Colors.grey[600]!,
+                        ),
+                        minHeight: 3,
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            widget.isPlaying
+                                ? _formatDuration(widget.audioPosition)
+                                : _formatDuration(duration),
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontSize: 11,
+                            ),
+                          ),
+                          Icon(
+                            Icons.mic,
+                            size: 20,
+                            color: Colors.grey[600],
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    }
+
+    // Fallback for any other case
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+      decoration: BoxDecoration(
+        color: widget.isMe ? primaryColor : Colors.yellow[100],
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: const Center(
+        child: Icon(
+          Icons.error,
+          size: 24,
+          color: Colors.red,
         ),
-      ],
-    ),
-  );
-}
+      ),
+    );
+  }
 
 Widget _buildImageViewer(BuildContext context) {
 
@@ -1237,8 +1349,9 @@ Widget _buildImageViewer(BuildContext context) {
 }
 
   String _formatDuration(Duration duration) {
-    final seconds = duration.inSeconds;
-    return "${seconds}s";
+    final minutes = duration.inMinutes;
+    final seconds = duration.inSeconds % 60;
+    return "${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}";
   }
 
   Widget _buildMessageStatus() {
@@ -1332,6 +1445,82 @@ Widget _buildImageViewer(BuildContext context) {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildReplyContent() {
+    if (widget.replyTo == null) return const SizedBox.shrink();
+
+    // Determine if the reply is to a media message
+    final isMediaReply = widget.replyTo!.startsWith('/') || 
+                        widget.replyTo!.contains('Pictures/Cyanase') ||
+                        widget.replyTo!.contains('audio_') ||
+                        widget.replyTo!.contains('image_');
+
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: Colors.grey[200],
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 3,
+            height: 40,
+            color: primaryTwo,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Replying to message',
+                  style: TextStyle(
+                    color: primaryTwo,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                if (isMediaReply)
+                  Row(
+                    children: [
+                      Icon(
+                        widget.replyTo!.contains('audio_') 
+                            ? Icons.audio_file 
+                            : Icons.image,
+                        size: 16,
+                        color: Colors.grey[600],
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        widget.replyTo!.contains('audio_') 
+                            ? 'Audio message' 
+                            : 'Image',
+                        style: TextStyle(
+                          color: Colors.grey[600],
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  )
+                else
+                  Text(
+                    widget.replyTo!,
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 12,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

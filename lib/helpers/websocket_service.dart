@@ -253,7 +253,11 @@ class WebSocketService {
       final tempId = data['temp_id'].toString();
       final newId = data['id'].toString();
       final groupId = data['room_id']?.toString();
- 
+      
+      print('🔵 [STATUS] Updating sent message status');
+      print('🔵 [STATUS] Temp ID: $tempId');
+      print('🔵 [STATUS] New ID: $newId');
+
       // First check if message with new ID already exists
       final db = await _dbHelper.database;
       final existingMessage = await db.query(

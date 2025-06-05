@@ -49,6 +49,8 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
   final StreamController<Map<String, dynamic>> _messageController = StreamController<Map<String, dynamic>>.broadcast();
   Map<String, int> _groupUnreadCounts = <String, int>{};
   bool _mounted = true;
+  StreamSubscription? _messageStreamSubscription;
+  StreamSubscription? _unreadCountStreamSubscription;
 
   @override
   void initState() {
@@ -65,10 +67,308 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
       if (!_mounted) return;
       await _loadChats();
       await _initializeWebSocket();
-      _setupMessageStreams();
+       _setupMessageStreams();
+      _setupUnreadCountStream();
     });
 
     _animationController!.forward();
+  }
+
+  void _setupUnreadCountStream() {
+    _unreadCountStreamSubscription = _dbHelper.unreadCountStream.listen((groupUnreadCounts) {
+      if (!_mounted) return;
+      
+      print('🔵 [ChatList] Received unread count update: $groupUnreadCounts');
+      
+      setState(() {
+        // Update unread counts
+        _groupUnreadCounts = groupUnreadCounts;
+        _totalUnreadCount = groupUnreadCounts.values.fold(0, (sum, count) => sum + count);
+        
+        // Update UI for specific chats that changed
+        for (final entry in groupUnreadCounts.entries) {
+          final groupId = entry.key;
+          final count = entry.value;
+          final chatIndex = _allChats.indexWhere((chat) => chat['id'].toString() == groupId);
+          
+          if (chatIndex != -1) {
+            _allChats[chatIndex] = {
+              ..._allChats[chatIndex],
+              'unreadCount': count,
+            };
+          }
+        }
+        
+        // Sort chats by most recent message and update filtered chats
+        _allChats.sort((a, b) => DateTime.parse(b['timestamp']).compareTo(DateTime.parse(a['timestamp'])));
+        _filteredChats = List.from(_allChats);
+        
+        // Notify listeners
+        _unreadCountController.add(_totalUnreadCount);
+        widget.onUnreadCountChanged?.call(_totalUnreadCount);
+      });
+    });
+  }
+
+  void _setupMessageStreams() {
+    // Set up message stream for real-time updates
+    _messageStreamSubscription = _dbHelper.messageStream.listen((groupMessages) {
+      if (!_mounted) return;
+      
+      print('🔵 [ChatList] Received message stream update');
+      
+      setState(() {
+        for (final entry in groupMessages.entries) {
+          final groupId = entry.key.toString();
+          final messages = entry.value;
+          
+          if (messages.isNotEmpty) {
+            final lastMessage = messages.first;
+            final chatIndex = _allChats.indexWhere((chat) => chat['id'].toString() == groupId);
+            
+            if (chatIndex != -1) {
+              // Update chat with new message
+              _allChats[chatIndex] = {
+                ..._allChats[chatIndex],
+                'lastMessage': _buildLastMessagePreview(lastMessage),
+                'lastMessageStatus': lastMessage['status'],
+                'lastMessageTime': lastMessage['timestamp'],
+                'timestamp': lastMessage['timestamp'],
+                'unreadCount': _groupUnreadCounts[groupId] ?? 0,
+                'isMe': lastMessage['isMe'] == 1,
+              };
+            }
+          }
+        }
+        
+        // Sort chats by most recent message
+        _allChats.sort((a, b) => DateTime.parse(b['timestamp']).compareTo(DateTime.parse(a['timestamp'])));
+        _filteredChats = List.from(_allChats);
+      });
+    });
+
+    // Set up WebSocket message handler
+    WebSocketService.instance.onMessageReceived = (data) {
+      if (!_mounted) return;
+      
+      print('🔵 [ChatList] Received WebSocket message: $data');
+      
+      try {
+        if (data['type'] == 'new_message') {
+          final message = data['message'];
+          if (message != null && message['room_id'] != null) {
+            final groupId = message['room_id'].toString();
+            _handleNewMessage(groupId, message);
+            
+            // Show notification for new message
+            if (message['sender_id']?.toString() != _userId) {
+              _showMessageNotification(message);
+            }
+          }
+        } else if (data['type'] == 'update_message_status') {
+          final groupId = data['group_id']?.toString();
+          if (groupId != null) {
+            _handleMessageStatusUpdate(groupId, data['status'], data['message_id']?.toString());
+          }
+        } else if (data['type'] == 'typing') {
+          print('🔵 [ChatList] Handling typing status: $data');
+          final groupId = data['room_id']?.toString();
+          final username = data['username']?.toString();
+          final isTyping = data['isTyping'] as bool? ?? false;
+          
+          if (groupId != null && username != null) {
+            setState(() {
+              final chatIndex = _allChats.indexWhere((chat) => chat['id'].toString() == groupId);
+              if (chatIndex != -1) {
+                _allChats[chatIndex] = {
+                  ..._allChats[chatIndex],
+                  'isTyping': isTyping,
+                  'typingUser': isTyping ? username : null,
+                };
+                _filteredChats = List.from(_allChats);
+              }
+            });
+          }
+        }
+      } catch (e, stackTrace) {
+        print('🔴 [ChatList] Error processing WebSocket message: $e');
+        print('🔴 [ChatList] Stack trace: $stackTrace');
+      }
+    };
+  }
+
+  void _handleTypingStatus(String groupId, String username, bool isTyping) {
+    if (!_mounted) return;
+    
+    setState(() {
+      final chatIndex = _allChats.indexWhere((chat) => chat['id'].toString() == groupId);
+      if (chatIndex != -1) {
+        _allChats[chatIndex] = {
+          ..._allChats[chatIndex],
+          'isTyping': isTyping,
+          'typingUser': isTyping ? username : null,
+        };
+        _filteredChats = List.from(_allChats);
+      }
+    });
+
+    // Clear typing status after 3 seconds if not cleared by another typing event
+    if (isTyping) {
+      Future.delayed(const Duration(seconds: 3), () {
+        if (_mounted) {
+          final chatIndex = _allChats.indexWhere((chat) => chat['id'].toString() == groupId);
+          if (chatIndex != -1 && _allChats[chatIndex]['typingUser'] == username) {
+            setState(() {
+              _allChats[chatIndex] = {
+                ..._allChats[chatIndex],
+                'isTyping': false,
+                'typingUser': null,
+              };
+              _filteredChats = List.from(_allChats);
+            });
+          }
+        }
+      });
+    }
+  }
+
+  Future<void> _handleMessageStatusUpdate(String groupId, String status, String? messageId) async {
+    if (!_mounted) return;
+
+    try {
+      await _dbHelper.markMessagesAsRead(groupId, messageId: messageId);
+      
+      // Get updated unread count for this group
+      final unreadCount = await _dbHelper.getGroupUnreadCount(groupId);
+      
+      // Update chat list without setState
+      final chatIndex = _allChats.indexWhere((chat) => chat['id'].toString() == groupId);
+      if (chatIndex != -1) {
+        setState(() {
+          _allChats[chatIndex] = {
+            ..._allChats[chatIndex],
+            'lastMessageStatus': status,
+            'unreadCount': unreadCount,
+          };
+          _filteredChats = List.from(_allChats);
+          
+          // Update total unread count
+          _totalUnreadCount = _groupUnreadCounts.values.fold(0, (sum, count) => sum + count);
+          _unreadCountController.add(_totalUnreadCount);
+          widget.onUnreadCountChanged?.call(_totalUnreadCount);
+        });
+      }
+    } catch (e) {
+      print('🔴 [ChatList] Error handling message status update: $e');
+    }
+  }
+
+  Widget _buildLastMessagePreview(Map<String, dynamic> message) {
+    final messageType = message['type'] as String? ?? 'text';
+    final messageText = message['message'] as String? ?? '';
+    final isMe = message['isMe'] == 1;
+    final senderName = message['sender_name'] as String?;
+    final status = message['status'] as String?;
+    
+    // Add sender name for messages not from current user
+    String prefix = '';
+    if (!isMe && senderName != null) {
+      prefix = '$senderName: ';
+    }
+
+    Widget messageContent;
+    switch (messageType) {
+      case 'image':
+        messageContent = Row(
+          children: [
+            if (!isMe && prefix.isNotEmpty)
+              Text(
+                prefix,
+                style: const TextStyle(color: Colors.grey),
+              ),
+            const Icon(Icons.image, color: Colors.grey, size: 16),
+            const SizedBox(width: 4),
+            const Text("Image", style: TextStyle(color: Colors.grey)),
+          ],
+        );
+        break;
+      case 'audio':
+        messageContent = Row(
+          children: [
+            if (!isMe && prefix.isNotEmpty)
+              Text(
+                prefix,
+                style: const TextStyle(color: Colors.grey),
+              ),
+            const Icon(Icons.mic, color: Colors.grey, size: 16),
+            const SizedBox(width: 4),
+            const Text("Audio", style: TextStyle(color: Colors.grey)),
+          ],
+        );
+        break;
+      case 'notification':
+        messageContent = Row(
+          children: [
+            const Icon(Icons.info, color: Colors.grey, size: 16),
+            const SizedBox(width: 4),
+            Text(
+              _truncateMessage(messageText),
+              style: const TextStyle(color: Colors.grey, fontStyle: FontStyle.italic),
+            ),
+          ],
+        );
+        break;
+      default:
+        messageContent = Text(
+          prefix + _truncateMessage(messageText),
+          style: const TextStyle(color: Colors.grey),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        );
+        break;
+    }
+
+    // Add status indicator for sent messages
+    if (isMe) {
+      return Row(
+        children: [
+          Expanded(child: messageContent),
+          const SizedBox(width: 4),
+          _buildMessageStatus(status),
+        ],
+      );
+    }
+
+    return messageContent;
+  }
+
+  Widget _buildMessageStatus(String? status) {
+    IconData icon;
+    Color color;
+    
+    switch (status) {
+      case 'sent':
+        icon = Icons.check;
+        color = Colors.grey;
+        break;
+      case 'delivered':
+        icon = Icons.done_all;
+        color = Colors.grey;
+        break;
+      case 'read':
+        icon = Icons.done_all;
+        color = primaryTwo;
+        break;
+      default:
+        icon = Icons.schedule;
+        color = Colors.grey;
+    }
+
+    return Icon(
+      icon,
+      size: 16,
+      color: color,
+    );
   }
 
   @override
@@ -77,6 +377,8 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
     _unreadCountController.close();
     _messageController.close();
     _messageStatusSubscription?.cancel();
+    _messageStreamSubscription?.cancel();
+    _unreadCountStreamSubscription?.cancel();
     _channel?.sink.close();
     _animationController?.dispose();
     _searchController.dispose();
@@ -84,48 +386,26 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
     super.dispose();
   }
 
-  void _setupMessageStreams() {
-    print('🔵 [ChatList] Setting up message streams');
-
-    WebSocketService.instance.onMessageReceived = (data) {
-      if (!_mounted) return;
-      print('🔵 [ChatList] Received WebSocket message: ${data['type']}');
-
-      if (data['type'] == 'new_message') {
-        final message = data['message'];
-        if (message != null && message['room_id'] != null) {
-          final groupId = message['room_id'].toString();
-          _handleNewMessage(groupId, message);
-        }
-      } else if (data['type'] == 'update_message_status') {
-        final groupId = data['group_id']?.toString();
-        final status = data['status'];
-        if (groupId != null && status == 'read') {
-          _handleMessageStatusUpdate(groupId);
-        }
-      }
-    };
-  }
-
-  Future<void> _handleNewMessage(String groupId, Map<String, dynamic> message) async {
+Future<void> _handleNewMessage(String groupId, Map<String, dynamic> message) async {
     try {
+      print('🔵 [ChatList] Handling new message in chatkist: $message');
+      
       final db = await _dbHelper.database;
+      final messageId = message['id']?.toString() ?? '';
+      final tempId = message['temp_id']?.toString() ?? '';
+      final isMe = message['sender_id']?.toString() == _userId;
+      final messageStatus = isMe ? 'sent' : 'unread';
       
-      
-      // Check if message already exists
       final existingMessage = await db.query(
         'messages',
         where: 'id = ? OR temp_id = ?',
-        whereArgs: [message['id'] ?? '', message['temp_id'] ?? ''],
+        whereArgs: [messageId, tempId],
       );
 
       if (existingMessage.isEmpty) {
-        // Insert new message with proper status
-        final isMe = message['sender_id']?.toString() == _userId;
-        final messageStatus = isMe ? 'sent' : 'unread';
-        
-        await _dbHelper.insertMessage({
-          'id': message['id'],
+        // Prepare message data with proper type conversions
+        final messageData = {
+          'id': messageId,
           'group_id': groupId,
           'sender_id': message['sender_id']?.toString() ?? _userId,
           'message': message['content'] ?? '',
@@ -136,104 +416,48 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
           'sender_name': message['username'] ?? 'Unknown',
           'sender_avatar': message['sender_info']?['profile_picture'] ?? '',
           'sender_role': message['sender_info']?['role'] ?? 'member',
-           'is_edited': message['is_edited'] ?? false,
-        'is_deleted': message['is_deleted'] ?? false,
-        'is_forwarded': message['is_forwarded'] ?? false,
-        'reply_to_id': message['reply_to_id']?.toString(),
-        'reply_to_message': message['reply_to_message']?.toString(),
-        'reply_to_type': message['reply_to_type']?.toString() ?? 'text',
-        });
+          'temp_id': tempId,
+        };
 
-        // Update chat list with new message
-        if (!isMe) {
-          final currentCount = _groupUnreadCounts[groupId] ?? 0;
-          _groupUnreadCounts[groupId] = currentCount + 1;
-          _totalUnreadCount++;
-          
-          setState(() {
-            final chatIndex = _allChats.indexWhere((chat) => chat['id'].toString() == groupId);
-            if (chatIndex != -1) {
-              _allChats[chatIndex] = {
-                ..._allChats[chatIndex],
-                'unreadCount': currentCount + 1,
-                'lastMessageStatus': 'unread',
-                'lastMessage': message['content'] ?? '',
-                'lastMessageTime': message['timestamp'] ?? DateTime.now().toIso8601String(),
-              };
-              _filteredChats = List.from(_allChats);
-            }
-          });
-          
-          _unreadCountController.add(_totalUnreadCount);
-          widget.onUnreadCountChanged?.call(_totalUnreadCount);
-        }
-
-        // Show notification for non-self messages
-        if (!isMe) {
-          final groupInfo = await db.query(
-            'groups',
-            where: 'id = ?',
-            whereArgs: [groupId],
-            columns: ['name'],
-          );
-          final groupName = groupInfo.isNotEmpty ? groupInfo.first['name'] as String : 'Group';
-          final senderName = message['username'] ?? 'Unknown';
-          final messageContent = message['content'] ?? '';
-          final messageType = message['message_type'] ?? 'text';
-
-          String notificationBody = messageContent;
-          if (messageType == 'image') {
-            notificationBody = '📷 Image';
-          } else if (messageType == 'audio') {
-            notificationBody = '🎵 Audio';
-          }
-
-          await NotificationService().showGroupMessageNotification(
-            groupName: groupName,
-            senderName: senderName,
-            message: notificationBody,
-            groupId: groupId,
-          );
-        }
-      }
-    } catch (e) {
-      print('🔴 [ChatList] Error handling new message: $e');
-    }
-  }
-
-  Future<void> _handleMessageStatusUpdate(String groupId) async {
-    if (!_mounted) return;
-
-    try {
-      final db = await _dbHelper.database;
-      await db.update(
-        'messages',
-        {'status': 'read'},
-        where: 'group_id = ? AND isMe = 0 AND status = ?',
-        whereArgs: [groupId, 'unread'],
-      );
-
-      setState(() {
-        final chatIndex = _allChats.indexWhere((chat) => chat['id'].toString() == groupId);
-        if (chatIndex != -1) {
-          final currentCount = _groupUnreadCounts[groupId] ?? 0;
-          if (currentCount > 0) {
-            _groupUnreadCounts[groupId] = 0;
-            _totalUnreadCount -= currentCount;
+        // Insert message into database
+        await _dbHelper.insertMessage(messageData);
+        
+        // Get updated unread count for this group
+        final unreadCount = await _dbHelper.getGroupUnreadCount(groupId);
+        
+        setState(() {
+          // Update chat list
+          final chatIndex = _allChats.indexWhere((chat) => chat['id'].toString() == groupId);
+          if (chatIndex != -1) {
             _allChats[chatIndex] = {
               ..._allChats[chatIndex],
-              'unreadCount': 0,
-              'lastMessageStatus': 'read',
+              'lastMessage': _buildLastMessagePreview(messageData),
+              'lastMessageStatus': messageStatus,
+              'lastMessageTime': messageData['timestamp'],
+              'timestamp': messageData['timestamp'],
+              'unreadCount': unreadCount,
+              'isMe': isMe,
             };
+            
+            // Sort chats by most recent message
+            _allChats.sort((a, b) => DateTime.parse(b['timestamp']).compareTo(DateTime.parse(a['timestamp'])));
             _filteredChats = List.from(_allChats);
+            
+            // Update total unread count
+            _totalUnreadCount = _groupUnreadCounts.values.fold(0, (sum, count) => sum + count);
             _unreadCountController.add(_totalUnreadCount);
             widget.onUnreadCountChanged?.call(_totalUnreadCount);
-            _refreshController.add(null);
           }
+        });
+
+        if (!isMe) {
+          // Show notification for new message
+          _showMessageNotification(message);
         }
-      });
-    } catch (e) {
-      print('🔴 [ChatList] Error handling message status update: $e');
+      }
+    } catch (e, stackTrace) {
+      print('🔴 [ChatList] Error handling new message: $e');
+      print('🔴 [ChatList] Stack trace: $stackTrace');
     }
   }
 
@@ -292,7 +516,12 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
               } else if (response['type'] == 'update_message_status') {
                 final groupId = response['group_id']?.toString();
                 if (groupId != null) {
-                  await _handleMessageStatusUpdate(groupId);
+                  await _handleMessageStatusUpdate(groupId, response['status'], response['message_id']);
+                }
+              } else if (response['type'] == 'typing') {
+                final groupId = response['room_id']?.toString();
+                if (groupId != null) {
+                  _handleTypingStatus(groupId, response['username'], response['isTyping']);
                 }
               } else {
                 print('🔵 Unknown message type received: ${response['type']}');
@@ -606,6 +835,56 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
     await _loadChats();
   }
 
+  Future<void> _showMessageNotification(Map<String, dynamic> message) async {
+    try {
+      final groupId = message['room_id']?.toString();
+      if (groupId == null) return;
+
+      // Get group info
+      final db = await _dbHelper.database;
+      final group = await db.query(
+        'groups',
+        where: 'id = ?',
+        whereArgs: [groupId],
+        limit: 1,
+      );
+
+      if (group.isEmpty) return;
+
+      final groupName = group.first['name'] as String? ?? 'Group';
+      final senderName = message['username'] as String? ?? 'Someone';
+      final content = message['content'] as String? ?? 'New message';
+      final messageType = message['message_type'] as String? ?? 'text';
+
+      // Format notification content based on message type
+      String notificationContent;
+      switch (messageType) {
+        case 'image':
+          notificationContent = '📷 Image';
+          break;
+        case 'audio':
+          notificationContent = '🎤 Audio message';
+          break;
+        default:
+          notificationContent = content;
+      }
+
+      // Show notification with group-sender format
+      await NotificationService().showMessageNotification(
+        title: '$groupName - $senderName',
+        body: notificationContent,
+        payload: json.encode({
+          'type': 'message',
+          'groupId': groupId,
+          'messageId': message['id'],
+        }),
+        groupId: groupId,
+      );
+    } catch (e) {
+      print('🔴 [ChatList] Error showing notification: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -675,74 +954,37 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
     try {
       final db = await _dbHelper.database;
       final groups = await _dbHelper.getGroups();
+      final unreadCounts = await _dbHelper.getGroupUnreadCounts();
 
       for (var group in groups) {
         final isApproved = await _isUserApproved(group['id']);
         if (!isApproved) continue;
 
-        final groupMessages = await _dbHelper.getMessages(
-          groupId: group['id'],
+        final groupId = group['id'].toString();
+        final unreadCount = unreadCounts[groupId] ?? 0;
+        _groupUnreadCounts[groupId] = unreadCount;
+
+        // Get the last message for this group
+        final groupMessages = await db.query(
+          'messages',
+          where: 'group_id = ?',
+          whereArgs: [group['id']],
+          orderBy: 'timestamp DESC',
           limit: 1,
         );
 
         final lastMessage = groupMessages.isNotEmpty ? groupMessages.first : null;
-        final unreadCount = _groupUnreadCounts[group['id'].toString()] ??
-            await _dbHelper.getMessages(groupId: group['id'])
-                .then((messages) => messages.where((m) => m['isMe'] == 0 && m['status'] == 'unread').length);
-
-        _groupUnreadCounts[group['id'].toString()] = unreadCount ?? 0;
-
         Widget lastMessagePreview = const Text(
           "No messages yet",
           style: TextStyle(color: Colors.grey),
         );
         String? lastMessageStatus;
-        String timestamp = group['created_at'] as String? ?? DateTime.now().toIso8601String();
+        String timestamp = group['last_activity'] as String? ?? group['created_at'] as String? ?? DateTime.now().toIso8601String();
 
         if (lastMessage != null) {
-          final messageType = lastMessage['type'] as String? ?? 'text';
-          final messageText = lastMessage['message'] as String? ?? '';
+          lastMessagePreview = _buildLastMessagePreview(lastMessage);
           lastMessageStatus = lastMessage['status'] as String?;
           timestamp = lastMessage['timestamp'] as String? ?? DateTime.now().toIso8601String();
-
-          switch (messageType) {
-            case 'image':
-              lastMessagePreview = Row(
-                children: const [
-                  Icon(Icons.image, color: Colors.grey, size: 16),
-                  SizedBox(width: 4),
-                  Text("Image", style: TextStyle(color: Colors.grey)),
-                ],
-              );
-              break;
-            case 'audio':
-              lastMessagePreview = Row(
-                children: const [
-                  Icon(Icons.mic, color: Colors.grey, size: 16),
-                  SizedBox(width: 4),
-                  Text("Audio", style: TextStyle(color: Colors.grey)),
-                ],
-              );
-              break;
-            case 'notification':
-              lastMessagePreview = Row(
-                children: [
-                  const Icon(Icons.info, color: Colors.grey, size: 16),
-                  const SizedBox(width: 4),
-                  Text(
-                    _truncateMessage(messageText),
-                    style: const TextStyle(color: Colors.grey, fontStyle: FontStyle.italic),
-                  ),
-                ],
-              );
-              break;
-            default:
-              lastMessagePreview = Text(
-                _truncateMessage(messageText),
-                style: const TextStyle(color: Colors.grey),
-              );
-              break;
-          }
         }
 
         chats.add({
@@ -762,9 +1004,11 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
           'allows_subscription': group['allows_subscription'] == 1,
           'has_user_paid': group['has_user_paid'] == 1,
           'subscription_amount': _parseDouble(group['subscription_amount']),
+          'isMe': lastMessage?['isMe'] == 1,
         });
       }
 
+      // Sort chats by most recent message
       chats.sort((a, b) => DateTime.parse(b['timestamp']).compareTo(DateTime.parse(a['timestamp'])));
 
       if (!_mounted) return [];
@@ -792,7 +1036,7 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
     }
   }
 
-  String _truncateMessage(String message, {int maxLength = 20}) {
+  String _truncateMessage(String message, {int maxLength = 30}) {
     if (message.length > maxLength) {
       return '${message.substring(0, maxLength)}...';
     }
@@ -870,6 +1114,7 @@ class _ChatListComponentState extends State<ChatListComponent> with TickerProvid
   List<Map<String, dynamic>> _displayChats = [];
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
+  Map<String, int> _unreadCounts = {};
 
   @override
   void initState() {
@@ -884,12 +1129,6 @@ class _ChatListComponentState extends State<ChatListComponent> with TickerProvid
     );
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(_fadeController);
     _fadeController.forward();
-  }
-
-  @override
-  void dispose() {
-    _fadeController.dispose();
-    super.dispose();
   }
 
   @override
@@ -946,10 +1185,25 @@ class _ChatListComponentState extends State<ChatListComponent> with TickerProvid
     );
   }
 
-  Widget _buildChatItem(Map<String, dynamic> chat) {
+  Widget _buildMessageStatus(String? status) {
+    IconData icon;
+    Color color;
+    switch (status) {
+      case 'sent': icon = Icons.check; color = Colors.grey; break;
+      case 'delivered': icon = Icons.done_all; color = Colors.grey; break;
+      case 'read': icon = Icons.done_all; color = primaryTwo; break;
+      default: icon = Icons.schedule; color = Colors.grey;
+    }
+    return Icon(icon, size: 16, color: color);
+  }
+
+   Widget _buildChatItem(Map<String, dynamic> chat) {
     final chatId = chat['id'].toString();
-    final hasUnreadMessages = chat["unreadCount"] > 0;
-  
+    final hasUnreadMessages = (chat['unreadCount'] ?? 0) > 0;
+    final isTyping = chat['isTyping'] as bool? ?? false;
+    final typingUser = chat['typingUser'] as String?;
+    final lastMessageStatus = chat['lastMessageStatus'] as String?;
+    final isMe = chat['isMe'] as bool? ?? false;
 
     return Container(
       key: ValueKey('chat_${chatId}_${chat['timestamp']}'),
@@ -970,26 +1224,21 @@ class _ChatListComponentState extends State<ChatListComponent> with TickerProvid
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
           onTap: () async {
-            
-         
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) {
-
-                  return MessageChatScreen(
-                    name: chat["name"],
-                    isAdminOnlyMode: chat["restrict_messages_to_admins"],
-                    isCurrentUserAdmin: chat["amAdmin"],
-                    description: chat["description"] ?? 'Our Saving Group',
-                    profilePic: chat["profilePic"],
-                    groupId: chat["isGroup"] ? chat["id"] : null,
-                    onMessageSent: widget.onReloadChats,
-                    allowSubscription: chat["allows_subscription"],
-                    hasUserPaid: chat["has_user_paid"],
-                    subscriptionAmount: chat["subscription_amount"].toString(),
-                  );
-                },
+                builder: (context) => MessageChatScreen(
+                  name: chat["name"],
+                  isAdminOnlyMode: chat["restrict_messages_to_admins"],
+                  isCurrentUserAdmin: chat["amAdmin"],
+                  description: chat["description"] ?? 'Our Saving Group',
+                  profilePic: chat["profilePic"],
+                  groupId: chat["isGroup"] ? chat["id"] : null,
+                  onMessageSent: widget.onReloadChats,
+                  allowSubscription: chat["allows_subscription"],
+                  hasUserPaid: chat["has_user_paid"],
+                  subscriptionAmount: chat["subscription_amount"].toString(),
+                ),
               ),
             );
           },
@@ -1055,8 +1304,18 @@ class _ChatListComponentState extends State<ChatListComponent> with TickerProvid
                       Row(
                         children: [
                           Expanded(
-                            child: chat["lastMessage"],
+                            child: isTyping && typingUser != null
+                                ? Text(
+                                    '$typingUser is typing...',
+                                    style: TextStyle(
+                                      color: primaryTwo,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                  )
+                                : chat["lastMessage"],
                           ),
+                          if (isMe && lastMessageStatus != null)
+                            _buildMessageStatus(lastMessageStatus),
                           if (hasUnreadMessages)
                             Container(
                               width: 8,
@@ -1064,19 +1323,6 @@ class _ChatListComponentState extends State<ChatListComponent> with TickerProvid
                               decoration: BoxDecoration(
                                 color: primaryColor,
                                 shape: BoxShape.circle,
-                              ),
-                            ),
-                          if (!hasUnreadMessages && chat["lastMessageStatus"] != null && chat["isMe"] == 1)
-                            Padding(
-                              padding: const EdgeInsets.only(left: 4),
-                              child: Icon(
-                                chat["lastMessageStatus"] == 'read' 
-                                    ? Icons.done_all 
-                                    : Icons.done,
-                                size: 16,
-                                color: chat["lastMessageStatus"] == 'read' 
-                                    ? Colors.blue 
-                                    : Colors.grey,
                               ),
                             ),
                         ],
