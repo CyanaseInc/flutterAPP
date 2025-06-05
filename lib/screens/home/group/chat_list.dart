@@ -1007,7 +1007,6 @@ Future<void> _handleNewMessage(String groupId, Map<String, dynamic> message) asy
           'profilePic': group['profile_pic'] as String? ?? '',
           'lastMessage': lastMessagePreview,
           'lastMessageStatus': lastMessageStatus,
-          'time': _formatTime(timestamp),
           'timestamp': timestamp,
           'unreadCount': unreadCount,
           'isGroup': true,
@@ -1043,7 +1042,28 @@ Future<void> _handleNewMessage(String groupId, Map<String, dynamic> message) asy
   String _formatTime(String timestamp) {
     try {
       final dateTime = DateTime.parse(timestamp);
-      return '${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
+      final now = DateTime.now();
+      final difference = now.difference(dateTime);
+
+      // Format time part
+      final timeStr = TimeOfDay.fromDateTime(dateTime).format(context);
+
+      // If message is from today, show time only
+      if (difference.inDays == 0) {
+        return timeStr;
+      }
+      // If message is from yesterday, show "Yesterday" and time
+      else if (difference.inDays == 1) {
+        return 'Yesterday, $timeStr';
+      }
+      // If message is from this year, show date and time
+      else if (dateTime.year == now.year) {
+        return '${dateTime.day}/${dateTime.month}, $timeStr';
+      }
+      // If message is from previous years, show full date and time
+      else {
+        return '${dateTime.day}/${dateTime.month}/${dateTime.year}, $timeStr';
+      }
     } catch (e) {
       return 'Just now';
     }
@@ -1132,6 +1152,36 @@ class _ChatListComponentState extends State<ChatListComponent> with TickerProvid
   late AnimationController _fadeController;
   late Animation<double> _fadeAnimation;
   Map<String, int> _unreadCounts = {};
+
+  String _formatTime(String timestamp) {
+    try {
+      final dateTime = DateTime.parse(timestamp);
+      final now = DateTime.now();
+      final difference = now.difference(dateTime);
+
+      // Format time part
+      final timeStr = TimeOfDay.fromDateTime(dateTime).format(context);
+
+      // If message is from today, show time only
+      if (difference.inDays == 0) {
+        return timeStr;
+      }
+      // If message is from yesterday, show "Yesterday" and time
+      else if (difference.inDays == 1) {
+        return 'Yesterday, $timeStr';
+      }
+      // If message is from this year, show date and time
+      else if (dateTime.year == now.year) {
+        return '${dateTime.day}/${dateTime.month}, $timeStr';
+      }
+      // If message is from previous years, show full date and time
+      else {
+        return '${dateTime.day}/${dateTime.month}/${dateTime.year}, $timeStr';
+      }
+    } catch (e) {
+      return 'Just now';
+    }
+  }
 
   @override
   void initState() {
@@ -1309,7 +1359,7 @@ class _ChatListComponentState extends State<ChatListComponent> with TickerProvid
                             ),
                           ),
                           Text(
-                            chat["time"],
+                            _formatTime(chat["timestamp"]),
                             style: TextStyle(
                               color: Colors.grey[600],
                               fontSize: 12,
@@ -1331,8 +1381,6 @@ class _ChatListComponentState extends State<ChatListComponent> with TickerProvid
                                   )
                                 : chat["lastMessage"],
                           ),
-                          if (isMe && lastMessageStatus != null)
-                            _buildMessageStatus(lastMessageStatus),
                           if (hasUnreadMessages)
                             Container(
                               width: 8,

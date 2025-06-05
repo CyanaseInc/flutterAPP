@@ -885,13 +885,6 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
       await _dbHelper.insertMessage(dbMessage);
       print('🔵 [DEBUG] Message inserted into database');
      
-      setState(() {
-        _messages.add(dbMessage);
-        _messages = MessageSort.sortMessagesByDate(_messages);
-        _groupedMessages = MessageSort.groupMessagesByDate(_messages);
-        _replyingToMessage = null;
-      });
-    
       try {
         print('🔵 [DEBUG] Sending message through WebSocket');
         await _wsService.sendMessage(wsMessage);
