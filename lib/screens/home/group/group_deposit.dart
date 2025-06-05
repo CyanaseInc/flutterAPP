@@ -76,7 +76,7 @@ class _DepositScreenState extends State<DepositScreen> {
                 radius: 50,
                 backgroundImage: widget.profilePic.isNotEmpty
                     ? CachedNetworkImageProvider(widget.profilePic)
-                    : const AssetImage('assets/avat.png') as ImageProvider,
+                    : const AssetImage('assets/images/avatar.png') as ImageProvider,
                 onBackgroundImageError: widget.profilePic.isNotEmpty
                     ? (exception, stackTrace) {}
                     : null,

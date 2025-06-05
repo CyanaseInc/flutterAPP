@@ -11,16 +11,19 @@ class MessageAppBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback onBackPressed; // Callback for back button
   final int? groupId;
   final String description;
-  const MessageAppBar(
-      {Key? key,
-      required this.name,
-      required this.groupId,
-      required this.profilePic,
-      required this.memberNames,
-      required this.onDepositPressed,
-      required this.onBackPressed,
-      required this.description})
-      : super(key: key);
+  final Function(String)? onProfilePicChanged;
+
+  const MessageAppBar({
+    Key? key,
+    required this.name,
+    required this.groupId,
+    required this.profilePic,
+    required this.memberNames,
+    required this.onDepositPressed,
+    required this.onBackPressed,
+    required this.description,
+    this.onProfilePicChanged,
+  }) : super(key: key);
 
   @override
   Size get preferredSize => Size.fromHeight(kToolbarHeight);
@@ -66,7 +69,8 @@ class MessageAppBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context) {
     return AppBar(
-      titleSpacing: 0, // Remove default spacing around the title
+      titleSpacing: 0,
+      backgroundColor: white, // Remove default spacing around the title
       leading: IconButton(
         icon: Icon(Icons.arrow_back_ios, color: Colors.black),
         onPressed: onBackPressed, // Handle back button press

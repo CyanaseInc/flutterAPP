@@ -82,8 +82,7 @@ class _ChangeGroupNameScreenState extends State<ChangeGroupNameScreen> {
       final Map<String, dynamic> groupData = {
         'name': newName,
         'description': newDescription,
-        'groupid':
-            widget.groupId.toString(), // Convert int to String as per your API
+        'groupid': widget.groupId.toString(),
       };
 
       // Call the API with positional arguments
@@ -100,10 +99,11 @@ class _ChangeGroupNameScreenState extends State<ChangeGroupNameScreen> {
         whereArgs: [widget.groupId],
       );
 
-      // Navigate back with updated data
+      // Navigate back with updated data and force refresh
       Navigator.pop(context, {
         'name': newName,
         'description': newDescription,
+        'refresh': true, // Add a flag to indicate refresh is needed
       });
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(

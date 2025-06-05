@@ -14,6 +14,7 @@ import 'package:cyanase/helpers/api_helper.dart';
 import 'package:cyanase/helpers/database_helper.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
+import 'package:cyanase/helpers/endpoints.dart';
 
 class GroupHeader extends StatefulWidget {
   final String groupName;
@@ -25,7 +26,8 @@ class GroupHeader extends StatefulWidget {
   final Map<String, dynamic> initialLoanSettings;
   final bool isAdmin;
   final String groupLink;
-  final bool allowWithdraw; // New parameter
+  final bool allowWithdraw;
+  final Function(String)? onProfilePicChanged;
 
   const GroupHeader(
       {Key? key,
@@ -38,7 +40,8 @@ class GroupHeader extends StatefulWidget {
       required this.initialLoanSettings,
       required this.isAdmin,
       required this.allowWithdraw,
-      required this.groupLink})
+      required this.groupLink,
+      this.onProfilePicChanged})
       : super(key: key);
 
   @override
@@ -64,8 +67,10 @@ class _GroupHeaderState extends State<GroupHeader> {
   }
 
   void _updateProfilePic(File image) {
+    debugPrint('Updating profile picture with new image: ${image.path}');
     setState(() {
       _profilePicFile = image;
+      _currentProfilePicUrl = null; // Clear the URL to force using the new file
     });
   }
 
@@ -105,49 +110,62 @@ class _GroupHeaderState extends State<GroupHeader> {
     final XFile? image = await picker.pickImage(source: ImageSource.gallery);
 
     if (image != null) {
-      setState(() {
-        _isLoading = true;
-      });
+      debugPrint('Image selected: ${image.path}');
+      // Show the local image immediately
+      _updateProfilePic(File(image.path));
+      
+      // Start the upload in the background
+      _uploadProfilePic(image.path);
+    }
+  }
 
-      try {
-        final dbHelper = DatabaseHelper();
-        final db = await dbHelper.database;
-        final userProfile = await db.query('profile', limit: 1);
+  Future<void> _uploadProfilePic(String imagePath) async {
+    try {
+      final dbHelper = DatabaseHelper();
+      final db = await dbHelper.database;
+      final userProfile = await db.query('profile', limit: 1);
 
-        if (userProfile.isEmpty) {
-          throw Exception('User profile not found');
-        }
+      if (userProfile.isEmpty) {
+        throw Exception('User profile not found');
+      }
 
-        final token = userProfile.first['token'] as String;
+      final token = userProfile.first['token'] as String;
+      debugPrint('Uploading profile picture to server...');
 
-        final response = await ApiService.updateGroupProfilePic(
-          token: token,
-          groupId: widget.groupId,
-          imageFile: File(image.path),
-        );
+      final response = await ApiService.updateGroupProfilePic(
+        token: token,
+        groupId: widget.groupId,
+        imageFile: File(imagePath),
+      );
 
-        if (response['success'] == true) {
+      if (response['success'] == true) {
+        final newUrl = '${ApiEndpoints.server}${response['newProfilePicUrl']}';
+        debugPrint('Profile picture upload successful. New URL: $newUrl');
+        
+        if (newUrl.isNotEmpty) {
+          // Update the groups table with new profile picture
+          await db.update(
+            'groups',
+            {'profile_pic': newUrl},
+            where: 'id = ?',
+            whereArgs: [widget.groupId],
+          );
+          
           setState(() {
-            _currentProfilePicUrl = response['newProfilePicUrl'];
+            _currentProfilePicUrl = newUrl;
             _profilePicFile = null;
           });
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                content: Text('Profile picture updated successfully')),
-          );
-        } else {
-          throw Exception(
-              response['message'] ?? 'Failed to update profile picture');
+
+          // Notify parent widgets about the profile picture change
+          if (widget.onProfilePicChanged != null) {
+            widget.onProfilePicChanged!(newUrl);
+          }
         }
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to update profile picture: $e')),
-        );
-      } finally {
-        setState(() {
-          _isLoading = false;
-        });
+      } else {
+        debugPrint('Profile picture upload failed: ${response['message']}');
       }
+    } catch (e) {
+      debugPrint('Error uploading profile picture: $e');
     }
   }
 
@@ -305,6 +323,8 @@ class _GroupHeaderState extends State<GroupHeader> {
       return const Center(child: Loader());
     }
 
+    debugPrint('Building GroupHeader with profile pic: ${_profilePicFile?.path ?? _currentProfilePicUrl}');
+
     return Container(
       width: double.infinity,
       color: white,
@@ -314,11 +334,15 @@ class _GroupHeaderState extends State<GroupHeader> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                widget.groupName,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
+              Flexible(
+                child: Text(
+                  widget.groupName,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                 ),
               ),
               Row(
@@ -333,11 +357,12 @@ class _GroupHeaderState extends State<GroupHeader> {
                                   _currentProfilePicUrl!.isNotEmpty
                               ? CachedNetworkImageProvider(
                                   _currentProfilePicUrl!)
-                              : const AssetImage('assets/avatar.png')
+                              : const AssetImage('assets/images/avatar.png')
                                   as ImageProvider),
                       onBackgroundImageError: (exception, stackTrace) {
                         debugPrint(
                             "Failed to load profile picture: $exception");
+                        debugPrint("Stack trace: $stackTrace");
                       },
                     ),
                   ),

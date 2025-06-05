@@ -17,14 +17,18 @@ class PendingUserLoansScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          'My Pending Loan Requests',
+          'My pending loan requests',
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.w600,
             color: Colors.white,
           ),
         ),
-        backgroundColor: primaryTwo,
+        backgroundColor: primaryTwo,leading: IconButton(
+          icon:
+              const Icon(Icons.arrow_back_ios, color: white), // White back icon
+          onPressed: () => Navigator.of(context).pop(),
+        ),
         elevation: 0,
         centerTitle: true,
       ),

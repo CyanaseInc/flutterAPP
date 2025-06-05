@@ -14,11 +14,18 @@ import 'chatlist_header.dart';
 import 'dart:convert';
 import 'dart:io' show WebSocket;
 import 'dart:math';
-import 'package:sqflite/sqflite.dart';
+
+
 
 class ChatList extends StatefulWidget {
   final Function(int)? onUnreadCountChanged;
-  const ChatList({Key? key,this.onUnreadCountChanged}) : super(key: key);
+  final Function(String, String)? onProfilePicChanged;
+
+  const ChatList({
+    Key? key,
+    this.onUnreadCountChanged,
+    this.onProfilePicChanged,
+  }) : super(key: key);
 
   @override
   ChatListState createState() => ChatListState();
@@ -819,6 +826,11 @@ Future<void> _handleNewMessage(String groupId, Map<String, dynamic> message) asy
             'pending_count': pendingCount,
           });
         }
+
+        // Update chat list if profile picture changed
+        if (profilePic != groupData['profile_pic']) {
+          widget.onProfilePicChanged?.call(groupId, profilePic);
+        }
       } catch (e) {
         print('Error processing group ${groupData['groupId']}: $e');
       }
@@ -1081,7 +1093,11 @@ Future<void> _handleNewMessage(String groupId, Map<String, dynamic> message) asy
   }
 
   void _reloadChats() {
-    _refreshController.add(null);
+    // Update loan data directly without full reload
+    _initializeWebSocket().then((_) {
+      // The WebSocket will update the loan data automatically
+      // No need for setState or full reload
+    });
   }
 }
 
@@ -1340,6 +1356,8 @@ class _ChatListComponentState extends State<ChatListComponent> with TickerProvid
   }
 
   Widget _getAvatar(String name, String? profilePic, bool isGroup) {
+
+  
     if (profilePic != null && profilePic.isNotEmpty) {
       return Hero(
         tag: 'avatar_${name}_${DateTime.now().millisecondsSinceEpoch}',

@@ -288,25 +288,35 @@ class _GroupSavingGoalsSectionState extends State<GroupSavingGoalsSection> {
         ),
         GestureDetector(
           onTap: () async {
-            final result = await Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) =>
-                    AddGroupGoalScreen(groupId: widget.groupId),
-              ),
-            );
-            _handleGoalAddedResult(result);
+            if (widget.isAdmin) {
+              final result = await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) =>
+                      AddGroupGoalScreen(groupId: widget.groupId),
+                ),
+              );
+              _handleGoalAddedResult(result);
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Only admins can add new goals'),
+                  behavior: SnackBarBehavior.floating,
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
           },
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
-              color: primaryTwo,
+              color: widget.isAdmin ? primaryTwo : Colors.grey[300],
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
               '+ Add Goal',
               style: TextStyle(
-                color: primaryColor,
+                color: widget.isAdmin ? primaryColor : Colors.grey[600],
                 fontWeight: FontWeight.w600,
                 fontSize: 14,
               ),

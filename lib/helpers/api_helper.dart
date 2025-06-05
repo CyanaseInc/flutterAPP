@@ -1559,27 +1559,37 @@ class ApiService {
     required int groupId,
     required bool approved,
   }) async {
-    // Replace with actual API call
+    try {
     final response = await http.post(
       Uri.parse(ApiEndpoints.processLoanRequest),
       headers: {
         'Authorization': 'Token $token',
         'Content-Type': 'application/json',
       },
-      body: jsonEncode(
-          {'group_id': groupId, 'loan_id': loanId, 'approved': approved}),
+        body: jsonEncode({
+          'group_id': groupId,
+          'loan_id': loanId,
+          'approved': approved
+        }),
     );
+
+      print('API Response Status: ${response.statusCode}');
+      print('API Response Body: ${response.body}');
 
     final responseData = jsonDecode(response.body);
 
     if (response.statusCode == 200) {
       return {
         'success': true,
-        'message': responseData['message'] ?? 'Picture deleted successfully',
+          'message': responseData['message'] ?? 'Loan processed successfully',
+          'loan_status': responseData['loan_status'] ?? 'processed'
       };
     } else {
-      throw Exception(
-          responseData['message'] ?? 'Failed to delete profile picture');
+        throw Exception(responseData['message'] ?? 'Failed to process loan request');
+      }
+    } catch (e) {
+      print('API Error: $e');
+      throw Exception('Failed to process loan: $e');
     }
   }
 

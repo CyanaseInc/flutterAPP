@@ -36,6 +36,7 @@ class MessageChatScreen extends StatefulWidget {
   final bool allowSubscription;
   final bool hasUserPaid;
   final String subscriptionAmount;
+  final Function(String)? onProfilePicChanged;
   const MessageChatScreen({
     super.key,
     required this.name,
@@ -49,6 +50,7 @@ class MessageChatScreen extends StatefulWidget {
     required this.allowSubscription,
     required this.hasUserPaid,
     required this.subscriptionAmount,
+    this.onProfilePicChanged,
   });
 
   @override
@@ -121,6 +123,8 @@ String? _lastMessageTimestamp;
 
   bool _mounted = true;  // Add mounted property
 
+  String _currentProfilePic = '';
+
  @override
  void initState() {
     super.initState();
@@ -143,6 +147,7 @@ String? _lastMessageTimestamp;
       _markMessagesAsRead();
       _resendPendingMessages();
     });
+    _currentProfilePic = widget.profilePic;
   }
 
 
@@ -1391,7 +1396,7 @@ Future<void> _markMessageAsRead(String messageId) async {
     return Scaffold(
       appBar: MessageAppBar(
         name: widget.name,
-        profilePic: widget.profilePic,
+        profilePic: _currentProfilePic,
         memberNames: _memberNames,
         groupId: widget.groupId,
         description: widget.description,
@@ -1413,6 +1418,9 @@ Future<void> _markMessageAsRead(String messageId) async {
           }
           widget.onMessageSent?.call();
           Navigator.pop(context);
+        },
+        onProfilePicChanged: (String newProfilePic) {
+          _handleProfilePicChanged(newProfilePic);
         },
       ),
       body: Stack(
@@ -2131,5 +2139,12 @@ void _updateUnreadMessages() {
     } catch (e) {
       print('🔴 [ChatScreen] Error in _resendPendingMessages: $e');
     }
+  }
+
+  void _handleProfilePicChanged(String newProfilePic) {
+    setState(() {
+      _currentProfilePic = newProfilePic;
+    });
+    widget.onProfilePicChanged?.call(newProfilePic);
   }
 }

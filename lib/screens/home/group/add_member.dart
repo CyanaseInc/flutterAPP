@@ -307,7 +307,7 @@ class _AddGroupMembersScreenState extends State<AddGroupMembersScreen>
             await _dbHelper.insertNotification(
               groupId: widget.groupId,
               message: "${contact['name'] ?? 'A new member'} has joined the group",
-              senderId: 'system',
+              senderId: userId,
             );
 
             // WebSocket notification

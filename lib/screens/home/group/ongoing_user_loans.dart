@@ -33,10 +33,12 @@ class _OngoingLoansScreenState extends State<OngoingLoansScreen> {
 
   @override
   Widget build(BuildContext context) {
+
+    print("my loans are, ${widget.loans}");
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          'On going loans',
+          'Ongoing loans',
           style: TextStyle(fontSize: 20, color: white),
         ),
         backgroundColor: primaryTwo,
@@ -184,8 +186,8 @@ class _OngoingLoansScreenState extends State<OngoingLoansScreen> {
   Future<void> _handleLoanPayment(Map<String, dynamic> loan) async {
     // Show loading popup
 
-    final loanID = loan['loan_id'];
-    final groupID = loan['group_id'];
+    final loanID = int.parse(loan['loan_id'].toString());
+    final groupID = int.parse(loan['group_id'].toString());
 
     await showDialog(
       context: context,

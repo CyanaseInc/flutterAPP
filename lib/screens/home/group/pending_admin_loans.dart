@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cyanase/theme/theme.dart';
 import 'package:cyanase/helpers/api_helper.dart';
 import 'package:cyanase/helpers/database_helper.dart';
+import 'package:cyanase/helpers/loader.dart';
 import 'package:intl/intl.dart';
 
 class PendingAdminLoansScreen extends StatefulWidget {
@@ -36,13 +37,29 @@ class _PendingAdminLoansScreenState extends State<PendingAdminLoansScreen> {
     required bool approved,
   }) async {
     try {
+      print('Starting loan processing...');
       final db = await _dbHelper.database;
+      print('Database connection successful');
+      
       final userProfile = await db.query('profile', limit: 1);
+      print('User profile query result: $userProfile');
+      
       if (userProfile.isEmpty) {
+        print('Error: User profile not found in database');
         throw Exception('User profile not found');
       }
-      final token = userProfile.first['token'] as String;
+      
+      // Ensure token is properly cast to String
+      final token = userProfile.first['token']?.toString();
+      print('Token retrieved: ${token != null ? 'Token exists' : 'Token is null'}');
+      
+      if (token == null) {
+        print('Error: Invalid token format - token is null');
+        throw Exception('Invalid token format');
+      }
 
+      print('Processing loan with data: {loanId: $loanId, groupId: $groupId, approved: $approved}');
+      
       final response = await ApiService.processLoanRequest(
         token: token,
         loanId: loanId,
@@ -50,16 +67,35 @@ class _PendingAdminLoansScreenState extends State<PendingAdminLoansScreen> {
         approved: approved,
       );
 
-      if (!response['success']) {
+      print('API Response received: $response');
+
+      if (response == null) {
+        print('Error: No response from server');
+        throw Exception('No response from server');
+      }
+
+      if (response['success'] == false) {
+        print('Error: Loan processing failed - ${response['message']}');
         throw Exception(response['message'] ?? 'Loan processing failed');
       }
 
-      return response; // Return full response including loan_status
-    } catch (e) {
-      print('Process loan error: $e'); // Debug log
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to process loan: $e')),
-      );
+      print('Loan processed successfully');
+      return {
+        'success': true,
+        'message': response['message'] ?? 'Loan processed successfully',
+        'loan_status': response['loan_status'] ?? 'processed'
+      };
+    } catch (e, stackTrace) {
+      print('Error: $e');
+      print('Stack trace: $stackTrace');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to process loan: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
       return {'success': false, 'message': e.toString()};
     }
   }
@@ -77,6 +113,10 @@ class _PendingAdminLoansScreenState extends State<PendingAdminLoansScreen> {
           ),
         ),
         backgroundColor: primaryTwo,
+         leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
+        ),
         elevation: 0,
         centerTitle: true,
       ),
@@ -209,13 +249,10 @@ class _PendingAdminLoansScreenState extends State<PendingAdminLoansScreen> {
                     elevation: 2,
                   ),
                   child: isApproving
-                      ? const SizedBox(
+                      ? SizedBox(
                           width: 20,
                           height: 20,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
-                          ),
+                          child: Loader(),
                         )
                       : const Text(
                           'Approve',
@@ -286,37 +323,66 @@ class _PendingAdminLoansScreenState extends State<PendingAdminLoansScreen> {
             onPressed: () async {
               Navigator.pop(context); // Close dialog
               final loanKey = '${loan['loan_id']}';
+              if (!mounted) return;
               setState(() {
-                _loadingStates['$loanKey-${approved ? 'approve' : 'deny'}'] =
-                    true;
+                _loadingStates['$loanKey-${approved ? 'approve' : 'deny'}'] = true;
               });
 
-              final response = await processLoan(
-                loanId: loan['loan_id'] as int,
-                groupId: loan['group_id'] as int,
-                approved: approved,
-              );
+              try {
+                print("my loan is, $loan");
+                // Ensure proper type casting for loan_id and group_id
+                final response = await processLoan(
+                  loanId: int.parse(loan['loan_id'].toString()),
+                  groupId: int.parse(loan['group_id'].toString()),
+                  approved: approved,
+                );
 
-              setState(() {
-                _loadingStates
-                    .remove('$loanKey-${approved ? 'approve' : 'deny'}');
-              });
+                if (!mounted) return;
 
-              if (response['success']) {
-                final loanStatus = response['loan_status'] as String?;
-                // Remove loan from list if it's no longer pending
-                if (loanStatus != 'pending') {
+                if (response['success']) {
+                  // Remove the loan from the list immediately after successful processing
                   setState(() {
                     loans.removeWhere((l) => l['loan_id'] == loan['loan_id']);
                   });
+
+                  // Notify parent to refresh data and update counts
+                  widget.onLoanProcessed();
+
+                  if (mounted) {
+                    // Show success message with remaining count
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          '${response['message']} (${loans.length} remaining)',
+                        ),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+
+                    // If no more loans, pop back to previous screen
+                    if (loans.isEmpty) {
+                      Navigator.pop(context);
+                    }
+                  }
+                } else {
+                  throw Exception(response['message'] ?? 'Failed to process loan');
                 }
-                widget.onLoanProcessed(); // Notify parent to refresh data
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(response['message'] ??
-                        'Loan ${approved ? 'approved' : 'denied'} successfully'),
-                  ),
-                );
+              } catch (e) {
+                print('Error: ${e.toString()}');
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error: ${e.toString()}'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              } finally {
+                if (mounted) {
+                  setState(() {
+                    _loadingStates.remove('$loanKey-${approved ? 'approve' : 'deny'}');
+                  });
+                }
               }
             },
             child: Text(

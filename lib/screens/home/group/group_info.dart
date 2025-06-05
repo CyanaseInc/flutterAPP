@@ -42,12 +42,20 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
   String _currencySymbol = '\$';
   bool _isAdmin = false;
   bool isAdminMode = false;
-  bool _allowWithdraw = false; // New state for allow_withdraw
+  bool _allowWithdraw = false;
+  String _currentProfilePic = '';
 
   @override
   void initState() {
     super.initState();
+    _currentProfilePic = widget.profilePic;
     _loadGroupDetails();
+  }
+
+  void _handleProfilePicChanged(String newProfilePic) {
+    setState(() {
+      _currentProfilePic = newProfilePic;
+    });
   }
 
   Future<void> _loadGroupDetails() async {
@@ -109,7 +117,7 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
           groupGoals = (data['goals'] as List? ?? []).map((goal) {
             return GroupSavingGoal.fromJson(goal, userId!);
           }).toList();
-          _allowWithdraw = data['is_withdraw'] ?? false; // Initialize from API
+          _allowWithdraw = data['is_withdraw'] ?? false;
         });
       } else {
         throw Exception(response['message'] ?? 'Failed to load group details');
@@ -155,7 +163,7 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
               children: [
                 GroupHeader(
                   groupName: _groupDetails['group_name'] ?? widget.groupName,
-                  profilePic: widget.profilePic,
+                  profilePic: _currentProfilePic,
                   groupId: widget.groupId,
                   description:
                       _groupDetails['group_description'] ?? widget.description,
@@ -165,7 +173,7 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
                   isAdmin: _isAdmin,
                   allowWithdraw: _allowWithdraw,
                   groupLink: _groupDetails['invite_info']?['invite_code'] ?? '',
-                  // interestEarned: _interestEarned, // Pass allowWithdraw
+                  onProfilePicChanged: _handleProfilePicChanged,
                 ),
                 const SizedBox(height: 10),
                 GroupSavingGoalsSection(
@@ -253,7 +261,7 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
                       });
                     },
                     onWithdrawSettingChanged:
-                        _updateWithdrawSetting, // Callback
+                        _updateWithdrawSetting,
                   ),
                 GroupMembers(
                   groupId: widget.groupId,
