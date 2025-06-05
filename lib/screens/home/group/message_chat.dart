@@ -351,30 +351,7 @@ print("we got called 2");
 
   String _formatTime(String timestamp) {
     final dateTime = DateTime.parse(timestamp);
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final messageDay = DateTime(dateTime.year, dateTime.month, dateTime.day);
-
-    // If message is from today, show only time
-    if (messageDay.isAtSameMomentAs(today)) {
-      return DateFormat('HH:mm').format(dateTime); // e.g., "14:30"
-    }
-    // If message is from yesterday, show "Yesterday"
-    else if (messageDay.isAtSameMomentAs(today.subtract(const Duration(days: 1)))) {
-      return "Yesterday";
-    }
-    // If message is from this week, show day name
-    else if (now.difference(messageDay).inDays < 7) {
-      return DateFormat('EEEE').format(dateTime); // e.g., "Monday"
-    }
-    // If message is from this year, show date without year
-    else if (dateTime.year == now.year) {
-      return DateFormat('dd.MM').format(dateTime); // e.g., "24.01"
-    }
-    // If message is from previous years, show full date
-    else {
-      return DateFormat('dd.MM.yyyy').format(dateTime); // e.g., "24.01.2024"
-    }
+    return DateFormat.jm().format(dateTime); // Uses system time format (12h or 24h)
   }
 
   String _getDayName(int weekday) {

@@ -10,6 +10,7 @@ import 'package:cyanase/helpers/endpoints.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'pending_groups_screen.dart';
 import 'package:lottie/lottie.dart';
+import 'package:intl/intl.dart';
 
 class ChatList extends StatefulWidget {
   const ChatList({Key? key}) : super(key: key);
@@ -625,9 +626,7 @@ class ChatListState extends State<ChatList>
         'description': group['description'],
         'profilePic': group['profile_pic'],
         'lastMessage': lastMessagePreview,
-        'time': lastMessage != null
-            ? _formatTime(lastMessage['timestamp'])
-            : 'Just now',
+        'time': _formatTime(timestamp),
         'timestamp': timestamp,
         'unreadCount': unreadCount,
         'isGroup': true,
@@ -663,8 +662,8 @@ class ChatListState extends State<ChatList>
   }
 
   String _formatTime(String timestamp) {
-    DateTime dateTime = DateTime.parse(timestamp);
-    return '${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
+    final dateTime = DateTime.parse(timestamp);
+    return DateFormat.jm().format(dateTime);
   }
 
   String _truncateMessage(String message, {int maxLength = 20}) {

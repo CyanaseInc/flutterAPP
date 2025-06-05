@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cyanase/theme/theme.dart';
+import 'package:cyanase/helpers/api_helper.dart';
 import 'pending_requests.dart';
+import 'package:cyanase/helpers/endpoints.dart';
 
 class PendingGroupsScreen extends StatefulWidget {
   final List<Map<String, dynamic>> adminGroups;
@@ -81,6 +83,7 @@ class _PendingGroupsScreenState extends State<PendingGroupsScreen> {
               itemCount: _adminGroups.length,
               itemBuilder: (context, index) {
                 final group = _adminGroups[index];
+                
                 final groupId = group['group_id'].toString();
                 final groupName = group['group_name'] as String;
                 final pendingCount = group['pending_count'] as int;
@@ -96,14 +99,19 @@ class _PendingGroupsScreenState extends State<PendingGroupsScreen> {
                     leading: CircleAvatar(
                       radius: 24,
                       backgroundColor: primaryColor,
-                      child: Text(
-                        groupName.isNotEmpty ? groupName[0].toUpperCase() : 'G',
-                        style: const TextStyle(
-                          color: white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                      backgroundImage: group['profile_pic'] != null && group['profile_pic'].toString().isNotEmpty
+                          ? NetworkImage(group['profile_pic'])
+                          : null,
+                      child: group['profile_pic'] == null || group['profile_pic'].toString().isEmpty
+                          ? Text(
+                              groupName.isNotEmpty ? groupName[0].toUpperCase() : 'G',
+                              style: const TextStyle(
+                                color: white,
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            )
+                          : null,
                     ),
                     title: Text(
                       groupName,

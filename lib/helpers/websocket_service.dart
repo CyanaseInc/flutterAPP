@@ -1,4 +1,3 @@
-
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -262,15 +261,14 @@ class WebSocketService {
       final db = await _dbHelper.database;
       final existingMessage = await db.query(
         'messages',
-        where: 'id = ?',
-        whereArgs: [newId],
+        where: 'id = ? OR temp_id = ?',
+        whereArgs: [newId, tempId],
       );
 
       if (existingMessage.isEmpty) {
         // Update message ID and status in database
-        await _dbHelper.updateMessageId(tempId, newId);
-        await _dbHelper.updateMessageStatus(newId, 'sent');
-
+        await _dbHelper.updateMessageId(tempId, newId, 'sent');
+        
         // Notify UI through message status stream
         _messageStatusController.add({
           'type': 'message_id_update',
@@ -280,7 +278,7 @@ class WebSocketService {
           'group_id': groupId,
         });
       } else {
-        print('🔵 [STATUS] Message with ID $newId already exists, skipping update');
+        print('🔵 [STATUS] Message with ID $newId or temp_id $tempId already exists, skipping update');
       }
     } catch (e) {
       print('🔴 [STATUS] Error handling sent message confirmation: $e');
@@ -335,8 +333,6 @@ class WebSocketService {
       print('🔵 [STATUS] Updating message status');
       print('🔵 [STATUS] Message ID: $messageId');
       print('🔵 [STATUS] New Status: $status');
-      print('🔵 [STATUS] User ID: $userId');
-      print('🔵 [STATUS] Timestamp: $timestamp');
 
       // Update status in database
       await _dbHelper.updateMessageStatus(messageId, status);
@@ -381,32 +377,7 @@ class WebSocketService {
     }
   }
 
-  Future<void> _sendReadStatus(String messageId) async {
-    if (!_isConnected || _webSocket == null) return;
-
-    try {
-      final db = await _dbHelper.database;
-      final userProfile = await db.query('profile', limit: 1);
-      if (userProfile.isEmpty) return;
-
-      final senderId = userProfile.first['id'];
-      if (senderId == null) return;
-
-      final statusMessage = {
-        'type': 'read_receipt',
-        'message_id': messageId,
-        'user_id': senderId,
-        'room_id': _groupId,
-        'timestamp': DateTime.now().toIso8601String(),
-      };
-
-      print('🔵 [STATUS] Sending read status for message $messageId');
-      _webSocket?.add(json.encode(statusMessage));
-    } catch (e) {
-      print('🔴 [STATUS] Error sending read status: $e');
-    }
-  }
-
+ 
   Future<void> sendTypingStatus(Map<String, dynamic> message) async {
     if (!_isConnected || _webSocket == null) return;
 
@@ -499,82 +470,6 @@ class WebSocketService {
     _messageQueue.removeWhere((msg) => msg['id'].toString() == messageId);
   }
 
-  void _handleWebSocketMessage(dynamic message) {
-    try {
-      print('🔵 [WS] Raw WebSocket message received: $message');
-      
-      if (message is String) {
-        final decoded = json.decode(message);
-        
-        switch (decoded['type']) {
-          case 'message':
-            _handleNewMessage(decoded);
-            break;
-          case 'update_message_status':
-            print('🔵 [WS] Processing message status update');
-            _handleMessageStatus(decoded);
-            break;
-          case 'message_id_update':
-            print('🔵 [WS] Processing message ID update');
-            _handleMessageIdUpdate(decoded);
-            break;
-          case 'typing':
-            print('🔵 [WS] Processing typing status');
-            _handleTypingStatus(decoded);
-            break;
-          default:
-            print('🔵 [WS] Unknown message type received: ${decoded['type']}');
-           
-        }
-      }
-    } catch (e) {
-      print('🔴 [WS] Error handling WebSocket message: $e');
-    }
-  }
+ 
 
-  void _handleMessageStatus(Map<String, dynamic> data) {
-    try {
-    
-      if (data['message_id'] == null || data['status'] == null) {
-        print('🔴 [WS] Missing required fields for status update');
-        return;
-      }
-
-      // Forward the status update to the UI
-      if (onMessageReceived != null) {
-        onMessageReceived!(data);
-      }
-    } catch (e) {
-      print('🔴 [WS] Error handling message status: $e');
-    }
-  }
-
-  void _handleMessageIdUpdate(Map<String, dynamic> data) {
-    try {
-      print('🔵 [WS] Handling message ID update:');
-      print('🔵 [WS] Old ID: ${data['old_id']}');
-      print('🔵 [WS] New ID: ${data['new_id']}');
-      print('🔵 [WS] Status: ${data['status']}');
-
-      if (data['old_id'] == null || data['new_id'] == null) {
-        print('🔴 [WS] Missing required fields for ID update');
-        return;
-      }
-
-      // Forward the ID update to the UI
-      if (onMessageReceived != null) {
-        onMessageReceived!(data);
-      }
-    } catch (e) {
-      print('🔴 [WS] Error handling message ID update: $e');
-    }
-  }
-
-  void _handleTypingStatus(Map<String, dynamic> data) {
-    // Implementation of handling typing status
-  }
-
-  void _handleNewMessage(Map<String, dynamic> data) {
-    // Implementation of handling new message
-  }
 }

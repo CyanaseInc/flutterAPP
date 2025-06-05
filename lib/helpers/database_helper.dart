@@ -768,14 +768,23 @@ class DatabaseHelper {
     }
   }
 
-  Future<void> updateMessageId(String tempId, String serverId) async {
+  Future<void> updateMessageId(String tempId, String serverId, String? status) async {
     final db = await database;
+    final updateData = {
+      'id': serverId,
+      'temp_id': null, // Clear temp_id to prevent duplicates
+    };
+    if (status != null) {
+      updateData['status'] = status;
+    }
+    
     await db.update(
       'messages',
-      {'id': serverId},
+      updateData,
       where: 'temp_id = ?',
       whereArgs: [tempId],
     );
+    
     // Broadcast updated messages
     final message = (await db.query(
       'messages',

@@ -5,7 +5,7 @@ import 'package:lottie/lottie.dart';
 import 'package:cyanase/helpers/endpoints.dart';
 import 'package:cyanase/helpers/database_helper.dart';
 import 'package:cyanase/helpers/api_helper.dart';
-import 'package:cyanase/helpers/websocket_service.dart';
+import 'package:cyanase/helpers/chat_websocket_service.dart';
 import 'package:cyanase/helpers/loader.dart';
 
 class PendingRequestsScreen extends StatefulWidget {
@@ -40,8 +40,8 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
   Future<void> _initializeWebSocket() async {
     try {
       print('Initializing WebSocket for group ${widget.groupId}');
-      await WebSocketService.instance.initialize(widget.groupId.toString());
-      if (WebSocketService.instance.isConnected) {
+      await ChatWebSocketService.instance.initialize(widget.groupId.toString());
+      if (ChatWebSocketService.instance.isConnected) {
         print('WebSocket connected successfully');
       } else {
         print('WebSocket initialization failed');
@@ -86,6 +86,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
 
     // Optimistic update
     final originalRequests = List<Map<String, dynamic>>.from(_pendingRequests);
+    
     setState(() {
       _pendingRequests.removeWhere((r) {
         final rUserId = r['user_id'].toString();
@@ -124,7 +125,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
       await _dbHelper.insertNotification(
         groupId: widget.groupId,
         message: "$userName has joined the group",
-        senderId: 'system',
+        senderId:adminId,
       );
 
       // Send notification through WebSocket
@@ -140,7 +141,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
       };
 
       try {
-        await WebSocketService.instance.sendMessage(wsMessage);
+        await ChatWebSocketService.instance.sendMessage(wsMessage);
       } catch (e) {
         print('WebSocket send error: $e');
         // Queue message if WebSocket fails
@@ -229,7 +230,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
       }
 
       final userName = request['user_name'] as String? ?? 'A user';
-
+ final tempId = DateTime.now().millisecondsSinceEpoch.toString();
       // Insert notification in database
       await _dbHelper.insertNotification(
         groupId: widget.groupId,
@@ -242,6 +243,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
         'type': 'send_message',
         'content': "$userName's request was denied",
         'sender_id': userId,
+        'temp_id': tempId,
         'group_id': widget.groupId.toString(),
         'room_id': widget.groupId.toString(),
         'message_type': 'notification',
@@ -250,12 +252,13 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
       };
 
       try {
-        await WebSocketService.instance.sendMessage(wsMessage);
+        await ChatWebSocketService .instance.sendMessage(wsMessage);
       } catch (e) {
         print('WebSocket send error: $e');
         // Queue message if WebSocket fails
         await _dbHelper.insertMessage({
           'group_id': widget.groupId.toString(),
+          'temp_id': tempId,
           'sender_id': userId,
           'message': "$userName's request was denied",
           'type': 'notification',
@@ -351,6 +354,8 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
   }
 
   Widget _buildAvatar(String? profilePic, String name) {
+
+  print('my mour $profilePic');
     final avatarUrl = profilePic != null && profilePic.isNotEmpty
         ? '${ApiEndpoints.server}/media/$profilePic'
         : null;
@@ -624,7 +629,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
 
   @override
   void dispose() {
-    // No need to dispose WebSocketService as it's a singleton
+    // No need to dispose ChatWebSocketService  as it's a singleton
     super.dispose();
   }
 }

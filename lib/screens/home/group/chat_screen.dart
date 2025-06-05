@@ -2087,8 +2087,6 @@ void _updateUnreadMessages() {
         return;
       }
 
-      print('🔵 [ChatScreen] Found ${pendingMessages.length} pending messages to resend');
-
       for (final message in pendingMessages) {
         try {
           // Create WebSocket message

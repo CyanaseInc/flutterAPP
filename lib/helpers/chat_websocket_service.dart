@@ -193,21 +193,9 @@ class ChatWebSocketService {
               await _handleReceivedMessage(data);
               break;
 
-            case 'message':
-              if (data['temp_id'] != null) {
-                await _handleSentMessageConfirmation(data);
-              } else {
-                await _handleReceivedMessage(data);
-              }
-              break;
-
-            case 'update_message_status':
-              await _handleMessageStatusUpdate({
-                'message_id': data['message']['id'],
-                'temp_id': data['message']['temp_id'],
-                'status': data['message']['status'],
-                'room_id': data['message']['room_id']
-              });
+            case 'update_message_status':  
+           
+                await  _handleSentMessageConfirmation(data);
               break;
 
             case 'typing':
@@ -236,54 +224,68 @@ class ChatWebSocketService {
 
   Future<void> _handleSentMessageConfirmation(Map<String, dynamic> data) async {
     try {
-        final tempId = data['temp_id'].toString();
-        final newId = data['id'].toString();
-        print('Message confirmation received - tempId: $tempId, newId: $newId');
+      final messageData = data['message'];
+      final tempId = messageData['temp_id']?.toString();
+      final newId = messageData['id']?.toString();
+       
+      if (tempId == null || newId == null) {
+        print('Missing temp_id or new_id in message confirmation');
+        return;
+      }
 
-        // Debug: Check if message exists before update
-        final db = await _dbHelper.database;
-        final beforeUpdate = await db.query(
-            'messages',
-            where: 'temp_id = ?',
-            whereArgs: [tempId],
+      print('Message confirmation received - tempId: $tempId, newId: $newId');
+
+      final db = await _dbHelper.database;
+      
+      // First check if a message with the new ID already exists
+      final existingWithNewId = await db.query(
+        'messages',
+        where: 'id = ?',
+        whereArgs: [newId],
+      );
+
+      if (existingWithNewId.isNotEmpty) {
+        print('Message with new ID $newId already exists, skipping update');
+        return;
+      }
+
+      // Update message ID and status in database
+      final updateResult = await db.update(
+        'messages',
+        {
+          'id': newId,
+          'temp_id': null, // Clear the temp_id to prevent duplicates
+          'status': 'sent'
+        },
+        where: 'temp_id = ?',
+        whereArgs: [tempId],
+      );
+
+      if (updateResult > 0) {
+        // Update media records if any
+        await db.update(
+          'media',
+          {
+            'message_id': newId,
+            'temp_id': null
+          },
+          where: 'temp_id = ?',
+          whereArgs: [tempId],
         );
-        print('Message before update: $beforeUpdate');
 
-        if (beforeUpdate.isNotEmpty) {
-            // Update message ID and status in database
-            await db.update(
-                'messages',
-                {
-                    'id': newId,
-                    'status': 'sent',
-                    'temp_id': null // Clear the temp_id to prevent duplicates
-                },
-                where: 'temp_id = ?',
-                whereArgs: [tempId],
-            );
-            
-            // Verify update
-            final afterUpdate = await db.query(
-                'messages',
-                where: 'id = ?',
-                whereArgs: [newId],
-            );
-            print('Message after update: $afterUpdate');
-
-            // Notify UI of ID update
-            onMessageReceived?.call({
-                'type': 'message_id_update',
-                'old_id': tempId,
-                'new_id': newId,
-                'status': 'sent',
-                'group_id': data['room_id'],
-            });
-        } else {
-            print('No message found with temp_id: $tempId');
-        }
+        // Notify UI of the update
+        _messageStatusController.add({
+          'type': 'update_message_status',
+          'message_id': newId,
+          'status': 'sent',
+          'group_id': messageData['room_id']?.toString(),
+        });
+      } else {
+        print('No message found with temp_id $tempId to update');
+      }
     } catch (e) {
-        print('Error in _handleSentMessageConfirmation: $e');
-        print('Error stack trace: ${StackTrace.current}');
+      print('Error in _handleSentMessageConfirmation: $e');
+      print('Error stack trace: ${StackTrace.current}');
     }
   }
 
@@ -292,14 +294,15 @@ class ChatWebSocketService {
       // Extract message data from either format
       final messageData = data['message'] ?? data;
       final messageId = messageData['id']?.toString();
+      final tempId = messageData['temp_id']?.toString();
       print('🔵 [ChatWebSocket] Processing received message: $messageData');
 
-      // Check if message already exists in database
+      // Check if message already exists in database using both id and temp_id
       final db = await _dbHelper.database;
       final existingMessage = await db.query(
         'messages',
-        where: 'id = ? OR temp_id = ?',
-        whereArgs: [messageId, messageData['temp_id']?.toString() ?? ''],
+        where: '(id = ? AND id IS NOT NULL) OR (temp_id = ? AND temp_id IS NOT NULL)',
+        whereArgs: [messageId, tempId],
       );
 
       // Only save if message doesn't exist
@@ -322,7 +325,7 @@ class ChatWebSocketService {
           'reply_to_id': messageData['reply_to_id']?.toString(),
           'reply_to_message': messageData['reply_to_message']?.toString(),
           'reply_to_type': messageData['reply_to_type']?.toString(),
-          'temp_id': messageData['temp_id']?.toString(),
+          'temp_id': tempId,
         });
 
         // Handle media for image or audio messages
@@ -402,73 +405,34 @@ class ChatWebSocketService {
     }
   }
 
-   Future<void> _handleMessageStatusUpdate(Map<String, dynamic> data) async {
-     print('🔵 [ChatWebSocket] Handling message status update: $data');
+  Future<void> _handleMessageStatusUpdate(Map<String, dynamic> data) async {
+    print('🔵 [ChatWebSocket] Handling message status update: $data');
     try {
-        final messageId = data['message_id']?.toString();
-        final tempId = data['temp_id']?.toString();
+
+     
+        final messageId = data['id']?.toString();
         final status = data['status'];
         final groupId = data['room_id']?.toString();
 
-        if (messageId == null || tempId == null) return;
+        if (messageId == null || status == null) {
+            print('Missing message_id or status in status update');
+            return;
+        }
 
         final db = await _dbHelper.database;
         
-        // First try to find the message by temp_id
-        final messageByTempId = await db.query(
+        // Update the message status
+        await db.update(
             'messages',
-            where: 'temp_id = ?',
-            whereArgs: [tempId],
+            {
+                'status': status,
+            },
+            where: 'id = ?',
+            whereArgs: [messageId],
         );
-
-        if (messageByTempId.isNotEmpty) {
-            // Update the message with the new ID and status
-            await db.update(
-                'messages',
-                {
-                    'id': messageId,
-                    'status': status,
-                    'temp_id': null // Clear the temp_id to prevent duplicates
-                },
-                where: 'temp_id = ?',
-                whereArgs: [tempId],
-            );
-                 await db.update(
-                'media',
-                {
-                    'message_id': messageId,
-                   
-                },
-                where: 'temp_id = ?',
-                whereArgs: [tempId],
-            );
-           
-        } 
- _messageStatusController.add({
-            'type': 'update_message_status',
-            'message_id': messageId,
-            'status': status,
-            'group_id': groupId,
-        });
+      print("yes we did it");
         // Notify UI of status update
         onMessageReceived?.call({
-            'type': 'update_message_status',
-            'message_id': messageId,
-            'status': status,
-            'group_id': groupId,
-        });
-
-        // Also send a message_id_update to ensure UI has latest ID
-        onMessageReceived?.call({
-            'type': 'message_id_update',
-            'old_id': tempId,
-            'new_id': messageId,
-            'status': status,
-            'group_id': groupId,
-        });
-
-        // Update message status stream
-        _messageStatusController.add({
             'type': 'update_message_status',
             'message_id': messageId,
             'status': status,
@@ -479,7 +443,6 @@ class ChatWebSocketService {
         print('Error stack trace: ${StackTrace.current}');
     }
   }
-
 
   Future<void> sendDeliveredStatus(String messageId) async {
     if (!_isConnected || _webSocket == null) return;
@@ -556,26 +519,8 @@ class ChatWebSocketService {
       // Send through WebSocket
       await _sendMessageInternal(message);
       
-      // Immediately update message status to 'sent' in database
-      if (message['id'] != null) {
-        await _dbHelper.updateMessageStatus(message['id'].toString(), 'sent');
-        
-        // Notify UI of immediate status update
-        _messageStatusController.add({
-          'type': 'update_message_status',
-          'message_id': message['id'].toString(),
-          'status': 'sent',
-          'group_id': message['room_id'],
-        });
-        
-        // Also notify through onMessageReceived for backward compatibility
-        onMessageReceived?.call({
-          'type': 'update_message_status',
-          'message_id': message['id'].toString(),
-          'status': 'sent',
-          'group_id': message['room_id'],
-        });
-      }
+      // Don't update status here - wait for server confirmation
+      // This prevents duplicate status updates
     } catch (e) {
       print('Error sending message: $e');
       rethrow;

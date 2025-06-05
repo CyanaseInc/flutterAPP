@@ -815,6 +815,7 @@ Future<void> _handleNewMessage(String groupId, Map<String, dynamic> message) asy
           adminGroups.add({
             'group_id': groupId,
             'group_name': groupName,
+            'profile_pic': profilePic,
             'pending_count': pendingCount,
           });
         }
@@ -1477,4 +1478,3 @@ class _ChatListComponentState extends State<ChatListComponent> with TickerProvid
     );
   }
 }
-
