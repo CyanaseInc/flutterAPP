@@ -986,11 +986,11 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
       await _dbHelper.insertMessage(message);
 
       // Update UI immediately with temp message
-      setState(() {
-        _messages.add(message);
-        _messages = MessageSort.sortMessagesByDate(_messages);
-        _groupedMessages = MessageSort.groupMessagesByDate(_messages);
-      });
+      // setState(() {
+      //   _messages.add(message);
+      //   _messages = MessageSort.sortMessagesByDate(_messages);
+      //   _groupedMessages = MessageSort.groupMessagesByDate(_messages);
+      // });
 
       final wsMessage = {
         'type': 'send_message',
@@ -1088,11 +1088,11 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
    
 
       // Update UI immediately
-      setState(() {
-        _messages.add(message);
-        _messages = MessageSort.sortMessagesByDate(_messages);
-        _groupedMessages = MessageSort.groupMessagesByDate(_messages);
-      });
+      // setState(() {
+      //   _messages.add(message);
+      //   _messages = MessageSort.sortMessagesByDate(_messages);
+      //   _groupedMessages = MessageSort.groupMessagesByDate(_messages);
+      // });
 
       final wsMessage = {
         'type': 'send_message',
