@@ -985,13 +985,6 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
       // Store in database
       await _dbHelper.insertMessage(message);
 
-      // Update UI immediately with temp message
-      // setState(() {
-      //   _messages.add(message);
-      //   _messages = MessageSort.sortMessagesByDate(_messages);
-      //   _groupedMessages = MessageSort.groupMessagesByDate(_messages);
-      // });
-
       final wsMessage = {
         'type': 'send_message',
         'content': "image_message", // Send local path as content
@@ -1008,6 +1001,16 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
       };
      
       await _wsService.sendMessage(wsMessage);
+
+      // Update status to 'sent' after successful WebSocket send
+      setState(() {
+        final index = _messages.indexWhere((msg) => msg['temp_id'] == tempId);
+        if (index != -1) {
+          _messages[index]['status'] = 'sent';
+          _messages = MessageSort.sortMessagesByDate(_messages);
+          _groupedMessages = MessageSort.groupMessagesByDate(_messages);
+        }
+      });
 
       _replyingToMessage = null;
       _scrollToBottomIfAtBottom();
@@ -1110,6 +1113,16 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
       };
      
       await _wsService.sendMessage(wsMessage);
+
+      // Update status to 'sent' after successful WebSocket send
+      setState(() {
+        final index = _messages.indexWhere((msg) => msg['temp_id'] == tempId);
+        if (index != -1) {
+          _messages[index]['status'] = 'sent';
+          _messages = MessageSort.sortMessagesByDate(_messages);
+          _groupedMessages = MessageSort.groupMessagesByDate(_messages);
+        }
+      });
 
       await _loadMessages();
       _replyingToMessage = null;
