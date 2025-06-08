@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cyanase/theme/theme.dart';
+import 'package:photo_view/photo_view.dart';
 
 class FullScreenImage extends StatelessWidget {
   final String imagePath;
@@ -10,37 +11,89 @@ class FullScreenImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
-      body: Center(
-        child: FutureBuilder<bool>(
-          future: _checkImageExists(imagePath),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              // Show a loading indicator while checking if the image exists
-              return CircularProgressIndicator(
-                color: white,
-              );
-            } else if (snapshot.hasData && snapshot.data!) {
-              // If the image exists, display it
-              return GestureDetector(
-                onTap: () => Navigator.pop(context),
-                child: Image.file(
-                  File(imagePath),
-                  fit: BoxFit.contain,
-                ),
-              );
-            } else {
-              // If the image does not exist, show an error message
-              return Text(
-                "Image not found",
-                style: TextStyle(
-                  color: white,
-                  fontSize: 18,
-                ),
-              );
-            }
-          },
-        ),
+      backgroundColor: Colors.black.withOpacity(0.9),
+      body: Stack(
+        children: [
+          // Close button at the top
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 16,
+            right: 16,
+            child: IconButton(
+              icon: const Icon(Icons.close, color: Colors.white, size: 28),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ),
+          
+          // Main image viewer
+          Center(
+            child: FutureBuilder<bool>(
+              future: _checkImageExists(imagePath),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const CircularProgressIndicator(
+                    color: Colors.white,
+                  );
+                } else if (snapshot.hasData && snapshot.data!) {
+                  return PhotoView(
+                    imageProvider: FileImage(File(imagePath)),
+                    minScale: PhotoViewComputedScale.contained,
+                    maxScale: PhotoViewComputedScale.covered * 2,
+                    initialScale: PhotoViewComputedScale.contained,
+                    backgroundDecoration: const BoxDecoration(
+                      color: Colors.transparent,
+                    ),
+                    loadingBuilder: (context, event) => const Center(
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                      ),
+                    ),
+                    errorBuilder: (context, error, stackTrace) => Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(
+                            Icons.error_outline,
+                            color: Colors.white,
+                            size: 42,
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            "Failed to load image",
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.8),
+                              fontSize: 16,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                } else {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(
+                          Icons.error_outline,
+                          color: Colors.white,
+                          size: 42,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          "Image not found",
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.8),
+                            fontSize: 16,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+              },
+            ),
+          ),
+        ],
       ),
     );
   }

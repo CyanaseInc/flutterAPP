@@ -408,39 +408,36 @@ class ChatWebSocketService {
   Future<void> _handleMessageStatusUpdate(Map<String, dynamic> data) async {
     print('🔵 [ChatWebSocket] Handling message status update: $data');
     try {
+      final messageId = data['id']?.toString();
+      final status = data['status'];
+      final groupId = data['room_id']?.toString();
 
-     
-        final messageId = data['id']?.toString();
-        final status = data['status'];
-        final groupId = data['room_id']?.toString();
+      if (messageId == null || status == null) {
+        print('Missing message_id or status in status update');
+        return;
+      }
 
-        if (messageId == null || status == null) {
-            print('Missing message_id or status in status update');
-            return;
-        }
-
-        final db = await _dbHelper.database;
-        
-        // Update the message status
-        await db.update(
-            'messages',
-            {
-                'status': status,
-            },
-            where: 'id = ?',
-            whereArgs: [messageId],
-        );
-      print("yes we did it");
-        // Notify UI of status update
-        onMessageReceived?.call({
-            'type': 'update_message_status',
-            'message_id': messageId,
-            'status': status,
-            'group_id': groupId,
-        });
+      // Update the message status in database
+      await _dbHelper.updateMessageStatus(messageId, status);
+      
+      // Notify UI of status update
+      onMessageReceived?.call({
+        'type': 'update_message_status',
+        'message_id': messageId,
+        'status': status,
+        'group_id': groupId,
+      });
+      
+      // Also notify through message status stream
+      _messageStatusController.add({
+        'type': 'update_message_status',
+        'message_id': messageId,
+        'status': status,
+        'group_id': groupId,
+      });
     } catch (e) {
-        print('Error in _handleMessageStatusUpdate: $e');
-        print('Error stack trace: ${StackTrace.current}');
+      print('Error in _handleMessageStatusUpdate: $e');
+      print('Error stack trace: ${StackTrace.current}');
     }
   }
 

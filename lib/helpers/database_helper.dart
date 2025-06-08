@@ -177,7 +177,6 @@ class DatabaseHelper {
         deleted INTEGER NOT NULL DEFAULT 0,
         temp_id TEXT,
         FOREIGN KEY (group_id) REFERENCES groups (id) ON DELETE CASCADE,
-        FOREIGN KEY (sender_id) REFERENCES profile(id) ON DELETE CASCADE,
         FOREIGN KEY (media_id) REFERENCES media (id) ON DELETE SET NULL
       )
     ''');
@@ -589,14 +588,14 @@ class DatabaseHelper {
 
   Future<List<Map<String, String>>> getGroupMemberNames(int groupId) async {
     final db = await database;
-    final result = await db.rawQuery('''
-      SELECT user_name, role, profile_pic
-    FROM participants   
-      WHERE group_id = ?
-  ''', [groupId]);
+    final result = await db.rawQuery(
+      'SELECT user_id, user_name, role, profile_pic FROM participants WHERE group_id = ?',
+      [groupId]
+    );
 
     return result
         .map((row) => {
+              'id': row['user_id'] as String,
               'name': row['user_name'] as String,
               'role': row['role'] as String? ?? 'Member',
               'profile_pic': row['profile_pic'] as String? ?? '',
@@ -741,6 +740,22 @@ class DatabaseHelper {
       where: 'id = ?',
       whereArgs: [messageId],
     );
+    
+    // Get the group ID for the message
+    final message = await db.query(
+      'messages',
+      where: 'id = ?',
+      whereArgs: [messageId],
+    );
+    
+    if (message.isNotEmpty) {
+      final groupId = message.first['group_id'] as int;
+      // Get updated messages for the group
+      final messages = await getMessages(groupId: groupId);
+      // Broadcast updated messages
+      _messageStreamController.add({groupId: messages});
+    }
+    
     _notifyMessageUpdate();
     _notifyUnreadCountUpdate();
   }

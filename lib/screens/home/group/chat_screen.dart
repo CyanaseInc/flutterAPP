@@ -304,17 +304,29 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
     final userProfile = await db.query('profile', limit: 1);
     final currentUserId = userProfile.first['id'] as String?;
     
+    // Get all participants first
     final participants = await _dbHelper.getGroupMemberNames(widget.groupId!);
+    // Create a map for quick lookup using user_id
+    final participantMap = {
+      for (var p in participants)
+        p['id']: {
+          'name': p['name'],
+          'role': p['role'],
+          'avatar': p['profile_pic'],
+        }
+    };
     
     if (!mounted) return;
 
     setState(() {
       _messages = messages.map((message) {
         final isMe = message['sender_id'].toString() == currentUserId;
-        final sender = participants.firstWhere(
-          (p) => p['name'] == message['sender_name'],
-          orElse: () => {'name': 'Unknown', 'role': 'member'},
-        );
+        final senderId = message['sender_id']?.toString();
+        final senderInfo = participantMap[senderId] ?? {
+          'name': 'Unknown',
+          'role': 'member',
+          'avatar': '',
+        };
         
         final status = message['status'] ?? (isMe ? 'sent' : 'unread');
         
@@ -327,8 +339,9 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
           'reply_to_id': message['reply_to_id'],
           'reply_to_message': message['reply_to_message'],
           'isReply': message['reply_to_id'] != null,
-          'sender_name': sender['name'],
-          'sender_role': sender['role'],
+          'sender_name': senderInfo['name'],
+          'sender_role': senderInfo['role'],
+          'sender_avatar': senderInfo['avatar'],
         };
       }).toList();
 

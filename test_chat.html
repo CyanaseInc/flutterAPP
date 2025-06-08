@@ -241,7 +241,7 @@
     <div class="config-panel">
         <h3>Connection Settings</h3>
         
-        <input type="text" id="wsUrl" value="ws://192.168.213.220:8000" placeholder="Base URL (e.g., ws://localhost:8000/)">
+        <input type="text" id="wsUrl" value="ws://192.168.73.220:8000" placeholder="Base URL (e.g., ws://localhost:8000/)">
         <input type="text" id="userToken" value="e46eca5af559a99b23df953ed0c5e9115f88cb87"placeholder="User Token">
         <input type="text" id="roomId" value="6" placeholder="Chat Room ID">
         <button onclick="connectWebSocket()">Connect</button>
@@ -791,113 +791,134 @@
         }
 
         function createMessageElement(message, isSent = false) {
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${isSent ? 'sent' : 'received'}`;
-            messageDiv.dataset.messageId = message.id || message.temp_id;
-            
-            // Add sender info for received messages
-            if (!isSent && message.sender_info) {
-                const senderInfo = document.createElement('div');
-                senderInfo.className = 'sender-info';
-                senderInfo.innerHTML = `
-                    <img src="${message.sender_info.profile_picture || 'https://via.placeholder.com/30'}" 
-                         alt="Profile" class="sender-avatar">
-                    <span class="sender-name">${message.username}</span>
-                    ${message.sender_info.is_verified ? '<span class="verified-badge">✓</span>' : ''}
-                `;
-                messageDiv.appendChild(senderInfo);
-            }
-            
-            // Add reply container if message is a reply
-            if (message.reply_to_id) {
-                const replyContainer = document.createElement('div');
-                replyContainer.className = 'reply-container';
-                
-                // Add reply sender info
-                const replySender = document.createElement('div');
-                replySender.className = 'reply-sender';
-                replySender.textContent = message.reply_to_sender || 'Unknown';
-                
-                // Add reply content based on type
-                const replyText = document.createElement('div');
-                replyText.className = 'reply-text';
-                
-                // Handle different reply types
-                if (message.reply_to_type === 'image') {
-                    replyText.innerHTML = '📷 Photo';
-                } else if (message.reply_to_type === 'audio') {
-                    replyText.innerHTML = '🎵 Voice message';
-                } else {
-                    replyText.textContent = message.reply_to_message || '';
-                }
-                
-                // Add click handler to scroll to original message
-                replyContainer.onclick = () => {
-                    const originalMessage = document.querySelector(`[data-message-id="${message.reply_to_id}"]`);
-                    if (originalMessage) {
-                        originalMessage.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        originalMessage.style.backgroundColor = '#f0f2f5';
-                        setTimeout(() => {
-                            originalMessage.style.backgroundColor = '';
-                        }, 1000);
-                    }
-                };
-                
-                replyContainer.appendChild(replySender);
-                replyContainer.appendChild(replyText);
-                messageDiv.appendChild(replyContainer);
-            }
-            
-            let contentElement;
-            
-            if (message.message_type === 'image') {
-                contentElement = document.createElement('img');
-                contentElement.src = message.file_data || message.content;
-                contentElement.className = 'file-preview';
-            } else if (message.message_type === 'audio') {
-                contentElement = document.createElement('audio');
-                contentElement.controls = true;
-                contentElement.className = 'audio-player';
-                contentElement.src = message.file_data || message.content;
-            } else {
-                contentElement = document.createElement('div');
-                contentElement.textContent = message.content;
-            }
-            
-            const messageTime = document.createElement('div');
-            messageTime.className = 'message-time';
-            messageTime.textContent = new Date(message.timestamp).toLocaleTimeString();
-            
-            const messageStatus = document.createElement('div');
-            messageStatus.className = 'message-status';
-            messageStatus.textContent = message.status || (isSent ? 'sent' : 'received');
-            
-            const messageProperties = document.createElement('div');
-            messageProperties.className = 'message-properties';
-            messageProperties.textContent = `ID: ${message.id || message.temp_id} | Type: ${message.message_type} | Status: ${message.status}`;
-            
-            // Add message flags
-            const messageFlags = document.createElement('div');
-            messageFlags.className = 'message-flags';
-            if (message.is_edited) messageFlags.textContent += '✏️ ';
-            if (message.is_deleted) messageFlags.textContent += '🗑️ ';
-            if (message.is_forwarded) messageFlags.textContent += '↪️ ';
-            
-            // Add reply button
-            const replyButton = document.createElement('button');
-            replyButton.textContent = 'Reply';
-            replyButton.className = 'message-options';
-            replyButton.onclick = () => setReplyMessage(message);
-            
-            messageDiv.appendChild(contentElement);
-            messageDiv.appendChild(messageTime);
-            messageDiv.appendChild(messageStatus);
-            messageDiv.appendChild(messageProperties);
-            messageDiv.appendChild(messageFlags);
-            messageDiv.appendChild(replyButton);
-            
-            return messageDiv;
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message ${isSent ? 'sent' : 'received'}`;
+    messageDiv.dataset.messageId = message.id || message.temp_id;
+    
+    // Add sender info for received messages
+    if (!isSent && message.sender_info) {
+        const senderInfo = document.createElement('div');
+        senderInfo.className = 'sender-info';
+        senderInfo.innerHTML = `
+            <img src="${message.sender_info.profile_picture || 'https://via.placeholder.com/30'}" 
+                 alt="Profile" class="sender-avatar">
+            <span class="sender-name">${message.username || 'Unknown'}</span>
+            ${message.sender_info.is_verified ? '<span class="verified-badge">✓</span>' : ''}
+        `;
+        messageDiv.appendChild(senderInfo);
+    }
+    
+    // Add reply container if message is a reply
+    if (message.reply_to_id) {
+        const replyContainer = document.createElement('div');
+        replyContainer.className = 'reply-container';
+        
+        const replySender = document.createElement('div');
+        replySender.className = 'reply-sender';
+        replySender.textContent = message.reply_to_sender || 'Unknown';
+        
+        const replyText = document.createElement('div');
+        replyText.className = 'reply-text';
+        
+        if (message.reply_to_type === 'image') {
+            replyText.innerHTML = '📷 Photo';
+        } else if (message.reply_to_type === 'audio') {
+            replyText.innerHTML = '🎵 Voice message';
+        } else {
+            replyText.textContent = message.reply_to_message || '';
         }
+        
+        replyContainer.onclick = () => {
+            const originalMessage = document.querySelector(`[data-message-id="${message.reply_to_id}"]`);
+            if (originalMessage) {
+                originalMessage.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                originalMessage.style.backgroundColor = '#f0f2f5';
+                setTimeout(() => {
+                    originalMessage.style.backgroundColor = '';
+                }, 1000);
+            }
+        };
+        
+        replyContainer.appendChild(replySender);
+        replyContainer.appendChild(replyText);
+        messageDiv.appendChild(replyContainer);
+    }
+    
+    let contentElement;
+    
+    if (message.message_type === 'image') {
+        contentElement = document.createElement('img');
+        // Prioritize attachment_url, then file_data, then content
+        const src = message.attachment_url || message.file_data || message.content;
+        if (src && src.startsWith('data:image/')) {
+            contentElement.src = src; // Valid Base64 Data URL
+        } else if (src && src.startsWith('http')) {
+            contentElement.src = src; // Server-provided URL
+        } else {
+            contentElement.src = 'https://via.placeholder.com/200?text=Image+Not+Available';
+            console.warn(`Invalid image source for message ${message.id || message.temp_id}: ${src}`);
+        }
+        contentElement.className = 'file-preview';
+        contentElement.onerror = () => {
+            contentElement.src = 'https://via.placeholder.com/200?text=Image+Not+Available';
+            console.error(`Failed to load image for message ${message.id || message.temp_id}`);
+        };
+    } else if (message.message_type === 'audio') {
+        contentElement = document.createElement('audio');
+        contentElement.controls = true;
+        contentElement.className = 'audio-player';
+        // Prioritize attachment_url, then file_data, then content
+        const src = message.attachment_url || message.file_data || message.content;
+        if (src && src.startsWith('data:audio/')) {
+            contentElement.src = src; // Valid Base64 Data URL
+        } else if (src && src.startsWith('http')) {
+            contentElement.src = src; // Server-provided URL
+        } else {
+            contentElement.src = '';
+            contentElement.innerHTML = '<p>Audio not available</p>';
+            console.warn(`Invalid audio source for message ${message.id || message.temp_id}: ${src}`);
+        }
+        contentElement.onerror = () => {
+            contentElement.innerHTML = '<p>Audio not available</p>';
+            console.error(`Failed to load audio for message ${message.id || message.temp_id}`);
+        };
+    } else {
+        contentElement = document.createElement('div');
+        contentElement.textContent = message.content || message.message || '';
+    }
+    
+    const messageTime = document.createElement('div');
+    messageTime.className = 'message-time';
+    messageTime.textContent = new Date(message.timestamp).toLocaleTimeString();
+    
+    const messageStatus = document.createElement('div');
+    messageStatus.className = 'message-status';
+    messageStatus.textContent = message.status || (isSent ? 'sent' : 'received');
+    
+    const messageProperties = document.createElement('div');
+    messageProperties.className = 'message-properties';
+    messageProperties.textContent = `ID: ${message.id || message.temp_id} | Type: ${message.message_type} | Status: ${message.status}`;
+    
+    const messageFlags = document.createElement('div');
+    messageFlags.className = 'message-flags';
+    if (message.is_edited) messageFlags.textContent += '✏️ ';
+    if (message.is_deleted) messageFlags.textContent += '🗑️ ';
+    if (message.is_forwarded) messageFlags.textContent += '↪️ ';
+    
+    const replyButton = document.createElement('button');
+    replyButton.textContent = 'Reply';
+    replyButton.className = 'message-options';
+    replyButton.onclick = () => setReplyMessage(message);
+    
+    messageDiv.appendChild(contentElement);
+    messageDiv.appendChild(messageTime);
+    messageDiv.appendChild(messageStatus);
+    messageDiv.appendChild(messageProperties);
+    messageDiv.appendChild(messageFlags);
+    messageDiv.appendChild(replyButton);
+    
+    return messageDiv;
+}
     </script>
 </body>
 </html> 
