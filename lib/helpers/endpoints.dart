@@ -1,7 +1,7 @@
 class ApiEndpoints {
-  //static const myIp = "server.cyanase.app";
-  static const myIp = "192.168.213.220:8000";
-  static const String server = "http://$myIp";
+  static const myIp = "server.cyanase.app"; 
+  // static const myIp = "192.168.81.220:8000";
+  static const String server = "https://$myIp";
   static const String checkuser = "$server/api/v1/en/checkUser/user/";
   static const String signup = "$server/api/v1/en/register/user/";
   static const String createGroup = "$server/api/v1/en/register/user/";
@@ -99,7 +99,7 @@ class ApiEndpoints {
   static const String editGroupGoal = "$server/api/v1/en/editgroupgoal/group/";
   static const String addMembers = "$server/api/v1/en/addmembers/group/";
   static const String editGoal = "$server/api/v1/en/edit/goal/";
-  static const String deleteGoal = "$server/api/v1/en/delete/goal/by/id/";
+  static const String deleteGoal = "$server/api/v1/en/delete/goal/";
   static const String deleteGroupGoal = "$server/api/v1/en/delete/group/goal/";
   static const String deleteGroupPic = "$server/api/v1/en/delete/group/pic/";
   static const String changeGroupPic = "$server/api/v1/en/change/group/pic/";

@@ -542,9 +542,9 @@ Future<void> _handleNewMessage(String groupId, Map<String, dynamic> message) asy
             print('🔴 WebSocket error: $error');
             print('🔴 Stack trace: $stackTrace');
             if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Check your internet connection')),
-              );
+              // ScaffoldMessenger.of(context).showSnackBar(
+              //   SnackBar(content: Text('Check your internet connection')),
+              // );
             }
             _attemptReconnect();
           },
@@ -577,12 +577,12 @@ Future<void> _handleNewMessage(String groupId, Map<String, dynamic> message) asy
 
   void _attemptReconnect() {
     if (_reconnectAttempts >= maxReconnectAttempts) {
-      print('🔴 Max reconnection attempts reached');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Connection lost. Please restart the app.')),
-        );
-      }
+      // print('🔴 Max reconnection attempts reached');
+      // // if (mounted) {
+      // //   ScaffoldMessenger.of(context).showSnackBar(
+      // //     const SnackBar(content: Text('Connection lost. Please restart the app.')),
+      // //   );
+      // // }
       return;
     }
 

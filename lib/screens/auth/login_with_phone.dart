@@ -114,7 +114,16 @@ class LoginScreenState extends State<LoginScreen> {
       });
 
       if (loginResponse.containsKey('success') && !loginResponse['success']) {
-        throw Exception(loginResponse['message'] ?? 'Login failed');
+        String errorMessage = loginResponse['message'] ?? 'Login failed';
+        // Convert technical messages to user-friendly ones
+        if (errorMessage.contains('Invalid credentials')) {
+          errorMessage = 'Incorrect phone number or password. Please try again.';
+        } else if (errorMessage.contains('not found')) {
+          errorMessage = 'No account found with this phone number. Please sign up first.';
+        } else if (errorMessage.contains('network')) {
+          errorMessage = 'Unable to connect to the internet. Please check your connection.';
+        }
+        throw Exception(errorMessage);
       }
 
       if (loginResponse.containsKey('token') &&
@@ -268,8 +277,14 @@ class LoginScreenState extends State<LoginScreen> {
         throw Exception('Invalid login response: Missing required fields');
       }
     } catch (e) {
+      print(e.toString().replaceAll('Exception: ', ''));
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
+        SnackBar(
+          content: Text(e.toString().replaceAll('Exception: ', '')),
+          backgroundColor: Colors.red[700],
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(10),
+        ),
       );
     } finally {
       setState(() {

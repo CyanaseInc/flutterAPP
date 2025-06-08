@@ -506,7 +506,7 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
         'attachment_url': message['attachment_url'],
       };
     });
-    print('🔵 [ChatScreen] Reply message set: $_replyingToMessage');
+    print('🔵 [ChatScreen] Reply message set: $_replyingToMessage, type: ${_replyingToMessage?['type']}');
   }
 
   Future<void> _getCurrentUserId() async {
@@ -900,6 +900,10 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
           }
         });
       
+        setState(() {
+          _replyingToMessage = null;
+        });
+      
       } catch (e) {
         print('🔴 [DEBUG] Error in WebSocket send: $e');
         print('🔴 [DEBUG] Stack trace: ${StackTrace.current}');
@@ -1012,8 +1016,9 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
         }
       });
 
-      _replyingToMessage = null;
-      _scrollToBottomIfAtBottom();
+      setState(() {
+        _replyingToMessage = null;
+      });
       widget.onMessageSent?.call();
   
     } catch (e) {
@@ -1124,9 +1129,12 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
         }
       });
 
-      await _loadMessages();
-      _replyingToMessage = null;
-      _scrollToBottomIfAtBottom();
+      setState(() {
+        _replyingToMessage = null;
+      });
+
+      // await _loadMessages(); // Removed as UI updates via stream
+      // _scrollToBottomIfAtBottom(); // Removed as UI updates via stream
       widget.onMessageSent?.call();
      
     } catch (e) {
@@ -1635,7 +1643,7 @@ Future<void> _markMessageAsRead(String messageId) async {
               onSendImageMessage: _sendImageMessage,
               onCancelRecording: _cancelRecording,
               replyToId: _replyingToMessage?['id']?.toString(),
-              replyingToMessage: _replyingToMessage?['message'],
+              replyingToMessage: _replyingToMessage,
               onCancelReply: () {
                 print('🔵 [ChatScreen] Cancelling reply');
                 setState(() => _replyingToMessage = null);

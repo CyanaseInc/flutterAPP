@@ -4,6 +4,7 @@ import 'package:cyanase/helpers/endpoints.dart';
 import 'package:cyanase/helpers/web_db.dart';
 // import 'package:cyanase/helpers/web_socket.dart';
 import 'package:flutter/material.dart' as material;
+import 'package:flutter/material.dart' show Key;
 import 'package:image_picker/image_picker.dart';
 import 'dart:io'; // For handling file paths
 import 'package:cyanase/theme/theme.dart';
@@ -14,6 +15,10 @@ import 'help_page.dart';
 import 'invite.dart';
 
 class SettingsPage extends material.StatefulWidget {
+  final Function(String?)? onProfileUpdate;
+  
+  const SettingsPage({Key? key, this.onProfileUpdate}) : super(key: key);
+
   @override
   _SettingsPageState createState() => _SettingsPageState();
 }
@@ -70,6 +75,8 @@ class _SettingsPageState extends material.State<SettingsPage> {
           setState(() {
             picture = upload['profile_pic'];
           });
+          // Notify parent about the profile update
+          widget.onProfileUpdate?.call(upload['profile_pic']);
         }
       }
     }

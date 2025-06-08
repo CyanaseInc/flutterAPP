@@ -16,7 +16,7 @@ class InputArea extends StatefulWidget {
   final Function(String) onSendImageMessage;
   final Function(String) onSendAudioMessage;
   final String? replyToId;
-  final String? replyingToMessage;
+  final Map<String, dynamic>? replyingToMessage;
   final VoidCallback? onCancelReply;
   final AudioFunctions audioFunctions;
   final bool isAdminOnlyMode;
@@ -150,29 +150,21 @@ class _InputAreaState extends State<InputArea> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Tooltip(
-                          message: widget.replyingToMessage!,
-                          child: Text(
-                            widget.replyingToMessage!.startsWith('/')
-                                ? widget.replyingToMessage!.endsWith('.m4a') ||
-                                        widget.replyingToMessage!
-                                            .endsWith('.mp3')
-                                    ? "Audio"
-                                    : widget.replyingToMessage!
-                                                .endsWith('.jpg') ||
-                                            widget.replyingToMessage!
-                                                .endsWith('.png') ||
-                                            widget.replyingToMessage!
-                                                .endsWith('.jpeg')
-                                        ? "Image"
-                                        : "File"
-                                : _truncateReplyText(widget.replyingToMessage!),
-                            style: const TextStyle(
-                              color: Colors.black54,
-                              fontSize: 14,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                          message: widget.replyingToMessage!['message'],
+                          child: widget.replyingToMessage!['type'] == 'image'
+                              ? const Icon(Icons.image, color: Colors.black54, size: 20)
+                              : widget.replyingToMessage!['type'] == 'audio'
+                                  ? const Icon(Icons.audio_file, color: Colors.black54, size: 20)
+                                  : Text(
+                                      _truncateReplyText(
+                                          widget.replyingToMessage!['message']),
+                                      style: const TextStyle(
+                                        color: Colors.black54,
+                                        fontSize: 14,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                         ),
                       ),
                       IconButton(

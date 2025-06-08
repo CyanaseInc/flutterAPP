@@ -428,7 +428,7 @@ class _WithdrawHelperState extends State<WithdrawHelper> {
                 ),
               ),
               child: const Text(
-                'Subscribe Now',
+                'Pay now',
                 style: TextStyle(
                   fontSize: 16,
                   color: primaryColor,

@@ -29,6 +29,7 @@ class _GoalDetailsScreenState extends State<GoalDetailsScreen> {
   String? _goalPicture;
   String? _tempGoalPicture;
   bool _isSubmitting = false;
+  bool _isDeleting = false;
 
   @override
   void initState() {
@@ -38,7 +39,7 @@ class _GoalDetailsScreenState extends State<GoalDetailsScreen> {
       text: editableGoalData['goal_name'] as String? ?? 'Unnamed Goal',
     );
     _goalPicture = "/${editableGoalData['goal_picture']}" as String?;
-    _tempGoalPicture = ApiEndpoints.server + _goalPicture!;
+    _tempGoalPicture = ApiEndpoints.server +'/'+ _goalPicture!;
   }
 
   @override
@@ -71,10 +72,9 @@ class _GoalDetailsScreenState extends State<GoalDetailsScreen> {
         final imageResponse = await ApiService.EditGoal(token, data, imageFile);
 
         if (imageResponse['success'] == true) {
-          final newImagePath = imageResponse['goal_picture'] as String?;
           setState(() {
-            _goalPicture = newImagePath;
-            editableGoalData['goal_picture'] = newImagePath;
+            _goalPicture = _tempGoalPicture;
+            editableGoalData['goal_picture'] = _tempGoalPicture;
           });
         } else {
           throw Exception(
@@ -109,6 +109,7 @@ class _GoalDetailsScreenState extends State<GoalDetailsScreen> {
   }
 
   Future<void> deleteGoal() async {
+    setState(() => _isDeleting = true);
     try {
       final dbHelper = DatabaseHelper();
       final db = await dbHelper.database;
@@ -117,25 +118,38 @@ class _GoalDetailsScreenState extends State<GoalDetailsScreen> {
       if (userProfile.isEmpty) {
         throw Exception('No user profile found');
       }
-      final token = userProfile.first['token'] as String;
+      final token = userProfile.first['token'] as String?;
+      
+      if (token == null) {
+        throw Exception('No authentication token found');
+      }
 
+      final goalId = editableGoalData['goal_id'];
+      if (goalId == null) {
+        throw Exception('Invalid goal ID');
+      }
+      
       final data = {
-        'goalid': editableGoalData['goal_id'],
+        'goal_id': goalId.toString(),
       };
+      
       final response = await ApiService.DeleteGoal(token, data);
-      if (response['success'] == true) {
+      
+      if (response != null && response['success'] == true) {
         Navigator.pop(context, {'deleted': true});
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Goal deleted')),
         );
+      } else {
+        throw Exception(response?['message'] ?? 'Failed to delete goal');
       }
     } catch (e) {
       print('Error in deleting goal: $e');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to delete goal: $e')),
+        const SnackBar(content: Text('Check your connection')),
       );
     } finally {
-      setState(() => _isSubmitting = false);
+      setState(() => _isDeleting = false);
     }
   }
 
@@ -152,8 +166,9 @@ class _GoalDetailsScreenState extends State<GoalDetailsScreen> {
           ),
           TextButton(
             onPressed: () {
+              Navigator.pop(context); // Close the confirmation dialog
+              setState(() => _isDeleting = true); // Show preloader
               deleteGoal();
-              Navigator.pop(context, editableGoalData);
             },
             style: TextButton.styleFrom(foregroundColor: Colors.red),
             child: const Text('Delete'),
@@ -183,6 +198,8 @@ class _GoalDetailsScreenState extends State<GoalDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
+
+   
     double totalDeposits = 0.0;
     if (editableGoalData['deposit'] != null &&
         (editableGoalData['deposit'] as List).isNotEmpty) {
@@ -506,11 +523,27 @@ class _GoalDetailsScreenState extends State<GoalDetailsScreen> {
               ),
             ),
           ),
-          if (_isSubmitting)
+          if (_isSubmitting || _isDeleting)
             Container(
               color: Colors.black.withOpacity(0.5),
-              child: const Center(
-                child: Loader(),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      _isDeleting ? 'Deleting goal...' : 'Saving changes...',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
         ],

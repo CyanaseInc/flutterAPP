@@ -40,7 +40,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
-  String? picture1;
+  String? _currentPicture;
   late TabController _tabController;
   String _currentTabTitle = 'Cyanase';
   bool _isSearching = false;
@@ -53,6 +53,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
+    _currentPicture = widget.picture;
     _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(_updateTabTitle);
 
@@ -61,6 +62,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       _checkUnreadMessages();
       _startUnreadCheckTimer();
       _setupNotificationHandler();
+      _getProfilePicture();
     });
   }
 
@@ -251,17 +253,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     });
   }
 
-  // void getLocalStorage() async {
-  //   try {
-  //     await WebSharedStorage.init();
-  //     var existingProfile = WebSharedStorage();
-  //     setState(() {
-  //       picture1 =
-  //     });
-  //   } catch (e) {
-  //     print('Error getting local storage: $e');
-  //   }
-  // }
+  void _updateProfilePicture(String? newPicture) {
+    setState(() {
+      _currentPicture = newPicture;
+    });
+  }
 
   void _showPasscodeCreationModal() {
     showModalBottomSheet(
@@ -674,21 +670,23 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Widget _profile() {
-    final picture = widget.picture != null
-        ? ApiEndpoints.server + '/' + widget.picture!
-        : "assets/images/avatar.png";
     return IconButton(
-      onPressed: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => SettingsPage(),
-        ),
-      ),
+      onPressed: () async {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => SettingsPage(
+              onProfileUpdate: _updateProfilePicture,
+            ),
+          ),
+        );
+      },
       padding: const EdgeInsets.all(8.0),
       icon: CircleAvatar(
         radius: 20,
-        backgroundImage: widget.picture != null
-            ? NetworkImage(picture) as ImageProvider
+        backgroundColor: Colors.transparent,
+        backgroundImage: _currentPicture != null && _currentPicture!.isNotEmpty
+            ? NetworkImage(ApiEndpoints.server + '/' + _currentPicture!) as ImageProvider
             : const AssetImage("assets/images/avatar.png"),
       ),
     );
@@ -784,6 +782,22 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       }
     } catch (e) {
       print('Error checking unread messages: $e');
+    }
+  }
+
+  Future<void> _getProfilePicture() async {
+    try {
+      final dbHelper = DatabaseHelper();
+      final db = await dbHelper.database;
+      final userProfile = await db.query('profile', limit: 1);
+      
+      if (userProfile.isNotEmpty && mounted) {
+        setState(() {
+          _currentPicture = userProfile.first['profile_pic'] as String?;
+        });
+      }
+    } catch (e) {
+      print('Error getting profile picture: $e');
     }
   }
 }

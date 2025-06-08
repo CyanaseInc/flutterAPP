@@ -38,11 +38,18 @@ class _TotalDepositsCardState extends State<TotalDepositsCard> {
                 const Text(
                   'Total Deposits',
                   style: TextStyle(
-                    fontSize: 16,
+                    fontSize: 18,
                     color: white,
                   ),
+                  
                 ),
-                const SizedBox(height: 10),
+                 const Text(
+                  'This is the amount invested',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey,
+                  ),
+                 ),
                 Text.rich(
                   TextSpan(
                     children: [
@@ -150,8 +157,15 @@ class _NetworthCardState extends State<NetworthCard> {
                 const Text(
                   'Networth',
                   style: TextStyle(
-                    fontSize: 16,
+                    fontSize: 18,
                     color: primaryTwo,
+                  ),
+                ),
+                const Text(
+                  'This is how much your investment has increased',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey,
                   ),
                 ),
                 const SizedBox(height: 10),

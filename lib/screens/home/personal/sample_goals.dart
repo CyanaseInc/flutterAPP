@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../../theme/theme.dart';
 import 'package:cyanase/helpers/database_helper.dart';
 import 'package:cyanase/helpers/api_helper.dart';
+import 'package:cyanase/helpers/get_currency.dart';
 import 'dart:convert';
 
 class SampleGoals extends StatefulWidget {
@@ -18,6 +19,7 @@ class SampleGoals extends StatefulWidget {
 class _SampleGoalsState extends State<SampleGoals> {
   bool isLoading = true;
   List<Map<String, dynamic>> goals = [];
+  String currency = '';
 
   @override
   void initState() {
@@ -36,10 +38,12 @@ class _SampleGoalsState extends State<SampleGoals> {
       }
 
       final token = userProfile.first['token'] as String;
+      final userCountry = userProfile.first['country'] as String;
+      final currencyCode = CurrencyHelper.getCurrencyCode(userCountry);
 
-      await WebSharedStorage.init();
-      // var existingProfile = WebSharedStorage();
-      // final token = existingProfile.getCommon('token');
+      setState(() {
+        currency = currencyCode;
+      });
 
       // Fetch goals from the API
       final Map<String, dynamic> response =
@@ -94,14 +98,15 @@ class _SampleGoalsState extends State<SampleGoals> {
   }
 
   Widget _buildGoalCard(Map<String, dynamic> goal) {
+
+    
     double progress = 0.0;
     if (goal['deposit'] != null && (goal['deposit'] as List).isNotEmpty) {
       final deposits = (goal['deposit'] as List)
           .map((d) => double.tryParse(d.toString()) ?? 0.0)
           .toList();
       final totalDeposits = deposits.reduce((a, b) => a + b);
-      final goalAmount = (goal['goal_amount'] as num?)?.toDouble() ??
-          1.0; // Avoid division by zero
+      final goalAmount = (goal['goal_amount'] as num?)?.toDouble() ?? 1.0;
       if (goalAmount > 0) {
         progress = totalDeposits / goalAmount;
       }
@@ -110,72 +115,117 @@ class _SampleGoalsState extends State<SampleGoals> {
     return GestureDetector(
       onTap: widget.onGoalTap,
       child: Card(
-        margin: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+        margin: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 16.0),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
         ),
-        elevation: 4,
+        elevation: 2,
         child: Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.all(20.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
                   Container(
-                    width: 50,
-                    height: 50,
+                    width: 60,
+                    height: 60,
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
                       image: DecorationImage(
-                        image: NetworkImage(ApiEndpoints.server +
-                                goal['goal_picture'] as String? ??
-                            ''),
+                        image: NetworkImage(ApiEndpoints.server + '/' + (goal['goal_picture'] as String? ?? '')),
                         fit: BoxFit.cover,
                         onError: (exception, stackTrace) =>
                             const AssetImage('assets/default_goal.jpg'),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 20),
                   Expanded(
-                    child: Text(
-                      goal['goal_name'] as String? ?? 'Unnamed Goal',
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          goal['goal_name'] as String? ?? 'Unnamed Goal',
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Created ${goal['created']?.toString() ?? 'N/A'}',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey[600],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
-              LinearProgressIndicator(
-                value: progress.clamp(0.0, 1.0),
-                backgroundColor: Colors.grey[300],
-                color: primaryTwo,
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Goal Amount',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[700],
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  Text(
+                    '$currency ${(goal['goal_amount'] as num?)?.toStringAsFixed(2) ?? '0.00'}',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: primaryTwo,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 8),
-              Text(
-                'Goal: ${(goal['goal_amount'] as num?)?.toStringAsFixed(2) ?? '0.00'}',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey[700],
+              const SizedBox(height: 12),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: LinearProgressIndicator(
+                  value: progress.clamp(0.0, 1.0),
+                  backgroundColor: Colors.grey[200],
+                  color: primaryTwo,
+                  minHeight: 8,
                 ),
               ),
-              Text(
-                'Period: ${goal['goal_period']?.toString() ?? 'N/A'} years',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey[600],
-                ),
-              ),
-              Text(
-                'Created: ${goal['created']?.toString() ?? 'N/A'}',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey[600],
-                ),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Period',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[700],
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  Text(
+                    '${goal['goal_period']?.toString() ?? 'N/A'} years',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),

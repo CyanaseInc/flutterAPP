@@ -8,6 +8,9 @@ import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:vibration/vibration.dart';
 import 'goal_details.dart'; // Import the new GoalDetailsScreen
 import 'package:intl/intl.dart'; // Import the intl package
+import 'package:cyanase/helpers/get_currency.dart';
+import 'package:cyanase/helpers/database_helper.dart';
+import 'dart:io';
 
 class GoalScreen extends StatefulWidget {
   final List<Map<String, dynamic>> goals;
@@ -25,12 +28,14 @@ class GoalScreen extends StatefulWidget {
 
 class _GoalScreenState extends State<GoalScreen> {
   late List<Map<String, dynamic>> _goals; // Local mutable copy of goals
+  String currency = '';
 
   @override
   void initState() {
     super.initState();
     _goals = List.from(widget.goals); // Initialize with widget.goals
     _initializeNotifications();
+    _fetchUserCurrency();
 
     AwesomeNotifications().setListeners(
       onActionReceivedMethod: (ReceivedAction receivedAction) async {
@@ -76,6 +81,25 @@ class _GoalScreenState extends State<GoalScreen> {
     await AwesomeNotifications().requestPermissionToSendNotifications();
   }
 
+  Future<void> _fetchUserCurrency() async {
+    try {
+      final dbHelper = DatabaseHelper();
+      final db = await dbHelper.database;
+      final userProfile = await db.query('profile', limit: 1);
+
+      if (userProfile.isNotEmpty) {
+        final userCountry = userProfile.first['country'] as String;
+        final currencyCode = CurrencyHelper.getCurrencyCode(userCountry);
+        setState(() {
+         
+          currency = currencyCode;
+        });
+      }
+    } catch (e) {
+      print('Error fetching user currency: $e');
+    }
+  }
+
   void _handleGoalUpdate(Map<String, dynamic>? result, int index) {
     if (result != null) {
       setState(() {
@@ -91,7 +115,23 @@ class _GoalScreenState extends State<GoalScreen> {
   @override
   Widget build(BuildContext context) {
     if (widget.isLoading) {
-      return const Center(child: Loader());
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Loader(),
+            const SizedBox(height: 16),
+            Text(
+              'Loading your goals...',
+              style: TextStyle(
+                fontSize: 16,
+                color: primaryTwo,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      );
     }
 
     if (_goals.isEmpty) {
@@ -175,6 +215,7 @@ class _GoalScreenState extends State<GoalScreen> {
                   final goal = entry.value;
                   return GoalCard(
                     goalData: goal,
+                    currency: currency,
                     onTap: () async {
                       final result = await Navigator.push(
                         context,
@@ -199,10 +240,12 @@ class _GoalScreenState extends State<GoalScreen> {
 class GoalCard extends StatelessWidget {
   final Map<String, dynamic> goalData;
   final VoidCallback? onTap;
+  final String currency;
 
   const GoalCard({
     Key? key,
     required this.goalData,
+    required this.currency,
     this.onTap,
   }) : super(key: key);
 
@@ -355,100 +398,170 @@ class GoalCard extends StatelessWidget {
         goalAmount > 0 ? (totalDeposits / goalAmount).clamp(0.0, 1.0) : 0.0;
     final reminderSet = goalData['reminder_set'] as bool? ?? false;
 
-   final goalPicture = goalData['goal_picture'] != null
-    ? (goalData['goal_picture'].toString().startsWith('http')
-        ? goalData['goal_picture']
-        : "${ApiEndpoints.server}/${goalData['goal_picture']}")
-    : null;
+    final goalPicture = goalData['goal_picture'] != null
+        ? (goalData['goal_picture'].toString().startsWith('http')
+            ? goalData['goal_picture']
+            : "${ApiEndpoints.server}/${goalData['goal_picture']}")
+        : null;
 
-    final hasImage = goalPicture != null && goalPicture.isNotEmpty;
-
+ 
     // Create a NumberFormat instance for formatting numbers with commas
-    final NumberFormat numberFormat = NumberFormat.decimalPattern();
+    final NumberFormat numberFormat = NumberFormat.currency(
+      symbol: '$currency ',
+      decimalDigits: 0,
+      locale: 'en_NG',
+    );
 
-    return GestureDetector(
-      onTap: onTap,
-      child: Card(
-        margin: const EdgeInsets.only(bottom: 16.0),
-        elevation: 4,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      image: DecorationImage(
-                        image: hasImage
-                            ? NetworkImage(goalPicture)
-                            : AssetImage('assets/images/goal.png')
-                                as ImageProvider,
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      goalData['goal_name'] as String? ?? 'Unnamed Goal',
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        child: GestureDetector(
+          onTap: onTap,
+          child: Card(
+            margin: const EdgeInsets.only(bottom: 20.0),
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: primaryTwo.withOpacity(0.1),
+                  width: 1,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
-              LinearProgressIndicator(
-                value: progress,
-                color: primaryTwo,
-                backgroundColor: Colors.grey[200],
-              ),
-              const SizedBox(height: 8),
-              // Display "% completed out of amount" with commas
-              Text(
-                '${(progress * 100).toStringAsFixed(1)}% completed (${numberFormat.format(totalDeposits)} / ${numberFormat.format(goalAmount)})',
-                style: const TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey,
+              child: Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 70,
+                          height: 70,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(14),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.1),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                            image: DecorationImage(
+                              image: NetworkImage(goalPicture),
+                              fit: BoxFit.cover,
+                              onError: (exception, stackTrace) =>
+                                  const AssetImage('assets/images/goal.png'),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      goalData['goal_name'] as String? ?? 'Unnamed Goal',
+                                      style: const TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w600,
+                                        letterSpacing: -0.5,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  Icon(
+                                    Icons.arrow_forward_ios,
+                                    size: 14,
+                                    color: primaryTwo.withOpacity(0.7),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                numberFormat.format(totalDeposits),
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w700,
+                                  color: primaryTwo,
+                                  letterSpacing: -0.5,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: LinearProgressIndicator(
+                        value: progress,
+                        minHeight: 8,
+                        backgroundColor: Colors.grey[200],
+                        valueColor: AlwaysStoppedAnimation<Color>(primaryTwo),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                       
+                        Row(
+                          children: [
+                            ElevatedButton.icon(
+                              onPressed: () => _showDepositBottomSheet(context),
+                              icon: const Icon(Icons.account_balance_wallet, size: 18),
+                              label: const Text('Deposit'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: primaryTwo,
+                                foregroundColor: white,
+                                padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            IconButton(
+                              onPressed: () async {
+                                await _setReminder(context);
+                              },
+                              icon: Icon(
+                                reminderSet
+                                    ? Icons.notifications_active
+                                    : Icons.notifications,
+                                color: reminderSet ? primaryTwo : Colors.grey[400],
+                                size: 20,
+                              ),
+                              style: IconButton.styleFrom(
+                                backgroundColor: Colors.grey[100],
+                                padding: const EdgeInsets.all(5),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  ElevatedButton.icon(
-                    onPressed: () => _showDepositBottomSheet(context),
-                    icon: const Icon(Icons.account_balance_wallet),
-                    label: const Text('Deposit'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: primaryTwo,
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: () async {
-                      await _setReminder(context);
-                    },
-                    icon: Icon(
-                      reminderSet
-                          ? Icons.notifications_active
-                          : Icons.notifications,
-                      color: reminderSet ? primaryTwo : Colors.grey,
-                    ),
-                  ),
-                ],
-              ),
-            ],
+            ),
           ),
         ),
       ),

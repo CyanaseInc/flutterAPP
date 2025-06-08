@@ -245,7 +245,7 @@ class _AddGoalScreenState extends State<AddGoalScreen> {
 
   Widget _buildStep1() {
     return _buildBubbleCard(
-      title: 'What’s your savings goal?',
+      title: "What's your savings goal?",
       content: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -651,16 +651,15 @@ class _AddGoalScreenState extends State<AddGoalScreen> {
       final dbHelper = DatabaseHelper();
       final db = await dbHelper.database;
       final userProfile = await db.query('profile', limit: 1);
-      await WebSharedStorage.init();
-      var existingProfile = WebSharedStorage();
 
-      final token = existingProfile.getCommon('token');
+      if (userProfile.isEmpty) {
+        throw Exception('No user profile found');
+      }
 
-      // if (userProfile.isEmpty) {
-      //   throw Exception('No user profile found');
-      // }
-
-      // final token = userProfile.first['token'] as String;
+      final token = userProfile.first['token'] as String?;
+      if (token == null) {
+        throw Exception('No authentication token found');
+      }
 
       // Save reminder data
       final data = {
@@ -668,7 +667,7 @@ class _AddGoalScreenState extends State<AddGoalScreen> {
         'goal_period': goalPeriodText,
         'goal_amount': goalAmountText,
         'deposit_type': depositType,
-        'reminder_day': reminderDay,
+        'deposit_reminder_day': reminderDay,
         'reminder_time': '${reminderTime.hour}:${reminderTime.minute}',
       };
 

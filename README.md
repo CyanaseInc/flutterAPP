@@ -19,3 +19,28 @@ source venv/bin/activate
  impact fm savings  0776884201, ypa- 
 
 0772123100
+
+
+
+############################################################################################################################################################################################################
+ps aux | grep gunicorn
+
+
+/var/www/html/cyanase.com/venv/bin/gunicorn --access-logfile - --workers 3 --bind unix:/run/gunicorn.sock cyanase_api.wsgi:application
+
+
+see daphine terrminal logs  sudo journalctl -u daphne.service -f
+
+
+restart daphine
+sudo systemctl restart daphne
+
+see live logs for gunicorn
+sudo journalctl -u gunicorn -f
+
+restart guncorn
+sudo systemctl restart gunicorn
+
+
+
+

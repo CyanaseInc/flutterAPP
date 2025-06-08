@@ -109,6 +109,8 @@ class _NumericLoginScreenState extends State<NumericLoginScreen> {
         final isVerified = profile['is_verified'] ?? false;
         final mypasscode = profile['passcode'] as String?;
         // Cast to String? for safety
+
+ print(" i have  a passcde and its  $picture");
         final autoSave = profile['auto_save'] ?? false;
         final goalsAlert = profile['goals_alert'] ?? false;
         setState(() {
