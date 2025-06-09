@@ -9,27 +9,23 @@ jobs:
     runs-on: macos-latest
 
     steps:
-      - uses: actions/checkout@v4  # Upgraded to v4 for latest features
+      - uses: actions/checkout@v4
 
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.32.2'  # Specific stable version to avoid SDK mismatches
+          flutter-version: '3.32.2'
           channel: 'stable'
           architecture: x64
 
-      # 🧹 Clean build artifacts
       - name: Clean build
         run: flutter clean
 
-      # 🛠 Repair Flutter pub cache
       - name: Repair Flutter cache
         run: flutter pub cache repair
 
-      # 📦 Get project dependencies
       - name: Install dependencies
         run: flutter pub get
 
-      # 🔍 Debug pubspec files
       - name: List pubspec files
         run: |
           echo "pubspec.yaml contents:"
@@ -37,21 +33,18 @@ jobs:
           echo "pubspec.lock contents:"
           cat pubspec.lock || echo "No pubspec.lock file found"
 
-      # 🔄 Update CocoaPods repo (iOS-specific)
       - name: Update CocoaPods
         run: pod repo update
         working-directory: ios
 
-      # 🩹 Patch: Fix Xcode bridging header + module interface conflict
-      - name: Disable BUILD_LIBRARY_FOR_DISTRIBUTION to fix Swift compiler error
+      # ✅ FIX: Disable BUILD_LIBRARY_FOR_DISTRIBUTION
+      - name: Patch Xcode project to avoid Swift bridging header issue
         run: |
           sed -i '' 's/BUILD_LIBRARY_FOR_DISTRIBUTION = YES;/BUILD_LIBRARY_FOR_DISTRIBUTION = NO;/g' ios/Runner.xcodeproj/project.pbxproj || true
 
-      # 🚀 Build the iOS release (without code signing)
       - name: Build iOS
         run: flutter build ios --release --no-codesign
 
-      # 📁 Prepare .ipa structure
       - name: Create Payload directory
         run: mkdir Payload
         working-directory: build/ios/iphoneos
@@ -60,12 +53,10 @@ jobs:
         run: mv Runner.app Payload
         working-directory: build/ios/iphoneos
 
-      # 📦 Create .ipa zip file
       - name: Zip IPA
         run: zip -qq -r -9 FlutterIpaExport.ipa Payload
         working-directory: build/ios/iphoneos
 
-      # ☁️ Upload the .ipa to GitHub release
       - name: Upload IPA to release
         uses: svenstaro/upload-release-action@v2
         with:
