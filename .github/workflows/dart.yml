@@ -7,6 +7,7 @@ jobs:
   build-ios:
     name: 🎉 iOS Build
     runs-on: macos-latest
+
     steps:
       - uses: actions/checkout@v3
 
@@ -14,24 +15,39 @@ jobs:
         with:
           channel: 'stable'
           architecture: x64
-      - run: flutter pub get
-      
 
+      # 🧹 Clean build artifacts
+      - name: Clean build
+        run: flutter clean
+
+      # 🛠 Repair Flutter pub cache
+      - name: Repair Flutter cache
+        run: flutter pub cache repair
+
+      # 📦 Get project dependencies
+      - name: Install dependencies
+        run: flutter pub get
+
+      # 🔄 Update CocoaPods repo (iOS-specific)
       - run: pod repo update
         working-directory: ios
 
+      # 🚀 Build the iOS release (without code signing)
       - run: flutter build ios --release --no-codesign
 
+      # 📁 Prepare .ipa structure
       - run: mkdir Payload
         working-directory: build/ios/iphoneos
 
       - run: mv Runner.app/ Payload
         working-directory: build/ios/iphoneos
 
+      # 📦 Create .ipa zip file
       - name: Zip output
         run: zip -qq -r -9 FlutterIpaExport.ipa Payload
         working-directory: build/ios/iphoneos
 
+      # ☁️ Upload the .ipa to GitHub release
       - name: Upload binaries to release
         uses: svenstaro/upload-release-action@v2
         with:
