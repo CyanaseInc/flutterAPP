@@ -28,6 +28,14 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      # 🔍 Debug pubspec files
+      - name: List pubspec files
+        run: |
+          echo "pubspec.yaml contents:"
+          cat pubspec.yaml
+          echo "pubspec.lock contents:"
+          cat pubspec.lock || echo "No pubspec.lock file found"
+
       # 🔄 Update CocoaPods repo (iOS-specific)
       - run: pod repo update
         working-directory: ios
