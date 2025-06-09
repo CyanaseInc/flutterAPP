@@ -1,119 +1,71 @@
-name: cyanase
-description: An investment app.
-version: 1.0.0+1
+name: Cyanase-iOS-ipa-build
 
-environment:
-  sdk: ">=3.6.0 <4.0.0"
+on:
+  workflow_dispatch:
 
-dependencies:
-  flutter:
-    sdk: flutter
+jobs:
+  build-ios:
+    name: 🎉 iOS Build
+    runs-on: macos-latest
 
-  # Core UI and UX
-  cupertino_icons: ^1.0.8
-  flutter_svg: ^2.0.0
-  provider: ^6.0.5
-  animate_do: ^3.0.2
-  lottie: ^3.1.2
-  percent_indicator: ^4.2.3
-  photo_view: ^0.14.0
- 
+    steps:
+      - uses: actions/checkout@v4  # Upgraded to v4 for latest features
 
-  # Phone, SIM, and Contacts
-  intl_phone_field: ^3.0.1
-  flutter_libphonenumber: ^2.5.1
-  country_picker: ^2.0.18
-  sim_card_info: ^0.0.1
-  flutter_contacts: ^1.1.9+2
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.22.2'  # Specific stable version to avoid SDK mismatches
+          channel: 'stable'
+          architecture: x64
 
-  # Notifications and Device Features
-  awesome_notifications: ^0.10.1
-  vibration: ^2.0.1
-  permission_handler: ^11.3.1
-  connectivity_plus: ^6.1.2
+      # 🧹 Clean build artifacts
+      - name: Clean build
+        run: flutter clean
 
-  # Media and File Handling
-  image_picker: ^1.1.2
-  image_cropper: ^8.1.0
-  video_player: ^2.5.1
-  file_picker: ^10.1.9
-  share_plus: ^10.1.4
-  clipboard: ^0.1.3
-  cached_network_image: ^3.2.3
+      # 🛠 Repair Flutter pub cache
+      - name: Repair Flutter cache
+        run: flutter pub cache repair
 
-  # Charts and Gauges
-  fl_chart: ^0.70.2
-  syncfusion_flutter_gauges: ^28.1.38
+      # 📦 Get project dependencies
+      - name: Install dependencies
+        run: flutter pub get
 
-  # Data and State
-  http: ^1.2.2
-  sqflite: ^2.2.1
-  path: ^1.8.3
-  path_provider: ^2.1.5
-  shared_preferences: ^2.5.2
-  localstorage: ^5.0.0
-  rxdart: ^0.28.0
-  logging: ^1.3.0
-  crypto: ^3.0.2
-  encrypt: ^5.0.0
-  http_parser: ^4.1.2
-  flutter_blurhash: ^0.9.1
+      # 🔍 Debug pubspec files
+      - name: List pubspec files
+        run: |
+          echo "pubspec.yaml contents:"
+          cat pubspec.yaml
+          echo "pubspec.lock contents:"
+          cat pubspec.lock || echo "No pubspec.lock file found"
 
-  # Real-time and Deep Linking
-  web_socket_channel: ^2.4.0
-  app_links: ^6.4.0
-  url_launcher: ^6.3.1
+      # 🔄 Update CocoaPods repo (iOS-specific)
+      - name: Update CocoaPods
+        run: pod repo update
+        working-directory: ios
 
-  # Voice and Audio
-  audioplayers: ^6.1.0
-  record: ^4.4.0
+      # 🚀 Build the iOS release (without code signing)
+      - name: Build iOS
+        run: flutter build ios --release --no-codesign
 
-  # QR and Emoji
-  qr_flutter: ^4.1.0
-  emoji_picker_flutter: ^4.3.0
+      # 📁 Prepare .ipa structure
+      - name: Create Payload directory
+        run: mkdir Payload
+        working-directory: build/ios/iphoneos
 
-  # OTP
-  flutter_verification_code_field: ^1.0.0
+      - name: Move Runner.app to Payload
+        run: mv Runner.app Payload
+        working-directory: build/ios/iphoneos
 
-  # Web support
-  web: ^1.1.1
-  flutter_local_notifications: ^19.2.1
-  socket_io_client: ^3.1.2
-  
+      # 📦 Create .ipa zip file
+      - name: Zip IPA
+        run: zip -qq -r -9 FlutterIpaExport.ipa Payload
+        working-directory: build/ios/iphoneos
 
-dev_dependencies:
-  flutter_test:
-    sdk: flutter
-  flutter_lints: ^2.0.0
-
-flutter:
-  uses-material-design: true
-
-  assets:
-    - assets/images/logo.png
-    - assets/images/deposit.png
-    - assets/images/avatar.png
-    - assets/images/vian.jpg
-    - assets/images/white.png
-    - assets/images/group.png
-    - assets/images/done.png
-    - assets/images/web.png
-    - assets/images/goal.png
-    - assets/icons/person.svg
-    - assets/icons/groups.svg
-    - assets/icons/goal-icon.svg
-    - assets/images/back.svg
-    - assets/animations/empty.json
-    - assets/animations/group.json
-
-  fonts:
-    - family: Geist
-      fonts:
-        - asset: assets/fonts/Geist-VariableFont_wght.ttf
-    - family: Montserrat
-      fonts:
-        - asset: assets/fonts/Montserrat-Regular.ttf
-        - asset: assets/fonts/Montserrat-Bold.ttf
-          weight: 700
-        - asset: assets/fonts/Montserrat-Italic.ttf
-          style: italic
+      # ☁️ Upload the .ipa to GitHub release
+      - name: Upload IPA to release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: build/ios/iphoneos/FlutterIpaExport.ipa
+          tag: v1.0
+          overwrite: true
+          body: "This is first release"
