@@ -9,10 +9,11 @@ jobs:
     runs-on: macos-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4  # Upgraded to v4 for latest features
 
       - uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.22.2'  # Specific stable version to avoid SDK mismatches
           channel: 'stable'
           architecture: x64
 
@@ -37,26 +38,30 @@ jobs:
           cat pubspec.lock || echo "No pubspec.lock file found"
 
       # 🔄 Update CocoaPods repo (iOS-specific)
-      - run: pod repo update
+      - name: Update CocoaPods
+        run: pod repo update
         working-directory: ios
 
       # 🚀 Build the iOS release (without code signing)
-      - run: flutter build ios --release --no-codesign
+      - name: Build iOS
+        run: flutter build ios --release --no-codesign
 
       # 📁 Prepare .ipa structure
-      - run: mkdir Payload
+      - name: Create Payload directory
+        run: mkdir Payload
         working-directory: build/ios/iphoneos
 
-      - run: mv Runner.app/ Payload
+      - name: Move Runner.app to Payload
+        run: mv Runner.app Payload
         working-directory: build/ios/iphoneos
 
       # 📦 Create .ipa zip file
-      - name: Zip output
+      - name: Zip IPA
         run: zip -qq -r -9 FlutterIpaExport.ipa Payload
         working-directory: build/ios/iphoneos
 
       # ☁️ Upload the .ipa to GitHub release
-      - name: Upload binaries to release
+      - name: Upload IPA to release
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
