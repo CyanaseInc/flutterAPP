@@ -42,6 +42,11 @@ jobs:
         run: pod repo update
         working-directory: ios
 
+      # 🩹 Patch: Fix Xcode bridging header + module interface conflict
+      - name: Disable BUILD_LIBRARY_FOR_DISTRIBUTION to fix Swift compiler error
+        run: |
+          sed -i '' 's/BUILD_LIBRARY_FOR_DISTRIBUTION = YES;/BUILD_LIBRARY_FOR_DISTRIBUTION = NO;/g' ios/Runner.xcodeproj/project.pbxproj || true
+
       # 🚀 Build the iOS release (without code signing)
       - name: Build iOS
         run: flutter build ios --release --no-codesign
