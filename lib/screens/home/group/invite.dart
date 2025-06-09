@@ -40,7 +40,7 @@ class _InviteScreenState extends State<InviteScreen> {
   }
 
   String _generateServerLink() {
-    return "${ApiEndpoints.server}/invite/${widget.inviteCode}";
+    return "${'https:cyanase.com'}/join-group/${widget.inviteCode}";
   }
 
   void _handleResetLink() {
