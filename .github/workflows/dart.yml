@@ -13,7 +13,7 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.22.2'  # Specific stable version to avoid SDK mismatches
+          flutter-version: '3.32.2'  # Specific stable version to avoid SDK mismatches
           channel: 'stable'
           architecture: x64
 
