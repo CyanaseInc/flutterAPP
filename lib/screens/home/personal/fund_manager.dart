@@ -3,7 +3,7 @@ import 'package:cyanase/helpers/web_db.dart';
 import 'package:flutter/material.dart';
 import 'package:cyanase/helpers/database_helper.dart';
 import 'package:cyanase/helpers/api_helper.dart';
-import 'package:localstorage/localstorage.dart';
+
 import '../../../theme/theme.dart';
 import '../componets/investment_deposit.dart';
 
@@ -149,7 +149,7 @@ class _FundManagerSliderState extends State<FundManagerSlider> {
                     borderRadius: BorderRadius.circular(12),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.grey.withValues(alpha: 0.3),
+                          color: Colors.grey.withOpacity(0.3),,
                         spreadRadius: 2,
                         blurRadius: 5,
                         offset: const Offset(0, 3),
@@ -203,7 +203,8 @@ class _FundManagerSliderState extends State<FundManagerSlider> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: primaryColor.withValues(alpha: 0.1),
+                          color: primaryColor.withOpacity(0.1),
+
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
