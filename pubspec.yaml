@@ -76,7 +76,6 @@ dependencies:
   flutter_verification_code_field: ^1.0.0
 
   # Web support
-  webdev: ^3.7.1
   web: ^1.1.1
   flutter_local_notifications: ^19.2.1
   socket_io_client: ^3.1.2
