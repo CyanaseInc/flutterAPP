@@ -216,7 +216,7 @@ class NotificationService {
         category: AndroidNotificationCategory.message,
         visibility: NotificationVisibility.public,
         color: Color(0xFF2196F3),
-        icon: '@mipmap/ic_launcher',
+        icon: '@mipmap/ic_stat_ic_launcher_foreground',
         largeIcon: DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
       );
 
@@ -312,7 +312,7 @@ class NotificationService {
         category: AndroidNotificationCategory.message,
         visibility: NotificationVisibility.public,
         color: Color(0xFF2196F3),
-        icon: '@mipmap/ic_launcher',
+        icon: '@mipmap/ic_stat_ic_launcher_foreground',
       );
 
       final iosDetails = DarwinNotificationDetails(
