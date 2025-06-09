@@ -740,22 +740,6 @@ class DatabaseHelper {
       where: 'id = ?',
       whereArgs: [messageId],
     );
-    
-    // Get the group ID for the message
-    final message = await db.query(
-      'messages',
-      where: 'id = ?',
-      whereArgs: [messageId],
-    );
-    
-    if (message.isNotEmpty) {
-      final groupId = message.first['group_id'] as int;
-      // Get updated messages for the group
-      final messages = await getMessages(groupId: groupId);
-      // Broadcast updated messages
-      _messageStreamController.add({groupId: messages});
-    }
-    
     _notifyMessageUpdate();
     _notifyUnreadCountUpdate();
   }

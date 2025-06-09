@@ -1,4 +1,3 @@
-
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/material.dart';
 import 'dart:convert';
@@ -217,9 +216,8 @@ class NotificationService {
         category: AndroidNotificationCategory.message,
         visibility: NotificationVisibility.public,
         color: Color(0xFF2196F3),
-        icon: '@mipmap/ic_launcher_foreground',
-        largeIcon: DrawableResourceAndroidBitmap('@mipmap/ic_launcher_foreground'),
-
+        icon: '@mipmap/ic_launcher',
+        largeIcon: DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
       );
 
       final iosDetails = DarwinNotificationDetails(
@@ -309,12 +307,12 @@ class NotificationService {
         styleInformation: BigTextStyleInformation(''),
         largeIcon: (largeIcon != null && !largeIcon.startsWith('http'))
             ? ByteArrayAndroidBitmap.fromBase64String(largeIcon)
-            : DrawableResourceAndroidBitmap('@mipmap/ic_launcher_foreground'),
+            : DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
         fullScreenIntent: true,
         category: AndroidNotificationCategory.message,
         visibility: NotificationVisibility.public,
         color: Color(0xFF2196F3),
-        icon: '@mipmap/ic_launcher_foreground',
+        icon: '@mipmap/ic_launcher',
       );
 
       final iosDetails = DarwinNotificationDetails(
