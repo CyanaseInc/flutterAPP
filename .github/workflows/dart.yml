@@ -58,12 +58,7 @@ jobs:
           XCODE_DERIVED_DATA_PATH: ${{ github.workspace }}/build/ios_derived
           SYMROOT: ${{ github.workspace }}/build/ios_derived
           DERIVED_DATA_PATH: ${{ github.workspace }}/build/ios_derived
-        run: |
-          flutter build ipa \
-            --release \
-            --no-codesign \
-            --verbose \
-            --dart-define=CI_BUILD=true
+        run: flutter build ipa --release --no-codesign --verbose --dart-define=CI_BUILD=true
 
       - name: 🔍 Debug: List generated IPA files
         run: ls -l build/ios/ipa || echo "No IPA generated"
