@@ -10,33 +10,67 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.0'
+          bundler-cache: true
+
       - uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
           architecture: x64
-      - run: flutter pub get
-      
+          flutter-version: '3.24.0'
 
-      - run: pod repo update
-        working-directory: ios
+      - name: Install CocoaPods
+        run: |
+          sudo gem install cocoapods
+          pod setup
 
-      - run: flutter build ios --release --no-codesign
+      - name: Clean build
+        run: |
+          flutter clean
+          cd ios
+          rm -rf Pods/
+          rm -rf .symlinks/
+          rm -rf Flutter/Flutter.framework
+          rm -rf Flutter/Flutter.podspec
+          cd ..
 
-      - run: mkdir Payload
-        working-directory: build/ios/iphoneos
+      - name: Get dependencies
+        run: flutter pub get
 
-      - run: mv Runner.app/ Payload
-        working-directory: build/ios/iphoneos
+      - name: Setup iOS build
+        run: |
+          cd ios
+          pod deintegrate
+          pod cache clean --all
+          pod install
+          cd ..
 
-      - name: Zip output
-        run: zip -qq -r -9 FlutterIpaExport.ipa Payload
-        working-directory: build/ios/iphoneos
+      - name: Build iOS
+        run: |
+          flutter build ios --release --no-codesign
+        env:
+          FLUTTER_BUILD_NUMBER: ${{ github.run_number }}
+          FLUTTER_BUILD_NAME: "1.0.0"
 
-      - name: Upload binaries to release
+      - name: Create IPA
+        run: |
+          cd build/ios/iphoneos
+          mkdir -p Payload
+          mv Runner.app Payload/
+          zip -qq -r -9 FlutterIpaExport.ipa Payload
+          cd ../../..
+
+      - name: Upload IPA
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: build/ios/iphoneos/FlutterIpaExport.ipa
-          tag: v1.0
+          tag: v1.0.${{ github.run_number }}
           overwrite: true
-          body: "This is first release"
+          body: |
+            iOS Build #${{ github.run_number }}
+            - Build Date: ${{ github.event.repository.updated_at }}
+            - Commit: ${{ github.sha }}
