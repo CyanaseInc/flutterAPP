@@ -118,6 +118,7 @@ class _GoalDetailsScreenState extends State<GoalDetailsScreen> {
       if (userProfile.isEmpty) {
         throw Exception('No user profile found');
       }
+      
       final token = userProfile.first['token'] as String?;
       
       if (token == null) {
