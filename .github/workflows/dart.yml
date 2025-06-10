@@ -9,17 +9,21 @@ jobs:
     runs-on: macos-latest
 
     steps:
-      - uses: actions/checkout@v4  # Upgraded to v4 for latest features
+      - uses: actions/checkout@v4
 
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.22.2'  # Specific stable version to avoid SDK mismatches
+          flutter-version: '3.24.0'  # Latest stable version as of June 2025
           channel: 'stable'
           architecture: x64
 
       # 🧹 Clean build artifacts
       - name: Clean build
         run: flutter clean
+
+      # 🛠 Clear pub cache
+      - name: Clear pub cache
+        run: rm -rf ~/Library/Caches/com.dartlang.pub
 
       # 🛠 Repair Flutter pub cache
       - name: Repair Flutter cache
@@ -37,10 +41,26 @@ jobs:
           echo "pubspec.lock contents:"
           cat pubspec.lock || echo "No pubspec.lock file found"
 
-      # 🔄 Update CocoaPods repo (iOS-specific)
-      - name: Update CocoaPods
-        run: pod repo update
+      # 🔄 Update and reinstall CocoaPods
+      - name: Update and Install CocoaPods
+        run: |
+          pod repo update
+          pod deintegrate
+          pod install
         working-directory: ios
+
+      # ✅ FIX: Remove bridging header reference
+      - name: Remove bridging header reference
+        run: |
+          sed -i '' '/SWIFT_OBJC_BRIDGING_HEADER/d' ios/Runner.xcodeproj/project.pbxproj || true
+          if [ -f ios/Runner/Runner-Bridging-Header.h ]; then
+            rm ios/Runner/Runner-Bridging-Header.h
+          fi
+
+      # ✅ FIX: Disable BUILD_LIBRARY_FOR_DISTRIBUTION
+      - name: Patch Xcode project to avoid Swift bridging header issue
+        run: |
+          sed -i '' 's/BUILD_LIBRARY_FOR_DISTRIBUTION = YES;/BUILD_LIBRARY_FOR_DISTRIBUTION = NO;/g' ios/Runner.xcodeproj/project.pbxproj || true
 
       # 🚀 Build the iOS release (without code signing)
       - name: Build iOS
