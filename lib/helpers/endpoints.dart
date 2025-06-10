@@ -1,7 +1,7 @@
 class ApiEndpoints {
-  // static const myIp = "server.cyanase.app"; 
-   static const myIp = "192.168.124.220:8000";
-  static const String server = "http://$myIp";
+  static const myIp = "server.cyanase.app"; 
+  //  static const myIp = "192.168.124.220:8000";
+  static const String server = "https://$myIp";
   static const String checkuser = "$server/api/v1/en/checkUser/user/";
   static const String signup = "$server/api/v1/en/register/user/";
   static const String createGroup = "$server/api/v1/en/register/user/";
