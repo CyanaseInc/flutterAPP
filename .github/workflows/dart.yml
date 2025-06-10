@@ -1,67 +1,30 @@
-name: cyanase_ipa
+- name: Clean DerivedData
+  run: rm -rf ~/Library/Developer/Xcode/DerivedData
 
-on:
-  workflow_dispatch:
+- name: Set permissions for DerivedData
+  run: sudo chmod -R 777 ~/Library/Developer/Xcode/DerivedData
 
-jobs:
-  build-ios:
-    name: 🚀 Build iOS Test IPA (No Signing)
-    runs-on: macos-14
+- name: 🧹 Clean and Get Packages
+  run: |
+    flutter clean
+    flutter pub get
 
-    steps:
-      - name: 🛎️ Checkout Code
-        uses: actions/checkout@v3
+- name: 🍎 Install CocoaPods
+  run: |
+    cd ios
+    pod deintegrate
+    pod install
+    cd ..
 
-      - name: 🔧 Set up Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: '3.0'
-          bundler-cache: true
+- name: ❌ Disable Code Signing & Bitcode
+  run: |
+    cd ios
+    sed -i '' 's/CODE_SIGN_STYLE = .*/CODE_SIGN_STYLE = Manual;/' Runner.xcodeproj/project.pbxproj
+    sed -i '' 's/CODE_SIGN_IDENTITY = .*/CODE_SIGN_IDENTITY = "";/' Runner.xcodeproj/project.pbxproj
+    sed -i '' 's/DEVELOPMENT_TEAM = .*/DEVELOPMENT_TEAM = "";/' Runner.xcodeproj/project.pbxproj
+    sed -i '' 's/PROVISIONING_PROFILE_SPECIFIER = .*/PROVISIONING_PROFILE_SPECIFIER = "";/' Runner.xcodeproj/project.pbxproj
+    sed -i '' 's/ENABLE_BITCODE = .*/ENABLE_BITCODE = NO;/' Runner.xcodeproj/project.pbxproj || echo "No ENABLE_BITCODE to update"
+    cd ..
 
-      - name: 💙 Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.32.2'
-          channel: stable
-          architecture: x64
-
-      - name: 🧹 Clean and Get Packages
-        run: |
-          flutter clean
-          flutter pub get
-
-      - name: 🍎 Install CocoaPods
-        run: |
-          cd ios
-          pod deintegrate
-          pod install
-          cd ..
-
-      - name: ❌ Disable Code Signing & Bitcode
-        run: |
-          cd ios
-          sed -i '' 's/CODE_SIGN_STYLE = .*/CODE_SIGN_STYLE = Manual;/' Runner.xcodeproj/project.pbxproj
-          sed -i '' 's/CODE_SIGN_IDENTITY = .*/CODE_SIGN_IDENTITY = "";/' Runner.xcodeproj/project.pbxproj
-          sed -i '' 's/DEVELOPMENT_TEAM = .*/DEVELOPMENT_TEAM = "";/' Runner.xcodeproj/project.pbxproj
-          sed -i '' 's/PROVISIONING_PROFILE_SPECIFIER = .*/PROVISIONING_PROFILE_SPECIFIER = "";/' Runner.xcodeproj/project.pbxproj
-          sed -i '' '/ENABLE_BITCODE =/d' Runner.xcodeproj/project.pbxproj
-          cd ..
-
-      - name: 🔓 Set Permissions
-        run: |
-          sudo chown -R $(whoami) .
-          sudo chmod -R 777 .
-
-      - name: 🛠 Set Writable Derived Data Path
-        run: |
-          mkdir -p ${{ github.workspace }}/build/ios_derived
-          echo "XCODE_DERIVED_DATA_PATH=${{ github.workspace }}/build/ios_derived" >> $GITHUB_ENV
-
-      - name: 📦 Build Unsigned IPA
-        run: flutter build ipa --release --no-codesign --verbose
-
-      - name: 📤 Upload IPA Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: cyanase_ios_ipa_unsigned
-          path: build/ios/ipa
+- name: Build Unsigned IPA
+  run: flutter build ipa --release --no-codesign --verbose
