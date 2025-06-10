@@ -72,7 +72,7 @@ dependencies:
   emoji_picker_flutter: ^4.3.0
 
   # OTP
-  flutter_verification_code_field: ^1.0.0
+  flutter_verification_code_field: ^1.2.2
 
   # Web support
   web: ^1.1.1
