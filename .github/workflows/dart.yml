@@ -68,8 +68,12 @@ jobs:
       # Set permissions for build and ios directories after pod install
       - name: Set permissions for build and ios directories
         run: |
-          sudo chown -R $(whoami) build ios
-          sudo chmod -R 777 build ios
+          if [ -d "build" ]; then
+            sudo chown -R $(whoami) build
+            sudo chmod -R 777 build
+          fi
+          sudo chown -R $(whoami) ios
+          sudo chmod -R 777 ios
 
       # Fix Bitcode setting for iOS (avoid CocoaPods ENABLE_BITCODE conflict)
       - name: Disable Bitcode for iOS
