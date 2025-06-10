@@ -40,6 +40,12 @@ jobs:
             exit 1
           fi
 
+      - name: 🪲 Upload project.pbxproj for debugging
+        uses: actions/upload-artifact@v4
+        with:
+          name: runner-project-pbxproj
+          path: ios/Runner.xcodeproj/project.pbxproj
+
       - name: ✅ Validate Xcode Project
         run: xcodebuild -project ios/Runner.xcodeproj -list
 
