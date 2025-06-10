@@ -6,27 +6,33 @@ on:
 jobs:
   build-ios:
     name: 🎉 iOS Build
-    runs-on: macos-14 # Use macos-14 to avoid potential sandbox issues
+    runs-on: macos-14
+
     steps:
+      # Checkout the code
       - uses: actions/checkout@v3
 
+      # Set up Ruby for CocoaPods
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.0'
           bundler-cache: true
 
+      # Set up Flutter
       - uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
           architecture: x64
           flutter-version: '3.32.2'
 
+      # Install CocoaPods
       - name: Install CocoaPods
         run: |
           sudo gem install cocoapods
           pod setup
 
+      # Clean previous build artifacts
       - name: Clean build
         run: |
           flutter clean
@@ -38,12 +44,12 @@ jobs:
           rm -rf Flutter/Flutter.podspec
           cd ..
 
+      # Get Flutter dependencies
       - name: Get dependencies
         run: |
           flutter pub get
-          flutter pub outdated
-          flutter pub upgrade --major-versions
 
+      # Pod cleanup and fresh install
       - name: Setup iOS build
         run: |
           cd ios
@@ -52,19 +58,37 @@ jobs:
           pod install
           cd ..
 
+      # Set iOS deployment target to 12.0
       - name: Set Xcode deployment target
         run: |
           cd ios
           sed -i '' 's/IPHONEOS_DEPLOYMENT_TARGET = .*/IPHONEOS_DEPLOYMENT_TARGET = 12.0;/' Runner.xcodeproj/project.pbxproj
           cd ..
 
-      # ======= Permission step moved before build =======
-      - name: Set permissions for build directory
+      # Set permissions for build and ios directories after pod install
+      - name: Set permissions for build and ios directories
         run: |
-          sudo mkdir -p build
-          sudo chown -R $(whoami) build
-          sudo chmod -R 777 build
+          sudo chown -R $(whoami) build ios
+          sudo chmod -R 777 build ios
 
+      # Fix Bitcode setting for iOS (avoid CocoaPods ENABLE_BITCODE conflict)
+      - name: Disable Bitcode for iOS
+        run: |
+          cd ios
+          plutil -replace ENABLE_BITCODE -bool NO Runner.xcodeproj/project.pbxproj || true
+          sed -i '' '/ENABLE_BITCODE =/d' Runner.xcodeproj/project.pbxproj
+          cd ..
+
+      # Disable code signing for CI
+      - name: Disable code signing for CI
+        run: |
+          cd ios
+          sed -i '' 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/' Runner.xcodeproj/project.pbxproj || true
+          sed -i '' 's/CODE_SIGN_IDENTITY = .*;/CODE_SIGN_IDENTITY = "";/g' Runner.xcodeproj/project.pbxproj || true
+          sed -i '' 's/DEVELOPMENT_TEAM = .*;/DEVELOPMENT_TEAM = "";/g' Runner.xcodeproj/project.pbxproj || true
+          cd ..
+
+      # Build iOS release (no code signing)
       - name: Build iOS
         run: |
           flutter build ios --release --no-codesign --verbose
@@ -73,12 +97,14 @@ jobs:
           FLUTTER_BUILD_NAME: "1.0.0"
           FLUTTER_FORCE_XCODE_WORKSPACE: "true"
 
+      # Debug permissions (optional, for troubleshooting)
       - name: Debug permissions
         run: |
           ls -la build/ios
           ls -la build/ios/Debug-iphoneos || echo "Debug-iphoneos not found"
           ls -la build/ios/Release-iphoneos || echo "Release-iphoneos not found"
 
+      # Create IPA
       - name: Create IPA
         run: |
           cd build/ios/iphoneos
@@ -87,6 +113,7 @@ jobs:
           zip -qq -r -9 FlutterIpaExport.ipa Payload
           cd ../../..
 
+      # Upload IPA as a release asset
       - name: Upload IPA
         uses: svenstaro/upload-release-action@v2
         with:
