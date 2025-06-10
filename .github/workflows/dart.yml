@@ -20,7 +20,7 @@ jobs:
         with:
           channel: 'stable'
           architecture: x64
-          flutter-version: '3.19.0'
+          flutter-version: '3.24.0'
 
       - name: Install CocoaPods
         run: |
