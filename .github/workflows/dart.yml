@@ -6,7 +6,7 @@ on:
 jobs:
   build-ios:
     name: 🎉 iOS Build
-    runs-on: macos-latest
+    runs-on: macos-14 # Use macos-14 to avoid potential sandbox issues
     steps:
       - uses: actions/checkout@v3
 
@@ -30,6 +30,7 @@ jobs:
       - name: Clean build
         run: |
           flutter clean
+          rm -rf build
           cd ios
           rm -rf Pods/
           rm -rf .symlinks/
@@ -51,13 +52,25 @@ jobs:
           pod install
           cd ..
 
+      - name: Set Xcode deployment target
+        run: |
+          cd ios
+          sed -i '' 's/IPHONEOS_DEPLOYMENT_TARGET = .*/IPHONEOS_DEPLOYMENT_TARGET = 12.0;/' Runner.xcodeproj/project.pbxproj
+          cd ..
+
       - name: Build iOS
         run: |
-          flutter build ios --release --no-codesign
+          flutter build ios --release --no-codesign --verbose
         env:
           FLUTTER_BUILD_NUMBER: ${{ github.run_number }}
           FLUTTER_BUILD_NAME: "1.0.0"
           FLUTTER_FORCE_XCODE_WORKSPACE: "true"
+
+      - name: Debug permissions
+        run: |
+          ls -la build/ios
+          ls -la build/ios/Debug-iphoneos || echo "Debug-iphoneos not found"
+          ls -la build/ios/Release-iphoneos || echo "Release-iphoneos not found"
 
       - name: Set permissions
         run: |
