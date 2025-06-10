@@ -2,8 +2,8 @@ import 'dart:math';
 import 'package:cyanase/helpers/loader.dart';
 import 'package:flutter/material.dart';
 import 'package:cyanase/helpers/api_helper.dart';
+import 'package:pin_code_fields/pin_code_fields.dart';
 import '../../theme/theme.dart';
-import 'package:flutter_verification_code_field/flutter_verification_code_field.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   @override
@@ -15,26 +15,22 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   int _currentPage = 0;
 
   final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _verificationCodeController =
-      TextEditingController();
+  final TextEditingController _verificationCodeController = TextEditingController();
   final TextEditingController _newPasswordController = TextEditingController();
-  final TextEditingController _confirmPasswordController =
-      TextEditingController();
+  final TextEditingController _confirmPasswordController = TextEditingController();
 
   bool _isEmailValid = false;
-  bool _isLoading = false; // To show/hide the preloader
-  bool _obscureNewPassword = true; // To toggle new password visibility
-  bool _obscureConfirmPassword = true; // To toggle confirm password visibility
-  String _verificationCode = ''; // Store the generated verification code
+  bool _isLoading = false;
+  bool _obscureNewPassword = true;
+  bool _obscureConfirmPassword = true;
+  String _verificationCode = '';
 
-  // Generate a 6-digit verification code
   String _generateVerificationCode() {
     var rnd = Random();
-    var code = rnd.nextInt(900000) + 100000; // Generates a 6-digit number
+    var code = rnd.nextInt(900000) + 100000;
     return code.toString();
   }
 
-  // Validate email and send verification code
   Future<void> _sendVerificationCode() async {
     final email = _emailController.text.trim();
     final isValid = RegExp(r"^[a-zA-Z0-9._%-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}")
@@ -46,28 +42,24 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
     if (isValid) {
       setState(() {
-        _isLoading = true; // Show preloader
+        _isLoading = true;
       });
 
-      _verificationCode =
-          _generateVerificationCode(); // Generate and store the code
+      _verificationCode = _generateVerificationCode();
 
       final userData = {
         'email': email,
-        'code': _verificationCode, // Send the code to the backend
+        'code': _verificationCode,
       };
 
       try {
         final response = await ApiService.CheckResetPassword(userData);
-        print(response['success']);
         if (response['success'] == true) {
-          // Code sent successfully, navigate to the next screen
           _nextPage();
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(
-                  'Failed to send verification code: ${response['message']}'),
+              content: Text('Failed to send verification code: ${response['message']}'),
               backgroundColor: Colors.red,
             ),
           );
@@ -81,18 +73,16 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         );
       } finally {
         setState(() {
-          _isLoading = false; // Hide preloader
+          _isLoading = false;
         });
       }
     }
   }
 
-  // Navigate to the next page or validate the verification code
   void _nextPage() {
     if (_isCurrentSlideValid()) {
       if (_currentPage < 2) {
         if (_currentPage == 1) {
-          // Check if the entered code matches the generated code
           if (_verificationCodeController.text.trim() == _verificationCode) {
             _pageController.nextPage(
               duration: const Duration(milliseconds: 300),
@@ -125,7 +115,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     }
   }
 
-  // Check if the current slide's input is valid
   bool _isCurrentSlideValid() {
     switch (_currentPage) {
       case 0:
@@ -140,13 +129,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     }
   }
 
-  // Reset password logic
   void _resetPassword() async {
     final newPassword = _newPasswordController.text.trim();
     final confirmPassword = _confirmPasswordController.text.trim();
-    final email = _emailController.text
-        .trim()
-        .split(' ')[0]; // Take only the email part before any space
+    final email = _emailController.text.trim().split(' ')[0];
 
     if (newPassword != confirmPassword) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -243,9 +229,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           ),
           if (_isLoading)
             Container(
-              color: Colors.black.withOpacity(0.5), // Overlay
+              color: Colors.black.withOpacity(0.5),
               child: const Center(
-                child: Loader(), // Preloader
+                child: Loader(),
               ),
             ),
         ],
@@ -310,34 +296,31 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               style: TextStyle(fontSize: 15, color: Colors.grey),
               textAlign: TextAlign.center,
             ),
-            VerificationCodeField(
-              length: 6,
-              onFilled: (value) {
-                if (value.length == 6) {
-                  // Check if the code has been filled
+            const SizedBox(height: 30),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 40.0),
+              child: PinCodeTextField(
+                appContext: context,
+                length: 6,
+                controller: _verificationCodeController,
+                onChanged: (value) {
                   setState(() {
-                    // Trigger the state update here
-                    _verificationCodeController.text = value;
+                    // Update state when code changes
                   });
-                }
-              },
-              size: const Size(30, 60),
-              
-              matchingPattern: RegExp(r'^\d+$'),
+                },
+                pinTheme: PinTheme(
+                  shape: PinCodeFieldShape.underline,
+                  fieldHeight: 50,
+                  fieldWidth: 40,
+                  activeFillColor: Colors.white,
+                  activeColor: primaryTwo,
+                  selectedColor: primaryTwo,
+                  inactiveColor: Colors.grey,
+                ),
+                keyboardType: TextInputType.number,
+                animationDuration: const Duration(milliseconds: 300),
+              ),
             ),
-            // TextField(
-            //   controller: _verificationCodeController,
-            //   onChanged: (_) {
-            //     setState(
-            //         () {}); // Trigger state update to enable/disable the Next button
-            //   },
-            //   keyboardType: TextInputType.number,
-            //   maxLength: 6,
-            //   decoration: const InputDecoration(
-            //     labelText: 'Verification Code',
-            //     border: UnderlineInputBorder(),
-            //   ),
-            // ),
           ],
         ),
       ),
@@ -363,8 +346,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               controller: _newPasswordController,
               obscureText: _obscureNewPassword,
               onChanged: (_) {
-                setState(
-                    () {}); // Trigger state update to enable/disable the Reset Password button
+                setState(() {});
               },
               decoration: InputDecoration(
                 labelText: 'New Password',
@@ -389,8 +371,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               controller: _confirmPasswordController,
               obscureText: _obscureConfirmPassword,
               onChanged: (_) {
-                setState(
-                    () {}); // Trigger state update to enable/disable the Reset Password button
+                setState(() {});
               },
               decoration: InputDecoration(
                 labelText: 'Confirm Password',
