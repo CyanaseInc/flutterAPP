@@ -11,23 +11,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Select Xcode version
+        run: sudo xcode-select -s /Applications/Xcode_15.4.app
+        # Explicitly select Xcode version to avoid mismatches
+
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.0'  # Latest stable version as of June 2025
+          flutter-version: '3.24.0'  # Matches your specified version
           channel: 'stable'
           architecture: x64
+          cache: true  # Enable caching for faster builds
 
       # 🧹 Clean build artifacts
       - name: Clean build
         run: flutter clean
-
-      # 🛠 Clear pub cache
-      - name: Clear pub cache
-        run: rm -rf ~/Library/Caches/com.dartlang.pub
-
-      # 🛠 Repair Flutter pub cache
-      - name: Repair Flutter cache
-        run: flutter pub cache repair
 
       # 📦 Get project dependencies
       - name: Install dependencies
@@ -41,15 +38,34 @@ jobs:
           echo "pubspec.lock contents:"
           cat pubspec.lock || echo "No pubspec.lock file found"
 
-      # 🔄 Update and reinstall CocoaPods
+      # 🔄 Install Ruby and CocoaPods
+      - name: Set up Ruby and CocoaPods
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'  # Ensure compatible Ruby version
+          bundler-cache: true
+
+      # 🔄 Update and install CocoaPods
       - name: Update and Install CocoaPods
         run: |
+          gem install cocoapods
           pod repo update
-          pod deintegrate
-          pod install
+          pod install --repo-update
         working-directory: ios
 
-      # ✅ FIX: Remove bridging header reference
+      # ✅ Regenerate iOS project files if needed
+      - name: Regenerate iOS project
+        run: flutter create --platforms=ios .
+        # Ensures GeneratedPluginRegistrant is created
+
+      # 🔍 Debug GeneratedPluginRegistrant
+      - name: Check for GeneratedPluginRegistrant
+        run: |
+          ls -la ios/Flutter
+          cat ios/Flutter/GeneratedPluginRegistrant.h || echo "GeneratedPluginRegistrant.h not found"
+          cat ios/Flutter/GeneratedPluginRegistrant.m || echo "GeneratedPluginRegistrant.m not found"
+
+      # ✅ Remove bridging header reference
       - name: Remove bridging header reference
         run: |
           sed -i '' '/SWIFT_OBJC_BRIDGING_HEADER/d' ios/Runner.xcodeproj/project.pbxproj || true
@@ -57,7 +73,7 @@ jobs:
             rm ios/Runner/Runner-Bridging-Header.h
           fi
 
-      # ✅ FIX: Disable BUILD_LIBRARY_FOR_DISTRIBUTION
+      # ✅ Disable BUILD_LIBRARY_FOR_DISTRIBUTION
       - name: Patch Xcode project to avoid Swift bridging header issue
         run: |
           sed -i '' 's/BUILD_LIBRARY_FOR_DISTRIBUTION = YES;/BUILD_LIBRARY_FOR_DISTRIBUTION = NO;/g' ios/Runner.xcodeproj/project.pbxproj || true
@@ -65,6 +81,9 @@ jobs:
       # 🚀 Build the iOS release (without code signing)
       - name: Build iOS
         run: flutter build ios --release --no-codesign
+        env:
+          FLUTTER_XCODE_WORKSPACE: ios/Runner.xcworkspace
+          FLUTTER_XCODE_SCHEME: Runner
 
       # 📁 Prepare .ipa structure
       - name: Create Payload directory
