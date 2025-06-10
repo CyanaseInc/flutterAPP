@@ -42,7 +42,7 @@ dependencies:
   cached_network_image: ^3.2.3
 
   # Charts and Gauges
-  fl_chart: ^0.70.2
+  fl_chart: ^0.65.0
   syncfusion_flutter_gauges: ^28.1.38
 
   # Data and State
