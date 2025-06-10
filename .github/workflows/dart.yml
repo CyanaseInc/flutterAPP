@@ -64,7 +64,7 @@ jobs:
           sed -i '' 's/IPHONEOS_DEPLOYMENT_TARGET = .*/IPHONEOS_DEPLOYMENT_TARGET = 12.0;/' Runner.xcodeproj/project.pbxproj
           cd ..
 
-      # Ensure correct CocoaPods base configuration
+      # Set CocoaPods base config
       - name: Set CocoaPods base config
         run: |
           cd ios
@@ -73,13 +73,13 @@ jobs:
           done
           cd ..
 
-      # Set permissions for the whole project (fixes write errors)
+      # Set permissions for the whole project
       - name: Set project directory permissions
         run: |
           sudo chown -R $(whoami) .
           sudo chmod -R 777 .
 
-      # Set permissions for build and ios directories after pod install
+      # Set permissions for build and ios directories
       - name: Set permissions for build and ios directories
         run: |
           if [ -d "build" ]; then
@@ -89,7 +89,7 @@ jobs:
           sudo chown -R $(whoami) ios
           sudo chmod -R 777 ios
 
-      # Fix Bitcode setting for iOS (avoid CocoaPods ENABLE_BITCODE conflict)
+      # Disable Bitcode for iOS
       - name: Disable Bitcode for iOS
         run: |
           cd ios
@@ -98,4 +98,20 @@ jobs:
           cd ..
 
       # Disable code signing for CI
-      - name:
+      - name: Disable code signing
+        run: |
+          cd ios
+          sed -i '' 's/CODE_SIGN_IDENTITY = .*/CODE_SIGN_IDENTITY = "";/' Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/DEVELOPMENT_TEAM = .*/DEVELOPMENT_TEAM = "";/' Runner.xcodeproj/project.pbxproj
+          cd ..
+
+      # Build IPA
+      - name: Build IPA
+        run: flutter build ipa --release
+
+      # Upload IPA as artifact
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cyanase_ios_ipa
+          path: build/ios/ipa
