@@ -27,7 +27,7 @@ dependencies:
   flutter_contacts: ^1.1.9+2
 
   # Notifications and Device Features
-  awesome_notifications: ^0.10.1
+  awesome_notifications: ^0.8.2
   vibration: ^2.0.1
   permission_handler: ^11.3.1
   connectivity_plus: ^6.1.2
@@ -43,7 +43,7 @@ dependencies:
 
   # Charts and Gauges
   fl_chart: ^0.65.0
-  syncfusion_flutter_gauges: ^28.1.38
+  syncfusion_flutter_gauges: ^23.2.7
 
   # Data and State
   http: ^1.2.2
