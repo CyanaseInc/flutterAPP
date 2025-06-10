@@ -1,4 +1,4 @@
-name: cyanase_ios_build
+name: iOS-ipa-build
 
 on:
   workflow_dispatch:
@@ -7,105 +7,32 @@ jobs:
   build-ios:
     name: 🎉 iOS Build
     runs-on: macos-latest
-
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # Full history for accurate diffs
-
-      - name: Clean cache and build artifacts
-        run: |
-          # Remove Flutter and iOS caches to ensure fresh build
-          rm -rf ~/.pub-cache  # Clear pub cache
-          rm -f pubspec.lock  # Remove stale lock file
-          rm -rf build  # Clear build directory
-          rm -rf ios/Flutter ios/Runner.xcodeproj ios/Runner.xcworkspace  # Clear iOS project files
-          flutter clean || true  # Clean Flutter artifacts, ignore errors if no build exists
-        working-directory: .
-
-      - name: Select Xcode version
-        run: sudo xcode-select -s /Applications/Xcode_15.4.app
-        working-directory: .
+      - uses: actions/checkout@v3
 
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.0'
           channel: 'stable'
           architecture: x64
-          cache: false  # Disable action cache to avoid stale dependencies
+      - run: flutter pub get
+      
 
-      - name: Install dependencies
-        run: flutter pub get
-        working-directory: .
-
-      - name: Verify pubspec name
-        run: |
-          echo "pubspec.yaml contents:"
-          cat pubspec.yaml
-          grep '^name:' pubspec.yaml
-          echo "Checking for stray pubspec.yaml files:"
-          find . -name "pubspec.yaml"
-        working-directory: .
-
-      - name: Regenerate iOS project
-        run: |
-          flutter create --platforms=ios . || \
-          (flutter clean && flutter pub get && flutter create --platforms=ios .)
-        working-directory: .
-
-      - name: Remove bridging header reference
-        run: |
-          sed -i '' '/SWIFT_OBJC_BRIDGING_HEADER/d' ios/Runner.xcodeproj/project.pbxproj || true
-          if [ -f ios/Runner/Runner-Bridging-Header.h ]; then
-            rm ios/Runner/Runner-Bridging-Header.h
-          fi
-        working-directory: .
-
-      - name: Check for GeneratedPluginRegistrant
-        run: |
-          ls -la ios/Flutter
-          cat ios/Flutter/GeneratedPluginRegistrant.h || echo "GeneratedPluginRegistrant.h not found"
-          cat ios/Flutter/GeneratedPluginRegistrant.m || echo "GeneratedPluginRegistrant.m not found"
-        working-directory: .
-
-      - name: Set up Ruby and CocoaPods
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: '3.2'
-          bundler-cache: true
-
-      - name: Update and Install CocoaPods
-        run: |
-          gem install cocoapods
-          pod repo update
-          pod install --repo-update
+      - run: pod repo update
         working-directory: ios
 
-      - name: Patch Xcode project
-        run: |
-          sed -i '' 's/BUILD_LIBRARY_FOR_DISTRIBUTION = YES;/BUILD_LIBRARY_FOR_DISTRIBUTION = NO;/g' ios/Runner.xcodeproj/project.pbxproj || true
-        working-directory: .
+      - run: flutter build ios --release --no-codesign
 
-      - name: Build iOS
-        run: flutter build ios --release --no-codesign
-        env:
-          FLUTTER_XCODE_WORKSPACE: ios/Runner.xcworkspace
-          FLUTTER_XCODE_SCHEME: Runner
-        working-directory: .
-
-      - name: Create Payload directory
-        run: mkdir Payload
+      - run: mkdir Payload
         working-directory: build/ios/iphoneos
 
-      - name: Move Runner.app to Payload
-        run: mv Runner.app Payload
+      - run: mv Runner.app/ Payload
         working-directory: build/ios/iphoneos
 
-      - name: Zip IPA
+      - name: Zip output
         run: zip -qq -r -9 FlutterIpaExport.ipa Payload
         working-directory: build/ios/iphoneos
 
-      - name: Upload IPA to release
+      - name: Upload binaries to release
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
