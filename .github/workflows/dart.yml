@@ -5,113 +5,52 @@ on:
 
 jobs:
   build-ios:
-    name: 🎉 iOS Build
+    name: 🚀 Build iOS Test IPA (No Signing)
     runs-on: macos-14
 
     steps:
-      # Checkout the code
-      - uses: actions/checkout@v3
+      - name: 🛎️ Checkout Code
+        uses: actions/checkout@v3
 
-      # Set up Ruby for CocoaPods
-      - name: Set up Ruby
+      - name: 🔧 Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.0'
           bundler-cache: true
 
-      # Set up Flutter
-      - uses: subosito/flutter-action@v2
+      - name: 💙 Set up Flutter
+        uses: subosito/flutter-action@v2
         with:
-          channel: 'stable'
-          architecture: x64
           flutter-version: '3.32.2'
+          channel: stable
+          architecture: x64
 
-      # Install CocoaPods
-      - name: Install CocoaPods
-        run: |
-          sudo gem install cocoapods
-          pod setup
-
-      # Clean previous build artifacts
-      - name: Clean build
+      - name: 🔃 Clean and Get Packages
         run: |
           flutter clean
-          rm -rf build
-          cd ios
-          rm -rf Pods/
-          rm -rf .symlinks/
-          rm -rf Flutter/Flutter.framework
-          rm -rf Flutter/Flutter.podspec
-          cd ..
+          flutter pub get
 
-      # Get Flutter dependencies
-      - name: Get dependencies
-        run: flutter pub get
-
-      # Pod cleanup and fresh install
-      - name: Setup iOS build
+      - name: 🍎 Install CocoaPods
         run: |
           cd ios
-          pod deintegrate
-          pod cache clean --all
           pod install
           cd ..
 
-      # Set iOS deployment target to 12.0
-      - name: Set Xcode deployment target
+      - name: 🧹 Disable All Code Signing
         run: |
           cd ios
-          sed -i '' 's/IPHONEOS_DEPLOYMENT_TARGET = .*/IPHONEOS_DEPLOYMENT_TARGET = 12.0;/' Runner.xcodeproj/project.pbxproj
-          cd ..
-
-      # Set CocoaPods base config
-      - name: Set CocoaPods base config
-        run: |
-          cd ios
-          for config in "Release" "Debug"; do
-            plutil -replace baseConfigurationReference -string "Pods/Target Support Files/Pods-Runner/Pods-Runner.${config}.xcconfig" Runner.xcodeproj/project.pbxproj || true
-          done
-          cd ..
-
-      # Set permissions for the whole project
-      - name: Set project directory permissions
-        run: |
-          sudo chown -R $(whoami) .
-          sudo chmod -R 777 .
-
-      # Set permissions for build and ios directories
-      - name: Set permissions for build and ios directories
-        run: |
-          if [ -d "build" ]; then
-            sudo chown -R $(whoami) build
-            sudo chmod -R 777 build
-          fi
-          sudo chown -R $(whoami) ios
-          sudo chmod -R 777 ios
-
-      # Disable Bitcode for iOS
-      - name: Disable Bitcode for iOS
-        run: |
-          cd ios
-          plutil -replace ENABLE_BITCODE -bool NO Runner.xcodeproj/project.pbxproj || true
+          sed -i '' 's/CODE_SIGN_STYLE = .*/CODE_SIGN_STYLE = Manual;/' Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/CODE_SIGN_IDENTITY = .*/CODE_SIGN_IDENTITY = "";/' Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/DEVELOPMENT_TEAM = .*/DEVELOPMENT_TEAM = "";/' Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/PROVISIONING_PROFILE_SPECIFIER = .*/PROVISIONING_PROFILE_SPECIFIER = "";/' Runner.xcodeproj/project.pbxproj
           sed -i '' '/ENABLE_BITCODE =/d' Runner.xcodeproj/project.pbxproj
           cd ..
 
-      # Disable code signing for CI
-      - name: Disable code signing
-        run: |
-          cd ios
-          sed -i '' 's/CODE_SIGN_IDENTITY = .*/CODE_SIGN_IDENTITY = "";/' Runner.xcodeproj/project.pbxproj
-          sed -i '' 's/DEVELOPMENT_TEAM = .*/DEVELOPMENT_TEAM = "";/' Runner.xcodeproj/project.pbxproj
-          cd ..
+      - name: 📦 Build Unsigned IPA
+        run: flutter build ipa --release --no-codesign
 
-      # Build IPA
-      - name: Build IPA
-        run: flutter build ipa --release
-
-      # Upload IPA as artifact
-      - name: Upload IPA artifact
+      - name: 📤 Upload Unsigned IPA
         uses: actions/upload-artifact@v4
         with:
-          name: cyanase_ios_ipa
+          name: cyanase_ios_ipa_unsigned
           path: build/ios/ipa
