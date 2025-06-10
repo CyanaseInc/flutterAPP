@@ -20,7 +20,7 @@ jobs:
         with:
           channel: 'stable'
           architecture: x64
-          flutter-version: '3.24.0'
+          flutter-version: '3.32.2'
 
       - name: Install CocoaPods
         run: |
@@ -58,6 +58,13 @@ jobs:
           sed -i '' 's/IPHONEOS_DEPLOYMENT_TARGET = .*/IPHONEOS_DEPLOYMENT_TARGET = 12.0;/' Runner.xcodeproj/project.pbxproj
           cd ..
 
+      # ======= Permission step moved before build =======
+      - name: Set permissions for build directory
+        run: |
+          sudo mkdir -p build
+          sudo chown -R $(whoami) build
+          sudo chmod -R 777 build
+
       - name: Build iOS
         run: |
           flutter build ios --release --no-codesign --verbose
@@ -71,11 +78,6 @@ jobs:
           ls -la build/ios
           ls -la build/ios/Debug-iphoneos || echo "Debug-iphoneos not found"
           ls -la build/ios/Release-iphoneos || echo "Release-iphoneos not found"
-
-      - name: Set permissions
-        run: |
-          sudo chown -R $(whoami) build
-          sudo chmod -R 755 build
 
       - name: Create IPA
         run: |
