@@ -322,7 +322,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 }
               },
               size: const Size(30, 60),
-              spaceBetween: 16,
+              
               matchingPattern: RegExp(r'^\d+$'),
             ),
             // TextField(
