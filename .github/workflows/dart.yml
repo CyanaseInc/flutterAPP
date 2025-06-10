@@ -25,7 +25,7 @@ jobs:
           channel: stable
           architecture: x64
 
-      - name: 🔃 Clean and Get Packages
+      - name: 🧹 Clean and Get Packages
         run: |
           flutter clean
           flutter pub get
@@ -36,7 +36,7 @@ jobs:
           pod install
           cd ..
 
-      - name: 🧹 Disable All Code Signing
+      - name: ❌ Disable All Code Signing
         run: |
           cd ios
           sed -i '' 's/CODE_SIGN_STYLE = .*/CODE_SIGN_STYLE = Manual;/' Runner.xcodeproj/project.pbxproj
@@ -46,11 +46,26 @@ jobs:
           sed -i '' '/ENABLE_BITCODE =/d' Runner.xcodeproj/project.pbxproj
           cd ..
 
-      - name: 📦 Build Unsigned IPA
-        run: flutter build ipa --release --no-codesign
+      - name: 🔓 Fix Permissions
+        run: |
+          sudo chown -R $(whoami) .
+          sudo chmod -R 777 .
 
-      - name: 📤 Upload Unsigned IPA
+      - name: 🛠 Set Writable Build Paths
+        run: |
+          mkdir -p build/ios_archive
+          mkdir -p build/ios_derived
+          echo "XCODE_DERIVED_DATA_PATH=$PWD/build/ios_derived" >> $GITHUB_ENV
+          echo "FLUTTER_BUILD_DIR=$PWD/build/ios_archive" >> $GITHUB_ENV
+
+      - name: 📦 Build Unsigned IPA
+        run: |
+          flutter build ipa --release --no-codesign \
+            --build-dir=build/ios_archive \
+            --verbose
+
+      - name: 📤 Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
           name: cyanase_ios_ipa_unsigned
-          path: build/ios/ipa
+          path: build/ios_archive/ios/ipa
