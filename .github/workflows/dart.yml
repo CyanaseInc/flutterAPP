@@ -33,10 +33,11 @@ jobs:
       - name: 🍎 Install CocoaPods
         run: |
           cd ios
+          pod deintegrate
           pod install
           cd ..
 
-      - name: ❌ Disable All Code Signing
+      - name: ❌ Disable Code Signing & Bitcode
         run: |
           cd ios
           sed -i '' 's/CODE_SIGN_STYLE = .*/CODE_SIGN_STYLE = Manual;/' Runner.xcodeproj/project.pbxproj
@@ -46,17 +47,18 @@ jobs:
           sed -i '' '/ENABLE_BITCODE =/d' Runner.xcodeproj/project.pbxproj
           cd ..
 
-      - name: 🔓 Fix Permissions
+      - name: 🔓 Set Permissions
         run: |
           sudo chown -R $(whoami) .
           sudo chmod -R 777 .
 
-      - name: 📦 Build IPA (No Signing)
-        env:
-          XCODE_DERIVED_DATA_PATH: ${{ github.workspace }}/build/ios_derived
+      - name: 🛠 Set Writable Derived Data Path
         run: |
-          mkdir -p $XCODE_DERIVED_DATA_PATH
-          flutter build ipa --release --no-codesign --verbose
+          mkdir -p ${{ github.workspace }}/build/ios_derived
+          echo "XCODE_DERIVED_DATA_PATH=${{ github.workspace }}/build/ios_derived" >> $GITHUB_ENV
+
+      - name: 📦 Build Unsigned IPA
+        run: flutter build ipa --release --no-codesign --verbose
 
       - name: 📤 Upload IPA Artifact
         uses: actions/upload-artifact@v4
