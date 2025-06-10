@@ -10,7 +10,7 @@ jobs:
 
     steps:
       - name: 🛎️ Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4 # Update to v4 for latest features
 
       - name: 🔧 Set up Ruby
         uses: ruby/setup-ruby@v1
@@ -25,6 +25,24 @@ jobs:
           channel: stable
           architecture: x64
 
+      - name: 📦 Cache Flutter and Pods
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+            ios/Pods
+          key: ${{ runner.os }}-flutter-${{ hashFiles('**/pubspec.lock') }}
+
+      - name: 🔎 Check for Merge Conflicts in project.pbxproj
+        run: |
+          if grep -E "^<<<<<<<|^=======|^>>>>>>>" ios/Runner.xcodeproj/project.pbxproj; then
+            echo "Error: Merge conflicts detected in project.pbxproj"
+            exit 1
+          fi
+
+      - name: ✅ Validate Xcode Project
+        run: xcodebuild -project ios/Runner.xcodeproj -list
+
       - name: 🧹 Clean and Get Packages
         run: |
           flutter clean
@@ -33,33 +51,25 @@ jobs:
       - name: 🍎 Install CocoaPods
         run: |
           cd ios
-          pod deintegrate
-          pod install
+          pod install --repo-update
           cd ..
 
       - name: 🚫 Disable User Script Sandboxing in Xcode project
         run: |
           cd ios
-          # Remove any existing ENABLE_USER_SCRIPT_SANDBOXING lines
-          sed -i '' '/ENABLE_USER_SCRIPT_SANDBOXING/d' Runner.xcodeproj/project.pbxproj
-          # Insert ENABLE_USER_SCRIPT_SANDBOXING = NO; line (append at end)
-          echo "  ENABLE_USER_SCRIPT_SANDBOXING = NO;" >> Runner.xcodeproj/project.pbxproj
+          awk '/buildSettings = {/ {print; print "\t\t\t\tENABLE_USER_SCRIPT_SANDBOXING = NO;"; next}1' Runner.xcodeproj/project.pbxproj > temp.pbxproj
+          mv temp.pbxproj Runner.xcodeproj/project.pbxproj
           cd ..
 
       - name: ❌ Disable Code Signing & Bitcode
         run: |
           cd ios
-          sed -i '' 's/CODE_SIGN_STYLE = .*/CODE_SIGN_STYLE = Manual;/' Runner.xcodeproj/project.pbxproj
-          sed -i '' 's/CODE_SIGN_IDENTITY = .*/CODE_SIGN_IDENTITY = "";/' Runner.xcodeproj/project.pbxproj
-          sed -i '' 's/DEVELOPMENT_TEAM = .*/DEVELOPMENT_TEAM = "";/' Runner.xcodeproj/project.pbxproj
-          sed -i '' 's/PROVISIONING_PROFILE_SPECIFIER = .*/PROVISIONING_PROFILE_SPECIFIER = "";/' Runner.xcodeproj/project.pbxproj
-          sed -i '' '/ENABLE_BITCODE =/d' Runner.xcodeproj/project.pbxproj
+          awk '/buildSettings = {/ {print; print "\t\t\t\tCODE_SIGN_STYLE = Manual;\n\t\t\t\tCODE_SIGN_IDENTITY = \"\";\n\t\t\t\tDEVELOPMENT_TEAM = \"\";\n\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = \"\";\n\t\t\t\tENABLE_BITCODE = NO;"; next}1' Runner.xcodeproj/project.pbxproj > temp.pbxproj
+          mv temp.pbxproj Runner.xcodeproj/project.pbxproj
           cd ..
 
       - name: 🔓 Set Permissions
-        run: |
-          sudo chown -R $(whoami) .
-          sudo chmod -R 777 .
+        run: chmod -R u+rw ios
 
       - name: 🛠 Set Writable Derived Data Path
         run: |
@@ -68,6 +78,21 @@ jobs:
 
       - name: 📦 Build Unsigned IPA
         run: flutter build ipa --release --no-codesign --verbose
+
+      - name: 🔄 Regenerate iOS Project (Fallback)
+        if: failure()
+        run: |
+          rm -rf ios
+          flutter create --platforms=ios .
+          cd ios
+          pod install --repo-update
+          cd ..
+          # Reapply modifications
+          awk '/buildSettings = {/ {print; print "\t\t\t\tENABLE_USER_SCRIPT_SANDBOXING = NO;"; next}1' ios/Runner.xcodeproj/project.pbxproj > ios/temp.pbxproj
+          mv ios/temp.pbxproj ios/Runner.xcodeproj/project.pbxproj
+          awk '/buildSettings = {/ {print; print "\t\t\t\tCODE_SIGN_STYLE = Manual;\n\t\t\t\tCODE_SIGN_IDENTITY = \"\";\n\t\t\t\tDEVELOPMENT_TEAM = \"\";\n\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = \"\";\n\t\t\t\tENABLE_BITCODE = NO;"; next}1' ios/Runner.xcodeproj/project.pbxproj > ios/temp.pbxproj
+          mv ios/temp.pbxproj ios/Runner.xcodeproj/project.pbxproj
+          flutter build ipa --release --no-codesign --verbose
 
       - name: 📤 Upload IPA Artifact
         uses: actions/upload-artifact@v4
