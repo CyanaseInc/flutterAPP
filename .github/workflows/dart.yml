@@ -10,7 +10,7 @@ jobs:
 
     steps:
       - name: 🛎️ Checkout Code
-        uses: actions/checkout@v4 # Update to v4 for latest features
+        uses: actions/checkout@v4
 
       - name: 🔧 Set up Ruby
         uses: ruby/setup-ruby@v1
@@ -49,16 +49,41 @@ jobs:
       - name: ✅ Validate Xcode Project
         run: xcodebuild -project ios/Runner.xcodeproj -list
 
+      # --- Fixes start here ---
+
+      - name: 🧹 Clean Xcode Derived Data
+        run: rm -rf ~/Library/Developer/Xcode/DerivedData
+
       - name: 🧹 Clean and Get Packages
         run: |
           flutter clean
           flutter pub get
+
+      - name: 🛠 Remove Bridging Header Setting (to fix Swift bridging header error)
+        run: |
+          sed -i '' '/SWIFT_OBJC_BRIDGING_HEADER/d' ios/Runner.xcodeproj/project.pbxproj
+
+      - name: 👷 Patch Podfile for Bitcode = NO (to fix ENABLE_BITCODE warning)
+        run: |
+          if ! grep -q "post_install do" ios/Podfile; then
+            echo '
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    target.build_configurations.each do |config|
+      config.build_settings["ENABLE_BITCODE"] = "NO"
+    end
+  end
+end
+' >> ios/Podfile
+          fi
 
       - name: 🍎 Install CocoaPods
         run: |
           cd ios
           pod install --repo-update
           cd ..
+
+      # --- End fixes ---
 
       - name: 🚫 Disable User Script Sandboxing in Xcode project
         run: |
@@ -67,7 +92,7 @@ jobs:
           mv temp.pbxproj Runner.xcodeproj/project.pbxproj
           cd ..
 
-      - name: ❌ Disable Code Signing & Bitcode
+      - name: ❌ Disable Code Signing & Bitcode (extra safety)
         run: |
           cd ios
           awk '/buildSettings = {/ {print; print "\t\t\t\tCODE_SIGN_STYLE = Manual;\n\t\t\t\tCODE_SIGN_IDENTITY = \"\";\n\t\t\t\tDEVELOPMENT_TEAM = \"\";\n\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = \"\";\n\t\t\t\tENABLE_BITCODE = NO;"; next}1' Runner.xcodeproj/project.pbxproj > temp.pbxproj
