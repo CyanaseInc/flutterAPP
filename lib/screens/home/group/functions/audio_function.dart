@@ -1,5 +1,3 @@
-
-
 import 'dart:async'; // For Timer
 import 'dart:io'; // For Directory and File
 import 'package:audioplayers/audioplayers.dart';
@@ -8,8 +6,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 class AudioFunctions {
-final AudioPlayer _audioPlayer = AudioPlayer();
-  final Record _audioRecorder = Record(); 
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  final _audioRecorder = Record();
 
   Future<void> playBeepSound() async {
     await _audioPlayer.play(
