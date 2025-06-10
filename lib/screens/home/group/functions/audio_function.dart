@@ -2,19 +2,18 @@ import 'package:flutter/material.dart';
 import 'dart:async'; // For Timer
 import 'dart:io'; // For Directory and File
 import 'package:audioplayers/audioplayers.dart';
-import 'package:flutter/material.dart';
 import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 class AudioFunctions {
   final AudioPlayer _audioPlayer = AudioPlayer();
-  final Record _audioRecorder = Record();
+  final AudioRecorder _audioRecorder = AudioRecorder(); // Changed from Record to AudioRecorder
   Timer? _recordingTimer;
 
   Future<void> playBeepSound() async {
     await _audioPlayer.play(
-        AssetSource('audio/beep.mp3')); // Add a beep sound file to your assets
+        AssetSource('audio/beep.mp3')); // Ensure beep.mp3 is in pubspec.yaml
   }
 
   /// Ensures the folder exists at the given path.
@@ -24,9 +23,7 @@ class AudioFunctions {
     // Check if the folder exists
     if (!await folder.exists()) {
       // Create the folder if it doesn't exist
-      await folder.create(
-          recursive:
-              true); // `recursive: true` creates parent directories if needed
+      await folder.create(recursive: true);
       print("Folder created at: $folderPath");
     } else {
       print("Folder already exists at: $folderPath");
@@ -57,10 +54,16 @@ class AudioFunctions {
       final filePath =
           '$folderPath/recording_${DateTime.now().millisecondsSinceEpoch}.m4a';
 
+      // Check if the recorder is already recording
+      if (await _audioRecorder.isRecording()) {
+        print("Recorder is already in use");
+        return null;
+      }
+
       // Start recording
       await _audioRecorder.start(
+        const RecordConfig(encoder: AudioEncoder.aacLc), // Updated for record package
         path: filePath,
-        encoder: AudioEncoder.aacLc,
       );
 
       print("Recording started at: $filePath");
@@ -93,12 +96,9 @@ class AudioFunctions {
       return null;
     } catch (e) {
       print("Error stopping recording: $e");
-
       return null;
     }
   }
-
-  /// Stops audio recording and returns the file path.
 
   /// Checks and requests microphone permission.
   Future<bool> _checkMicrophonePermission() async {
