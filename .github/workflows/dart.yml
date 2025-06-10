@@ -5,66 +5,63 @@ on:
 
 jobs:
   build-ios:
-    name: 🚀 Build iOS Unsigned IPA (No Signing, Fixes Sandbox & Pods)
+    name: 🚀 Build iOS Test IPA (No Signing)
     runs-on: macos-14
 
     steps:
       - name: 🛎️ Checkout Code
         uses: actions/checkout@v3
 
-      - name: 🔧 Set up Ruby for CocoaPods
+      - name: 🔧 Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.0'
           bundler-cache: true
 
-      - name: 💙 Set up Flutter SDK
+      - name: 💙 Set up Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.32.2'
           channel: stable
           architecture: x64
 
-      - name: 🧹 Clean Flutter and Get Dependencies
+      - name: 🧹 Clean and Get Packages
         run: |
           flutter clean
           flutter pub get
 
-      - name: 🍎 CocoaPods Install
+      - name: 🍎 Install CocoaPods
         run: |
           cd ios
-          pod deintegrate || true
-          pod cache clean --all
-          pod install --repo-update
+          pod deintegrate
+          pod install
           cd ..
 
-      - name: 🔓 Fix Permissions (No sudo)
-        run: chmod -R 777 .
-
-      - name: 🧹 Clean Derived Data
-        run: rm -rf ${{ github.workspace }}/build/ios_derived || true
-
-      - name: 🛠 Create writable Derived Data folder
-        run: mkdir -p ${{ github.workspace }}/build/ios_derived
-
-      - name: 🔧 Set XCODE_DERIVED_DATA_PATH, SYMROOT, DERIVED_DATA_PATH
+      - name: ❌ Disable Code Signing & Bitcode
         run: |
+          cd ios
+          sed -i '' 's/CODE_SIGN_STYLE = .*/CODE_SIGN_STYLE = Manual;/' Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/CODE_SIGN_IDENTITY = .*/CODE_SIGN_IDENTITY = "";/' Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/DEVELOPMENT_TEAM = .*/DEVELOPMENT_TEAM = "";/' Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/PROVISIONING_PROFILE_SPECIFIER = .*/PROVISIONING_PROFILE_SPECIFIER = "";/' Runner.xcodeproj/project.pbxproj
+          sed -i '' '/ENABLE_BITCODE =/d' Runner.xcodeproj/project.pbxproj
+          cd ..
+
+      - name: 🔓 Set Permissions
+        run: |
+          sudo chown -R $(whoami) .
+          sudo chmod -R 777 .
+
+      - name: 🛠 Set Writable Derived Data Path
+        run: |
+          mkdir -p ${{ github.workspace }}/build/ios_derived
           echo "XCODE_DERIVED_DATA_PATH=${{ github.workspace }}/build/ios_derived" >> $GITHUB_ENV
-          echo "SYMROOT=${{ github.workspace }}/build/ios_derived" >> $GITHUB_ENV
-          echo "DERIVED_DATA_PATH=${{ github.workspace }}/build/ios_derived" >> $GITHUB_ENV
 
-      - name: 📦 Build unsigned IPA
-        env:
-          XCODE_DERIVED_DATA_PATH: ${{ github.workspace }}/build/ios_derived
-          SYMROOT: ${{ github.workspace }}/build/ios_derived
-          DERIVED_DATA_PATH: ${{ github.workspace }}/build/ios_derived
-        run: flutter build ipa --release --no-codesign --verbose --dart-define=CI_BUILD=true
+      - name: 📦 Build Unsigned IPA
+        run: flutter build ipa --release --no-codesign --verbose
 
-      - name: 🔍 Debug: List generated IPA files
-        run: ls -l build/ios/ipa || echo "No IPA generated"
-
-      - name: 📤 Upload IPA artifact
+      - name: 📤 Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
           name: cyanase_ios_ipa_unsigned
-          path: build/ios/ipa/*.ipa
+          path: build/ios/ipa
