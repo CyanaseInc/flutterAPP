@@ -51,21 +51,15 @@ jobs:
           sudo chown -R $(whoami) .
           sudo chmod -R 777 .
 
-      - name: 🛠 Set Writable Build Paths
+      - name: 📦 Build IPA (No Signing)
+        env:
+          XCODE_DERIVED_DATA_PATH: ${{ github.workspace }}/build/ios_derived
         run: |
-          mkdir -p build/ios_archive
-          mkdir -p build/ios_derived
-          echo "XCODE_DERIVED_DATA_PATH=$PWD/build/ios_derived" >> $GITHUB_ENV
-          echo "FLUTTER_BUILD_DIR=$PWD/build/ios_archive" >> $GITHUB_ENV
-
-      - name: 📦 Build Unsigned IPA
-        run: |
-          flutter build ipa --release --no-codesign \
-            --build-dir=build/ios_archive \
-            --verbose
+          mkdir -p $XCODE_DERIVED_DATA_PATH
+          flutter build ipa --release --no-codesign --verbose
 
       - name: 📤 Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
           name: cyanase_ios_ipa_unsigned
-          path: build/ios_archive/ios/ipa
+          path: build/ios/ipa
