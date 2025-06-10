@@ -38,29 +38,36 @@ jobs:
           pod install
           cd ..
 
-      # Remove sudo for security and better compatibility with GitHub runners
-      - name: 🔓 Fix Permissions (No sudo)
-        run: chmod -R 777 .
+      - name: ❌ Disable Code Signing & Bitcode in Xcode project
+        run: |
+          cd ios
+          sed -i '' 's/CODE_SIGN_STYLE = .*/CODE_SIGN_STYLE = Manual;/' Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/CODE_SIGN_IDENTITY = .*/CODE_SIGN_IDENTITY = "";/' Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/DEVELOPMENT_TEAM = .*/DEVELOPMENT_TEAM = "";/' Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/PROVISIONING_PROFILE_SPECIFIER = .*/PROVISIONING_PROFILE_SPECIFIER = "";/' Runner.xcodeproj/project.pbxproj
+          sed -i '' '/ENABLE_BITCODE =/d' Runner.xcodeproj/project.pbxproj
+          cd ..
 
-      # Clean and prepare a writable DerivedData directory inside workspace
-      - name: 🧹 Clean Derived Data
-        run: rm -rf ${{ github.workspace }}/build/ios_derived || true
+      - name: 🔓 Fix Permissions
+        run: |
+          sudo chown -R $(whoami) .
+          sudo chmod -R 777 .
 
       - name: 🛠 Create writable Derived Data folder
         run: mkdir -p ${{ github.workspace }}/build/ios_derived
 
-      # Export environment variables so Xcode uses your workspace for DerivedData
-      - name: 🔧 Set XCODE_DERIVED_DATA_PATH, SYMROOT, DERIVED_DATA_PATH
+      - name: 🔍 Debug: Check Derived Data folder permissions & env
         run: |
-          echo "XCODE_DERIVED_DATA_PATH=${{ github.workspace }}/build/ios_derived" >> $GITHUB_ENV
-          echo "SYMROOT=${{ github.workspace }}/build/ios_derived" >> $GITHUB_ENV
-          echo "DERIVED_DATA_PATH=${{ github.workspace }}/build/ios_derived" >> $GITHUB_ENV
+          ls -ld ${{ github.workspace }}/build/ios_derived
+          ls -l ${{ github.workspace }}/build/ios_derived || echo "Empty"
+          env | grep XCODE_DERIVED_DATA_PATH || echo "XCODE_DERIVED_DATA_PATH not set"
+
+      - name: 🔧 Set XCODE_DERIVED_DATA_PATH env var for next steps
+        run: echo "XCODE_DERIVED_DATA_PATH=${{ github.workspace }}/build/ios_derived" >> $GITHUB_ENV
 
       - name: 📦 Build unsigned IPA
         env:
           XCODE_DERIVED_DATA_PATH: ${{ github.workspace }}/build/ios_derived
-          SYMROOT: ${{ github.workspace }}/build/ios_derived
-          DERIVED_DATA_PATH: ${{ github.workspace }}/build/ios_derived
         run: flutter build ipa --release --no-codesign --verbose
 
       - name: 🔍 Debug: List generated IPA files
