@@ -35,40 +35,35 @@ jobs:
           cd ios
           pod deintegrate || true
           pod cache clean --all
-          pod install
+          pod install --repo-update
           cd ..
 
-      - name: ❌ Disable Code Signing & Bitcode in Xcode project
-        run: |
-          cd ios
-          sed -i '' 's/CODE_SIGN_STYLE = .*/CODE_SIGN_STYLE = Manual;/' Runner.xcodeproj/project.pbxproj
-          sed -i '' 's/CODE_SIGN_IDENTITY = .*/CODE_SIGN_IDENTITY = "";/' Runner.xcodeproj/project.pbxproj
-          sed -i '' 's/DEVELOPMENT_TEAM = .*/DEVELOPMENT_TEAM = "";/' Runner.xcodeproj/project.pbxproj
-          sed -i '' 's/PROVISIONING_PROFILE_SPECIFIER = .*/PROVISIONING_PROFILE_SPECIFIER = "";/' Runner.xcodeproj/project.pbxproj
-          sed -i '' '/ENABLE_BITCODE =/d' Runner.xcodeproj/project.pbxproj
-          cd ..
+      - name: 🔓 Fix Permissions (No sudo)
+        run: chmod -R 777 .
 
-      - name: 🔓 Fix Permissions
-        run: |
-          sudo chown -R $(whoami) .
-          sudo chmod -R 777 .
+      - name: 🧹 Clean Derived Data
+        run: rm -rf ${{ github.workspace }}/build/ios_derived || true
 
       - name: 🛠 Create writable Derived Data folder
         run: mkdir -p ${{ github.workspace }}/build/ios_derived
 
-      - name: 🔍 Debug: Check Derived Data folder permissions & env
+      - name: 🔧 Set XCODE_DERIVED_DATA_PATH, SYMROOT, DERIVED_DATA_PATH
         run: |
-          ls -ld ${{ github.workspace }}/build/ios_derived
-          ls -l ${{ github.workspace }}/build/ios_derived || echo "Empty"
-          env | grep XCODE_DERIVED_DATA_PATH || echo "XCODE_DERIVED_DATA_PATH not set"
-
-      - name: 🔧 Set XCODE_DERIVED_DATA_PATH env var for next steps
-        run: echo "XCODE_DERIVED_DATA_PATH=${{ github.workspace }}/build/ios_derived" >> $GITHUB_ENV
+          echo "XCODE_DERIVED_DATA_PATH=${{ github.workspace }}/build/ios_derived" >> $GITHUB_ENV
+          echo "SYMROOT=${{ github.workspace }}/build/ios_derived" >> $GITHUB_ENV
+          echo "DERIVED_DATA_PATH=${{ github.workspace }}/build/ios_derived" >> $GITHUB_ENV
 
       - name: 📦 Build unsigned IPA
         env:
           XCODE_DERIVED_DATA_PATH: ${{ github.workspace }}/build/ios_derived
-        run: flutter build ipa --release --no-codesign --verbose
+          SYMROOT: ${{ github.workspace }}/build/ios_derived
+          DERIVED_DATA_PATH: ${{ github.workspace }}/build/ios_derived
+        run: |
+          flutter build ipa \
+            --release \
+            --no-codesign \
+            --verbose \
+            --dart-define=CI_BUILD=true
 
       - name: 🔍 Debug: List generated IPA files
         run: ls -l build/ios/ipa || echo "No IPA generated"
@@ -77,4 +72,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: cyanase_ios_ipa_unsigned
-          path: build/ios/ipa
+          path: build/ios/ipa/*.ipa
