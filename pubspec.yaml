@@ -43,7 +43,7 @@ dependencies:
 
   # Charts and Gauges
   fl_chart: ^0.65.0
-  syncfusion_flutter_gauges: ^28.1.38
+  syncfusion_flutter_gauges: ^24.1.41
 
   # Data and State
   http: ^1.2.2
