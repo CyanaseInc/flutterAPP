@@ -43,8 +43,8 @@ dependencies:
 
   # Charts and Gauges
   fl_chart: ^0.65.0
-  syncfusion_flutter_gauges: ^24.1.41
-  syncfusion_flutter_core: ^24.1.41
+  syncfusion_flutter_gauges: ^29.2.10
+  syncfusion_flutter_core: ^29.2.10
 
   # Data and State
   http: ^1.2.2
@@ -66,7 +66,7 @@ dependencies:
 
   # Voice and Audio
   audioplayers: ^6.1.0
-  record: ^4.4.0
+  flutter_sound: ^9.28.0
 
   # QR and Emoji
   qr_flutter: ^4.1.0

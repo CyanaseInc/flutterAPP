@@ -11,7 +11,6 @@
 #include <emoji_picker_flutter/emoji_picker_flutter_plugin.h>
 #include <file_selector_linux/file_selector_plugin.h>
 #include <gtk/gtk_plugin.h>
-#include <record_linux/record_linux_plugin.h>
 #include <sim_card_info/sim_card_info_plugin.h>
 #include <url_launcher_linux/url_launcher_plugin.h>
 
@@ -31,9 +30,6 @@ void fl_register_plugins(FlPluginRegistry* registry) {
   g_autoptr(FlPluginRegistrar) gtk_registrar =
       fl_plugin_registry_get_registrar_for_plugin(registry, "GtkPlugin");
   gtk_plugin_register_with_registrar(gtk_registrar);
-  g_autoptr(FlPluginRegistrar) record_linux_registrar =
-      fl_plugin_registry_get_registrar_for_plugin(registry, "RecordLinuxPlugin");
-  record_linux_plugin_register_with_registrar(record_linux_registrar);
   g_autoptr(FlPluginRegistrar) sim_card_info_registrar =
       fl_plugin_registry_get_registrar_for_plugin(registry, "SimCardInfoPlugin");
   sim_card_info_plugin_register_with_registrar(sim_card_info_registrar);

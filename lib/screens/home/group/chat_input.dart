@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:record/record.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter_sound/flutter_sound.dart'; // Changed from record package
 import './functions/audio_function.dart';
 import './functions/image_functions.dart';
 import 'package:cyanase/theme/theme.dart';
+
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 
 class InputArea extends StatefulWidget {
@@ -86,7 +88,13 @@ class _InputAreaState extends State<InputArea> {
   }
 
   Future<bool> _checkAudioPermission() async {
-    return await Record().hasPermission();
+    // Updated permission check for flutter_sound
+    final status = await Permission.microphone.status;
+    if (!status.isGranted) {
+      final result = await Permission.microphone.request();
+      return result.isGranted;
+    }
+    return true;
   }
 
   bool get _canSendMessages {
