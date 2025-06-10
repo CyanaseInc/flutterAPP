@@ -37,6 +37,15 @@ jobs:
           pod install
           cd ..
 
+      - name: 🚫 Disable User Script Sandboxing in Xcode project
+        run: |
+          cd ios
+          # Remove any existing ENABLE_USER_SCRIPT_SANDBOXING lines
+          sed -i '' '/ENABLE_USER_SCRIPT_SANDBOXING/d' Runner.xcodeproj/project.pbxproj
+          # Insert ENABLE_USER_SCRIPT_SANDBOXING = NO; line (append at end)
+          echo "  ENABLE_USER_SCRIPT_SANDBOXING = NO;" >> Runner.xcodeproj/project.pbxproj
+          cd ..
+
       - name: ❌ Disable Code Signing & Bitcode
         run: |
           cd ios
@@ -65,4 +74,3 @@ jobs:
         with:
           name: cyanase_ios_ipa_unsigned
           path: build/ios/ipa
-
