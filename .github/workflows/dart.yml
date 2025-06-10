@@ -46,8 +46,7 @@ jobs:
 
       # Get Flutter dependencies
       - name: Get dependencies
-        run: |
-          flutter pub get
+        run: flutter pub get
 
       # Pod cleanup and fresh install
       - name: Setup iOS build
@@ -64,6 +63,21 @@ jobs:
           cd ios
           sed -i '' 's/IPHONEOS_DEPLOYMENT_TARGET = .*/IPHONEOS_DEPLOYMENT_TARGET = 12.0;/' Runner.xcodeproj/project.pbxproj
           cd ..
+
+      # Ensure correct CocoaPods base configuration
+      - name: Set CocoaPods base config
+        run: |
+          cd ios
+          for config in "Release" "Debug"; do
+            plutil -replace baseConfigurationReference -string "Pods/Target Support Files/Pods-Runner/Pods-Runner.${config}.xcconfig" Runner.xcodeproj/project.pbxproj || true
+          done
+          cd ..
+
+      # Set permissions for the whole project (fixes write errors)
+      - name: Set project directory permissions
+        run: |
+          sudo chown -R $(whoami) .
+          sudo chmod -R 777 .
 
       # Set permissions for build and ios directories after pod install
       - name: Set permissions for build and ios directories
@@ -84,48 +98,4 @@ jobs:
           cd ..
 
       # Disable code signing for CI
-      - name: Disable code signing for CI
-        run: |
-          cd ios
-          sed -i '' 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/' Runner.xcodeproj/project.pbxproj || true
-          sed -i '' 's/CODE_SIGN_IDENTITY = .*;/CODE_SIGN_IDENTITY = "";/g' Runner.xcodeproj/project.pbxproj || true
-          sed -i '' 's/DEVELOPMENT_TEAM = .*;/DEVELOPMENT_TEAM = "";/g' Runner.xcodeproj/project.pbxproj || true
-          cd ..
-
-      # Build iOS release (no code signing)
-      - name: Build iOS
-        run: |
-          flutter build ios --release --no-codesign --verbose
-        env:
-          FLUTTER_BUILD_NUMBER: ${{ github.run_number }}
-          FLUTTER_BUILD_NAME: "1.0.0"
-          FLUTTER_FORCE_XCODE_WORKSPACE: "true"
-
-      # Debug permissions (optional, for troubleshooting)
-      - name: Debug permissions
-        run: |
-          ls -la build/ios
-          ls -la build/ios/Debug-iphoneos || echo "Debug-iphoneos not found"
-          ls -la build/ios/Release-iphoneos || echo "Release-iphoneos not found"
-
-      # Create IPA
-      - name: Create IPA
-        run: |
-          cd build/ios/iphoneos
-          mkdir -p Payload
-          mv Runner.app Payload/
-          zip -qq -r -9 FlutterIpaExport.ipa Payload
-          cd ../../..
-
-      # Upload IPA as a release asset
-      - name: Upload IPA
-        uses: svenstaro/upload-release-action@v2
-        with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: build/ios/iphoneos/FlutterIpaExport.ipa
-          tag: v1.0.${{ github.run_number }}
-          overwrite: true
-          body: |
-            iOS Build #${{ github.run_number }}
-            - Build Date: ${{ github.event.repository.updated_at }}
-            - Commit: ${{ github.sha }}
+      - name:
