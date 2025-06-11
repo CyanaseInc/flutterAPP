@@ -11,7 +11,173 @@ if (localPropertiesFile.exists()) {
         localProperties.load(reader)
     }
 }
+name: cyanase_ipa
 
+on:
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    name: 🚀 Build iOS Test IPA (No Signing)
+    runs-on: macos-14
+
+    steps:
+      - name: 🛎️ Checkout Code
+        uses: actions/checkout@v3
+
+      - name: 🔧 Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.0'
+          bundler-cache: true
+
+      - name: 💙 Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.32.2'
+          channel: stable
+          architecture: x64
+
+      - name: 🧹 Clean and Get Packages
+        run: |
+          flutter clean
+          flutter pub get
+
+      - name: 🍎 Install CocoaPods
+        run: |
+          cd ios
+          pod deintegrate
+          pod install
+          cd ..
+
+      - name: ❌ Disable Code Signing & Bitcode
+        run: |
+          cd ios
+          sed -i '' 's/CODE_SIGN_STYLE = .*/CODE_SIGN_STYLE = Manual;/' Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/CODE_SIGN_IDENTITY = .*/CODE_SIGN_IDENTITY = "";/' Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/DEVELOPMENT_TEAM = .*/DEVELOPMENT_TEAM = "";/' Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/PROVISIONING_PROFILE_SPECIFIER = .*/PROVISIONING_PROFILE_SPECIFIER = "";/' Runner.xcodeproj/project.pbxproj
+          sed -i '' '/ENABLE_BITCODE =/d' Runner.xcodeproj/project.pbxproj
+          cd ..
+
+      - name: 🔓 Set Permissions
+        run: |
+          sudo chown -R $(whoami) .
+          sudo chmod -R 777 .
+
+      - name: 🛠 Set Writable Derived Data Path
+        run: |
+          mkdir -p ${{ github.workspace }}/build/ios_derived
+          echo "XCODE_DERIVED_DATA_PATH=${{ github.workspace }}/build/ios_derived" >> $GITHUB_ENV
+
+      - name: 📦 Build Unsigned IPA
+        run: flutter build ipa --release --no-codesign --verbose
+
+      - name: 📤 Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cyanase_ios_ipa_unsigned
+          path: build/ios/ipa
+
+
+The job failed during the iOS build process due to multiple issues, primarily related to CocoaPods integration, Xcode project configurations, and file permissions. Below are the identified problems and their solutions:
+
+---
+
+### **1. CocoaPods Configuration Issue**
+#### Error:
+```
+CocoaPods did not set the base configuration of your project because your project already has a custom config set.
+```
+#### Solution:
+- Open your `ios/Podfile`.
+- Ensure the following line is present and uncommented:
+  ```ruby
+  config.build_settings['ENABLE_BITCODE'] = 'NO'
+  ```
+- Check the Xcode project and ensure that the base configuration for each target is not overridden.
+  1. Open `Runner.xcworkspace` in Xcode.
+  2. Go to the "Build Settings" tab.
+  3. Ensure the "Base Configuration" is set to `Pods/Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig`.
+
+---
+
+### **2. File Permissions Issue**
+#### Error:
+```
+Flutter failed to write to a file at "/Users/runner/Library/Developer/Xcode/DerivedData/Runner/...".
+Please ensure that the SDK and/or project is installed in a location that has read/write permissions for the current user.
+```
+#### Solution:
+- Update the GitHub Actions workflow to ensure proper permissions:
+  - Add the following to your workflow file `.github/workflows/dart.yml`:
+    ```yaml
+    steps:
+      - name: Set permissions for DerivedData
+        run: |
+          sudo chmod -R 777 ~/Library/Developer/Xcode/DerivedData
+    ```
+- Alternatively, you can clean the `DerivedData` directory before the build step:
+  ```yaml
+  steps:
+    - name: Clean DerivedData
+      run: rm -rf ~/Library/Developer/Xcode/DerivedData
+    ```
+
+---
+
+### **3. Flutter Plugin Warnings**
+#### Errors:
+- `comparison of distinct pointer types ('FlutterSoundRecorder *' and 'NSNull * _Nonnull')`
+- `unused variable 'audioSource'`
+- `implicit conversion loses integer precision`
+
+#### Solution:
+- Update the Flutter plugins to the latest version by running:
+  ```bash
+  flutter pub upgrade
+  ```
+- If warnings persist, you can suppress them in the build:
+  1. Open `Runner.xcworkspace` in Xcode.
+  2. Go to the "Build Settings" tab.
+  3. Add the following flags under "Other Warning Flags":
+     ```
+     -Wno-unused-variable
+     -Wno-compare-distinct-pointer-types
+     -Wno-shorten-64-to-32
+     ```
+
+---
+
+### **4. iOS Build Script Fails**
+#### Error:
+```
+PhaseScriptExecution Run Script ... Script-9740EE...
+```
+#### Solution:
+- Ensure that the Flutter build script is properly configured in your workflow file:
+  ```yaml
+  steps:
+    - name: Run Flutter Build
+      run: flutter build ipa --release
+  ```
+- Add a script phase in Xcode to clean the build cache:
+  1. Open `Runner.xcworkspace`.
+  2. Go to "Build Phases".
+  3. Add a new "Run Script Phase" with the following:
+     ```bash
+     rm -rf "${PROJECT_DIR}/build"
+     rm -rf "${PROJECT_DIR}/ios/Flutter/Flutter.framework"
+     ```
+---
+
+### **Workflow File Reference**
+You can find the workflow file here:
+[`.github/workflows/dart.yml`](https://github.com/CyanaseInc/flutterAPP/blob/acebb56240c304e4a056c2fb368fa79da4fc60ec/.github/workflows/dart.yml)
+
+---
+
+Let me know if you need further assistance with the implementation!
 def flutterVersionCode = localProperties.getProperty('flutter.versionCode') ?: '1'
 def flutterVersionName = localProperties.getProperty('flutter.versionName') ?: '1.0'
 
