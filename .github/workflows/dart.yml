@@ -47,6 +47,16 @@ jobs:
         run: |
           flutter clean
           flutter pub get
+          flutter precache --ios
+
+      - name: 🔧 Ensure Flutter Framework is Available
+        run: |
+          cd ios
+          if [ ! -d "Flutter" ]; then
+            mkdir -p Flutter
+            cp -r $(dirname $(which flutter))/../packages/flutter_tools/templates/ios/Flutter/* Flutter/
+          fi
+          cd ..
 
       - name: 🍎 Patch Podfile post_install to disable BUILD_LIBRARY_FOR_DISTRIBUTION
         run: |
