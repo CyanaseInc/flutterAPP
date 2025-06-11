@@ -39,6 +39,7 @@ post_install do |installer|
       config.build_settings['CODE_SIGNING_REQUIRED'] = 'NO'
       config.build_settings['CODE_SIGNING_IDENTITY'] = ''
       config.build_settings['DEVELOPMENT_TEAM'] = ''
+      config.build_settings['BUILD_LIBRARY_FOR_DISTRIBUTION'] = 'NO'
       config.build_settings['PROVISIONING_PROFILE_SPECIFIER'] = ''
       config.build_settings['HEADER_SEARCH_PATHS'] ||= ['$(inherited)']
       config.build_settings['HEADER_SEARCH_PATHS'] << '${PODS_ROOT}/Flutter/Flutter.framework/Headers'
