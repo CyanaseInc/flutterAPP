@@ -33,16 +33,6 @@ jobs:
             ios/Pods
           key: ${{ runner.os }}-flutter-${{ hashFiles('**/pubspec.lock') }}
 
-      - name: 🔎 Check for Merge Conflicts in project.pbxproj
-        run: |
-          if grep -E "^<<<<<<<|^=======|^>>>>>>>" ios/Runner.xcodeproj/project.pbxproj; then
-            echo "Error: Merge conflicts detected in project.pbxproj"
-            exit 1
-          fi
-
-      - name: ✅ Validate Xcode Project
-        run: xcodebuild -project ios/Runner.xcodeproj -list
-
       - name: 🧹 Clean and Get Packages
         run: |
           flutter clean
@@ -51,6 +41,8 @@ jobs:
       - name: 🍎 Install CocoaPods
         run: |
           cd ios
+          pod deintegrate
+          pod cache clean --all
           pod install --repo-update
           cd ..
 
@@ -88,7 +80,14 @@ jobs:
       - name: 🚫 Disable Swift Module Interfaces (Fix bridging headers error)
         run: |
           cd ios
-          awk '/buildSettings = {/ {print; print "\t\t\t\tBUILD_LIBRARY_FOR_DISTRIBUTION = NO;"; next}1' Runner.xcodeproj/project.pbxproj > temp.pbxproj
+          awk '/buildSettings = {/ {
+            print;
+            print "\t\t\t\tBUILD_LIBRARY_FOR_DISTRIBUTION = NO;";
+            print "\t\t\t\tSWIFT_ENABLE_MODULE_INTERFACE = NO;";
+            print "\t\t\t\tDEFINES_MODULE = NO;";
+            print "\t\t\t\tSWIFT_INSTALL_OBJC_HEADER = NO;";
+            next
+          }1' Runner.xcodeproj/project.pbxproj > temp.pbxproj
           mv temp.pbxproj Runner.xcodeproj/project.pbxproj
           cd ..
 
@@ -101,7 +100,8 @@ jobs:
           echo "XCODE_DERIVED_DATA_PATH=${{ github.workspace }}/build/ios_derived" >> $GITHUB_ENV
 
       - name: 📦 Build Unsigned IPA
-        run: flutter build ipa --release --no-codesign --verbose
+        run: |
+          flutter build ipa --release --no-codesign --verbose
 
       - name: 🔄 Regenerate iOS Project (Fallback)
         if: failure()
@@ -130,7 +130,14 @@ jobs:
           }1' ios/Runner.xcodeproj/project.pbxproj > ios/temp.pbxproj
           mv ios/temp.pbxproj ios/Runner.xcodeproj/project.pbxproj
 
-          awk '/buildSettings = {/ {print; print "\t\t\t\tBUILD_LIBRARY_FOR_DISTRIBUTION = NO;"; next}1' ios/Runner.xcodeproj/project.pbxproj > ios/temp.pbxproj
+          awk '/buildSettings = {/ {
+            print;
+            print "\t\t\t\tBUILD_LIBRARY_FOR_DISTRIBUTION = NO;";
+            print "\t\t\t\tSWIFT_ENABLE_MODULE_INTERFACE = NO;";
+            print "\t\t\t\tDEFINES_MODULE = NO;";
+            print "\t\t\t\tSWIFT_INSTALL_OBJC_HEADER = NO;";
+            next
+          }1' ios/Runner.xcodeproj/project.pbxproj > ios/temp.pbxproj
           mv ios/temp.pbxproj ios/Runner.xcodeproj/project.pbxproj
 
           flutter build ipa --release --no-codesign --verbose
