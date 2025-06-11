@@ -54,6 +54,12 @@ jobs:
           pod install --repo-update
           cd ..
 
+      - name: 🧽 Remove Bridging Header Reference (if unused)
+        run: |
+          cd ios
+          sed -i '' '/SWIFT_OBJC_BRIDGING_HEADER/d' Runner.xcodeproj/project.pbxproj
+          cd ..
+
       - name: 🚫 Disable User Script Sandboxing
         run: |
           cd ios
@@ -119,6 +125,8 @@ jobs:
 
           awk '/buildSettings = {/ {print; print "\t\t\t\tBUILD_LIBRARY_FOR_DISTRIBUTION = NO;"; next}1' ios/Runner.xcodeproj/project.pbxproj > ios/temp.pbxproj
           mv ios/temp.pbxproj ios/Runner.xcodeproj/project.pbxproj
+
+          sed -i '' '/SWIFT_OBJC_BRIDGING_HEADER/d' ios/Runner.xcodeproj/project.pbxproj
 
           flutter build ipa --release --no-codesign --verbose
 
