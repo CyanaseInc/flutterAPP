@@ -48,41 +48,33 @@ jobs:
           flutter clean
           flutter pub get
 
-      - name: 🍎 Patch Podfile to ensure BUILD_LIBRARY_FOR_DISTRIBUTION = NO
+      - name: 🍎 Patch Podfile post_install to disable BUILD_LIBRARY_FOR_DISTRIBUTION
         run: |
-          # Backup Podfile before patching
-          cp ios/Podfile ios/Podfile.bak
-
-          # Check if Podfile contains post_install block
           if grep -q "post_install do |installer|" ios/Podfile; then
             echo "Patching existing post_install block in Podfile"
-
-            # Insert BUILD_LIBRARY_FOR_DISTRIBUTION=NO inside post_install targets loop if missing
             awk '
-              BEGIN {inserted=0}
+              BEGIN {in_post=0; done=0}
               /post_install do \|installer\|/ {in_post=1}
               in_post && /installer.pods_project.targets.each do \|target\|/ {in_targets=1}
-              in_targets && /end/ && !inserted {
+              in_targets && /end/ && done==0 {
                 print "\t\ttarget.build_configurations.each do |config|"
                 print "\t\t\tconfig.build_settings[\"BUILD_LIBRARY_FOR_DISTRIBUTION\"] = \"NO\""
                 print "\t\tend"
-                inserted=1
+                done=1
               }
               {print}
             ' ios/Podfile > ios/Podfile.patched && mv ios/Podfile.patched ios/Podfile
-
           else
-            echo "No post_install block found, adding a new one with BUILD_LIBRARY_FOR_DISTRIBUTION=NO"
-            cat <<EOF >> ios/Podfile
-
-post_install do |installer|
-  installer.pods_project.targets.each do |target|
-    target.build_configurations.each do |config|
-      config.build_settings["BUILD_LIBRARY_FOR_DISTRIBUTION"] = "NO"
-    end
-  end
-end
-EOF
+            echo "No post_install block found, adding a new one"
+            echo '
+            post_install do |installer|
+              installer.pods_project.targets.each do |target|
+                target.build_configurations.each do |config|
+                  config.build_settings["BUILD_LIBRARY_FOR_DISTRIBUTION"] = "NO"
+                end
+              end
+            end
+            ' >> ios/Podfile
           fi
 
       - name: 🍎 Install CocoaPods
@@ -91,7 +83,7 @@ EOF
           pod install --repo-update
           cd ..
 
-      # Remove manual bridging header hack, as it causes conflicts with module interfaces
+      # Removed Add Bridging Header step to avoid module interface error
 
       - name: 🚫 Disable User Script Sandboxing
         run: |
