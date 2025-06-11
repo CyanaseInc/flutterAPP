@@ -5,96 +5,128 @@ on:
 
 jobs:
   build-ios:
-    name: 🎉 iOS Build
-    runs-on: macos-14 # Use macos-14 to avoid potential sandbox issues
-    steps:
-      - uses: actions/checkout@v3
+    name: 🚀 Build iOS Test IPA (No Signing)
+    runs-on: macos-14
 
-      - name: Set up Ruby
+    steps:
+      - name: 🛎️ Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 🔧 Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.0'
           bundler-cache: true
 
-      - uses: subosito/flutter-action@v2
+      - name: 💙 Set up Flutter
+        uses: subosito/flutter-action@v2
         with:
-          channel: 'stable'
-          architecture: x64
           flutter-version: '3.32.2'
+          channel: stable
+          architecture: x64
 
-      - name: Install CocoaPods
+      - name: 📦 Cache Flutter and Pods
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+            ios/Pods
+          key: ${{ runner.os }}-flutter-${{ hashFiles('**/pubspec.lock') }}
+
+      - name: 🔎 Check for Merge Conflicts in project.pbxproj
         run: |
-          sudo gem install cocoapods
-          pod setup
+          if grep -E "^<<<<<<<|^=======|^>>>>>>>" ios/Runner.xcodeproj/project.pbxproj; then
+            echo "Error: Merge conflicts detected in project.pbxproj"
+            exit 1
+          fi
 
-      - name: Clean build
+      - name: 🪲 Upload project.pbxproj for debugging
+        uses: actions/upload-artifact@v4
+        with:
+          name: runner-project-pbxproj
+          path: ios/Runner.xcodeproj/project.pbxproj
+
+      - name: ✅ Validate Xcode Project
+        run: xcodebuild -project ios/Runner.xcodeproj -list
+
+      # --- Fixes start here ---
+
+      - name: 🧹 Clean Xcode Derived Data
+        run: rm -rf ~/Library/Developer/Xcode/DerivedData
+
+      - name: 🧹 Clean and Get Packages
         run: |
           flutter clean
-          rm -rf build
-          cd ios
-          rm -rf Pods/
-          rm -rf .symlinks/
-          rm -rf Flutter/Flutter.framework
-          rm -rf Flutter/Flutter.podspec
-          cd ..
-
-      - name: Get dependencies
-        run: |
           flutter pub get
-          flutter pub outdated
-          flutter pub upgrade --major-versions
 
-      - name: Setup iOS build
+      - name: 🛠 Remove Bridging Header Setting (to fix Swift bridging header error)
+        run: |
+          sed -i '' '/SWIFT_OBJC_BRIDGING_HEADER/d' ios/Runner.xcodeproj/project.pbxproj
+
+      - name: 👷 Patch Podfile for Bitcode = NO (to fix ENABLE_BITCODE warning)
+        run: |
+          if ! grep -q "post_install do" ios/Podfile; then
+            echo '
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    target.build_configurations.each do |config|
+      config.build_settings["ENABLE_BITCODE"] = "NO"
+    end
+  end
+end
+' >> ios/Podfile
+          fi
+
+      - name: 🍎 Install CocoaPods
         run: |
           cd ios
-          pod deintegrate
-          pod cache clean --all
-          pod install
+          pod install --repo-update
           cd ..
 
-      - name: Set Xcode deployment target
+      # --- End fixes ---
+
+      - name: 🚫 Disable User Script Sandboxing in Xcode project
         run: |
           cd ios
-          sed -i '' 's/IPHONEOS_DEPLOYMENT_TARGET = .*/IPHONEOS_DEPLOYMENT_TARGET = 12.0;/' Runner.xcodeproj/project.pbxproj
+          awk '/buildSettings = {/ {print; print "\t\t\t\tENABLE_USER_SCRIPT_SANDBOXING = NO;"; next}1' Runner.xcodeproj/project.pbxproj > temp.pbxproj
+          mv temp.pbxproj Runner.xcodeproj/project.pbxproj
           cd ..
 
-      # ======= Permission step moved before build =======
-      - name: Set permissions for build directory
+      - name: ❌ Disable Code Signing & Bitcode (extra safety)
         run: |
-          sudo mkdir -p build
-          sudo chown -R $(whoami) build
-          sudo chmod -R 777 build
+          cd ios
+          awk '/buildSettings = {/ {print; print "\t\t\t\tCODE_SIGN_STYLE = Manual;\n\t\t\t\tCODE_SIGN_IDENTITY = \"\";\n\t\t\t\tDEVELOPMENT_TEAM = \"\";\n\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = \"\";\n\t\t\t\tENABLE_BITCODE = NO;"; next}1' Runner.xcodeproj/project.pbxproj > temp.pbxproj
+          mv temp.pbxproj Runner.xcodeproj/project.pbxproj
+          cd ..
 
-      - name: Build iOS
+      - name: 🔓 Set Permissions
+        run: chmod -R u+rw ios
+
+      - name: 🛠 Set Writable Derived Data Path
         run: |
-          flutter build ios --release --no-codesign --verbose
-        env:
-          FLUTTER_BUILD_NUMBER: ${{ github.run_number }}
-          FLUTTER_BUILD_NAME: "1.0.0"
-          FLUTTER_FORCE_XCODE_WORKSPACE: "true"
+          mkdir -p ${{ github.workspace }}/build/ios_derived
+          echo "XCODE_DERIVED_DATA_PATH=${{ github.workspace }}/build/ios_derived" >> $GITHUB_ENV
 
-      - name: Debug permissions
+      - name: 📦 Build Unsigned IPA
+        run: flutter build ipa --release --no-codesign --verbose
+
+      - name: 🔄 Regenerate iOS Project (Fallback)
+        if: failure()
         run: |
-          ls -la build/ios
-          ls -la build/ios/Debug-iphoneos || echo "Debug-iphoneos not found"
-          ls -la build/ios/Release-iphoneos || echo "Release-iphoneos not found"
+          rm -rf ios
+          flutter create --platforms=ios .
+          cd ios
+          pod install --repo-update
+          cd ..
+          # Reapply modifications
+          awk '/buildSettings = {/ {print; print "\t\t\t\tENABLE_USER_SCRIPT_SANDBOXING = NO;"; next}1' ios/Runner.xcodeproj/project.pbxproj > ios/temp.pbxproj
+          mv ios/temp.pbxproj ios/Runner.xcodeproj/project.pbxproj
+          awk '/buildSettings = {/ {print; print "\t\t\t\tCODE_SIGN_STYLE = Manual;\n\t\t\t\tCODE_SIGN_IDENTITY = \"\";\n\t\t\t\tDEVELOPMENT_TEAM = \"\";\n\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = \"\";\n\t\t\t\tENABLE_BITCODE = NO;"; next}1' ios/Runner.xcodeproj/project.pbxproj > ios/temp.pbxproj
+          mv ios/temp.pbxproj ios/Runner.xcodeproj/project.pbxproj
+          flutter build ipa --release --no-codesign --verbose
 
-      - name: Create IPA
-        run: |
-          cd build/ios/iphoneos
-          mkdir -p Payload
-          mv Runner.app Payload/
-          zip -qq -r -9 FlutterIpaExport.ipa Payload
-          cd ../../..
-
-      - name: Upload IPA
-        uses: svenstaro/upload-release-action@v2
+      - name: 📤 Upload IPA Artifact
+        uses: actions/upload-artifact@v4
         with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: build/ios/iphoneos/FlutterIpaExport.ipa
-          tag: v1.0.${{ github.run_number }}
-          overwrite: true
-          body: |
-            iOS Build #${{ github.run_number }}
-            - Build Date: ${{ github.event.repository.updated_at }}
-            - Commit: ${{ github.sha }}
+          name: cyanase_ios_ipa_unsigned
+          path: build/ios/ipa
