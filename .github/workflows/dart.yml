@@ -21,7 +21,7 @@ jobs:
       - name: 💙 Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.32.2'
+          flutter-version: '3.22.2' # Corrected to a valid stable version; verify with `flutter --version` locally
           channel: stable
           architecture: x64
 
@@ -31,13 +31,18 @@ jobs:
           path: |
             ~/.pub-cache
             ios/Pods
-          key: ${{ runner.os }}-flutter-${{ hashFiles('**/pubspec.lock') }}
+            ios/Podfile.lock
+          key: ${{ runner.os }}-flutter-${{ hashFiles('**/pubspec.lock') }}-v1
+          restore-keys: |
+            ${{ runner.os }}-flutter-
 
       - name: 🧹 Clean and Get Packages
         run: |
           flutter clean
           flutter pub get
           flutter precache --ios
+          echo "✅ Flutter version:"
+          flutter --version
 
       - name: 🍎 Install CocoaPods
         run: |
@@ -47,16 +52,16 @@ jobs:
           pod deintegrate
           pod cache clean --all
           pod repo update
-          pod install --repo-update
+          pod install --repo-update || { echo "❌ Pod install failed"; cat Podfile; exit 1; }
           cd ..
 
       - name: ➕ Add Bridging Header for GeneratedPluginRegistrant
         run: |
           cd ios
-          echo '#import "GeneratedPluginRegistrant.h"' > Runner/Runner-Bridging-Header.h
-          sed -i '' '/buildSettings = {/a\
-            \t\t\t\tSWIFT_OBJC_BRIDGING_HEADER = Runner/Runner-Bridging-Header.h;
-          ' Runner.xcodeproj/project.pbxproj
+          echo '#import <Flutter/Flutter.h>' > Runner/Runner-Bridging-Header.h
+          echo '#import "GeneratedPluginRegistrant.h"' >> Runner/Runner-Bridging-Header.h
+          echo "✅ Bridging header created at ios/Runner/Runner-Bridging-Header.h"
+          cat Runner/Runner-Bridging-Header.h
           cd ..
 
       - name: 🚫 Disable User Script Sandboxing
@@ -76,43 +81,70 @@ jobs:
             print "\t\t\t\tDEVELOPMENT_TEAM = \"\";";
             print "\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = \"\";";
             print "\t\t\t\tENABLE_BITCODE = NO;";
+            print "\t\t\t\tSWIFT_OBJC_BRIDGING_HEADER = \"Runner/Runner-Bridging-Header.h\";";
             next
           }1' Runner.xcodeproj/project.pbxproj > temp.pbxproj
           mv temp.pbxproj Runner.xcodeproj/project.pbxproj
           cd ..
 
-      - name: 🚫 Disable Swift Module Interfaces (Fix bridging headers error)
+      - name: 🚫 Fix BUILD_LIBRARY_FOR_DISTRIBUTION conflict
         run: |
-          cd ios
-          awk '/buildSettings = {/ {print; print "\t\t\t\tBUILD_LIBRARY_FOR_DISTRIBUTION = NO;"; next}1' Runner.xcodeproj/project.pbxproj > temp.pbxproj
-          mv temp.pbxproj Runner.xcodeproj/project.pbxproj
-          cd ..
+          gem install xcodeproj
+          ruby -e '
+            require "xcodeproj"
+            project = Xcodeproj::Project.open("ios/Runner.xcodeproj")
+            project.targets.each do |target|
+              if target.name == "RunnerTests"
+                target.build_configurations.each do |config|
+                  config.build_settings["BUILD_LIBRARY_FOR_DISTRIBUTION"] = "NO"
+                end
+              end
+            end
+            project.save
+          '
+          echo "✅ Fixed BUILD_LIBRARY_FOR_DISTRIBUTION for RunnerTests"
 
-      - name: 🔓 Set Permissions
-        run: chmod -R u+rw ios
+      - name: 🔓 Reset Permissions
+        run: chmod -R u+rw .
 
       - name: 🛠 Set Writable Derived Data Path
         run: |
           mkdir -p ${{ github.workspace }}/build/ios_derived
           echo "XCODE_DERIVED_DATA_PATH=${{ github.workspace }}/build/ios_derived" >> $GITHUB_ENV
 
-      - name: 📦 Build Unsigned IPA
+      - name: 📦 Build iOS App
         run: |
           set -euo pipefail
-          flutter build ipa --release --no-codesign --verbose
+          flutter build ios --release --no-codesign --verbose 2>&1 | tee build.log
+          echo "✅ iOS build completed"
+
+      - name: 📦 Create IPA
+        run: |
+          cd build/ios/iphoneos
+          mkdir -p Payload
+          mv Runner.app Payload/
+          zip -r app.ipa Payload
+          mv app.ipa ../../..
+          cd ../../..
+          echo "✅ IPA created at app.ipa"
+          ls -la
 
       - name: 🧪 List Build Folder (Debugging)
         run: |
           echo "🔍 Listing all contents of build/ios:"
           find build/ios
+          echo "🔍 Contents of build.log:"
+          cat build.log
 
       - name: 📄 Rename IPA for Release Upload
         run: |
           mkdir -p release-artifacts
-          IPA_PATH=$(find build/ios -type f -name "*.ipa" | head -n 1)
+          IPA_PATH=$(find . -type f -name "*.ipa" | head -n 1)
           if [ -z "$IPA_PATH" ]; then
             echo "❌ No IPA found. Here's what was built:"
             find build
+            echo "🔍 Build log:"
+            cat build.log
             exit 1
           fi
           echo "✅ IPA found at $IPA_PATH"
@@ -128,7 +160,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: 📤 Upload IPA Artifact (optional)
+      - name: 📤 Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
           name: cyanase_ios_ipa_unsigned
