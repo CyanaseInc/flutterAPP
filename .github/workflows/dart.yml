@@ -85,12 +85,13 @@ jobs:
           mv temp.pbxproj Runner.xcodeproj/project.pbxproj
           cd ..
 
-      - name: 🚫 Disable Swift Module Interfaces (Fix bridging headers error)
-        run: |
-          cd ios
-          awk '/buildSettings = {/ {print; print "\t\t\t\tBUILD_LIBRARY_FOR_DISTRIBUTION = NO;"; next}1' Runner.xcodeproj/project.pbxproj > temp.pbxproj
-          mv temp.pbxproj Runner.xcodeproj/project.pbxproj
-          cd ..
+      # 🔥 Removed this block because it overrides BUILD_LIBRARY_FOR_DISTRIBUTION, causing CocoaPods warnings:
+      # - name: 🚫 Disable Swift Module Interfaces (Fix bridging headers error)
+      #   run: |
+      #     cd ios
+      #     awk '/buildSettings = {/ {print; print "\t\t\t\tBUILD_LIBRARY_FOR_DISTRIBUTION = NO;"; next}1' Runner.xcodeproj/project.pbxproj > temp.pbxproj
+      #     mv temp.pbxproj Runner.xcodeproj/project.pbxproj
+      #     cd ..
 
       - name: 🔓 Set Permissions
         run: chmod -R u+rw ios
