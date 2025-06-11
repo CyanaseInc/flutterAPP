@@ -109,13 +109,13 @@ jobs:
       - name: 📦 Build iOS App
         run: |
           set -euo pipefail
-          flutter build ios --release --no-codesign --verbose > build.log 2>&1 || { echo "❌ Build failed"; cat build.log; exit 1; }
-          echo "✅ iOS build completed"
+          flutter build ios-framework --release --no-codesign --verbose > build.log 2>&1 || { echo "❌ Build failed"; cat build.log; exit 1; }
+          echo "✅ iOS framework build completed"
 
       - name: Verify Build Output
         run: |
-          if [ ! -d "build/ios/iphoneos/Runner.app" ]; then
-            echo "Error: Runner.app not found in build/ios/iphoneos"
+          if [ ! -d "build/ios/framework" ]; then
+            echo "Error: iOS framework not found in build/ios/framework"
             cat build.log
             exit 1
           fi
@@ -126,9 +126,9 @@ jobs:
 
       - name: 📦 Create IPA
         run: |
-          cd build/ios/iphoneos
+          cd build/ios/framework
           mkdir -p Payload
-          mv Runner.app Payload/
+          mv App.framework Payload/
           zip -r app.ipa Payload
           mv app.ipa ../../..
           cd ../../..
