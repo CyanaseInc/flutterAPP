@@ -1,150 +1,70 @@
-name: cyanase_ipa
+name: Build iOS IPA
 
 on:
   workflow_dispatch:
 
 jobs:
-  build-ios:
-    name: 🚀 Build iOS Test IPA (No Signing)
-    runs-on: macos-14
+  build:
+    name: 🏗️ Build IPA for iOS
+    runs-on: macos-latest
 
     steps:
-      - name: 🛎️ Checkout Code
-        uses: actions/checkout@v4
+      - name: 🧾 Checkout repository
+        uses: actions/checkout@v3
 
-      - name: 🔧 Set up Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: '3.0'
-          bundler-cache: true
-
-      - name: 💙 Set up Flutter
+      - name: 🔧 Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.32.2'
+          flutter-version: '3.19.0' # or whatever you're using
           channel: stable
-          architecture: x64
 
-      - name: 📦 Cache Flutter and Pods
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.pub-cache
-            ios/Pods
-            ios/Podfile.lock
-          key: ${{ runner.os }}-flutter-${{ hashFiles('**/pubspec.lock') }}-v2
-          restore-keys: |
-            ${{ runner.os }}-flutter-
+      - name: 📦 Install Flutter dependencies
+        run: flutter pub get
 
-      - name: 🧹 Clean and Get Packages
-        run: |
-          flutter clean
-          flutter pub get
-          flutter precache --ios
-          flutter --version
+      - name: 🛠️ Build Flutter iOS artifacts
+        run: flutter build ios --release --no-codesign
 
-      - name: 🍎 Clean and Install CocoaPods
+      - name: 🍎 Install CocoaPods
         run: |
           cd ios
-          rm -rf Pods Podfile.lock
-          pod deintegrate
-          pod cache clean --all
-          pod repo update
-          pod install --repo-update || { echo "❌ Pod install failed"; cat Podfile; exit 1; }
+          pod install
           cd ..
 
-      - name: 🧯 Patch Pod xcconfig (Remove BUILD_LIBRARY_FOR_DISTRIBUTION)
+      - name: 🔧 Patch Pod xcconfig (disable bitcode and others)
         run: |
-          find ios/Pods/Target\ Support\ Files -name "*.xcconfig" -print0 | \
-          xargs -0 sed -i '' '/BUILD_LIBRARY_FOR_DISTRIBUTION/d'
+          echo 'Updating Pod settings...'
+          find ios/Pods/Target\ Support\ Files -name "*.xcconfig" -print0 | xargs -0 sed -i '' 's/ENABLE_BITCODE = YES/ENABLE_BITCODE = NO/g'
+          find ios/Pods/Target\ Support\ Files -name "*.xcconfig" -print0 | xargs -0 sed -i '' 's/BUILD_LIBRARY_FOR_DISTRIBUTION = YES/BUILD_LIBRARY_FOR_DISTRIBUTION = NO/g'
 
-      
+      - name: 🧯 Patch Runner project to disable module interfaces
+        run: |
+          gem install xcodeproj
+          ruby -e '
+            require "xcodeproj"
+            proj = Xcodeproj::Project.open("ios/Runner.xcodeproj")
+            proj.targets.each do |target|
+              if target.name == "Runner"
+                target.build_configurations.each do |config|
+                  config.build_settings["BUILD_LIBRARY_FOR_DISTRIBUTION"] = "NO"
+                end
+              end
+            end
+            proj.save
+          '
 
-      - name: 🔐 Disable User Script Sandboxing
+      - name: 🏗️ Rebuild iOS for distribution
+        run: flutter build ios --release --no-codesign
+
+      - name: 📦 Archive .ipa
         run: |
           cd ios
-          awk '/buildSettings = {/ {print; print "\t\t\t\tENABLE_USER_SCRIPT_SANDBOXING = NO;"; next}1' Runner.xcodeproj/project.pbxproj > temp.pbxproj
-          mv temp.pbxproj Runner.xcodeproj/project.pbxproj
-          cd ..
-
-      - name: 🚫 Disable Signing, Bitcode, Enable Bridging Header
-        run: |
-          cd ios
-          awk '/buildSettings = {/ {
-            print;
-            print "\t\t\t\tCODE_SIGN_STYLE = Manual;";
-            print "\t\t\t\tCODE_SIGN_IDENTITY = \"\";";
-            print "\t\t\t\tDEVELOPMENT_TEAM = \"\";";
-            print "\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = \"\";";
-            print "\t\t\t\tENABLE_BITCODE = NO;";
-            
-            next
-          }1' Runner.xcodeproj/project.pbxproj > temp.pbxproj
-          mv temp.pbxproj Runner.xcodeproj/project.pbxproj
-          cd ..
-
-      - name: 🔓 Reset Permissions
-        run: chmod -R u+rw .
-
-      - name: 📂 Prepare Derived Data Path
-        run: |
-          mkdir -p ${{ github.workspace }}/build/ios_derived
-          echo "XCODE_DERIVED_DATA_PATH=${{ github.workspace }}/build/ios_derived" >> $GITHUB_ENV
-
-      - name: 🧱 Build iOS App (No Signing)
-        run: |
-          set -euo pipefail
-          flutter build ios --release --no-codesign --verbose > build.log 2>&1 || {
-            echo "❌ Build failed"
-            cat build.log
-            exit 1
-          }
-          echo "✅ iOS build completed"
-
-      - name: 🧪 Verify Build Output
-        run: |
-          if [ ! -d "build/ios/iphoneos/Runner.app" ]; then
-            echo "❌ Runner.app not found"
-            cat build.log
-            exit 1
-          fi
-
-      - name: 🧾 Show Last 50 Build Logs
-        run: tail -n 50 build.log
-        if: always()
-
-      - name: 📦 Create IPA
-        run: |
-          cd build/ios/iphoneos
           mkdir -p Payload
-          mv Runner.app Payload/
-          zip -r app.ipa Payload
-          mv app.ipa ../../..
-          cd ../../..
-          echo "✅ IPA created at app.ipa"
+          cp -r build/ios/iphoneos/Runner.app Payload/
+          zip -r Runner.ipa Payload
+          mv Runner.ipa ../Runner.ipa
 
-      - name: 🗃️ Rename & Move IPA
-        run: |
-          mkdir -p release-artifacts
-          IPA_PATH=$(find . -type f -name "*.ipa" | head -n 1)
-          if [ -z "$IPA_PATH" ]; then
-            echo "❌ IPA not found"
-            exit 1
-          fi
-          cp "$IPA_PATH" release-artifacts/cyanase_ios_unsigned.ipa
-
-      - name: 🚀 Upload to GitHub Release
-        uses: softprops/action-gh-release@v1
-        if: success()
-        with:
-          name: "Cyanase iOS Release"
-          tag_name: "ios-${{ github.run_number }}"
-          files: release-artifacts/cyanase_ios_unsigned.ipa
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: ☁️ Upload IPA to Actions
+      - name: 📤 Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: cyanase_ios_ipa_unsigned
-          path: release-artifacts/cyanase_ios_unsigned.ipa
+          name: Cyanase-Runner-IPA
+          path: Runner.ipa
