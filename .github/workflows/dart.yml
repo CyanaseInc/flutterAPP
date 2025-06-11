@@ -42,13 +42,51 @@ jobs:
           flutter pub get
           flutter precache --ios
 
-      - name: 🔧 Ensure Flutter Framework is Available
+      - name: 🔧 Set up Flutter Framework
         run: |
           cd ios
-          if [ ! -d "Flutter" ]; then
-            mkdir -p Flutter
-            cp -r $(dirname $(which flutter))/../packages/flutter_tools/templates/ios/Flutter/* Flutter/
+          # Create Flutter directory if it doesn't exist
+          mkdir -p Flutter
+          
+          # Copy Flutter framework files
+          FLUTTER_ROOT=$(dirname $(which flutter))/..
+          cp -r "$FLUTTER_ROOT/packages/flutter_tools/templates/ios/Flutter/"* Flutter/
+          
+          # Ensure Flutter.h exists
+          if [ ! -f "Flutter/Flutter.h" ]; then
+            echo "Creating Flutter.h"
+            cat > Flutter/Flutter.h << 'EOL'
+#ifndef FLUTTER_FLUTTER_H_
+#define FLUTTER_FLUTTER_H_
+
+#import <Foundation/Foundation.h>
+
+@protocol FlutterPlugin;
+@class FlutterPluginRegistrar;
+
+NS_ASSUME_NONNULL_BEGIN
+
+@interface FlutterPlugin : NSObject
++ (void)registerWithRegistrar:(NSObject<FlutterPluginRegistrar>*)registrar;
+@end
+
+@protocol FlutterPluginRegistrar
+- (void)addMethodCallDelegate:(id<FlutterPlugin>)delegate channel:(id)channel;
+@end
+
+NS_ASSUME_NONNULL_END
+
+#endif  // FLUTTER_FLUTTER_H_
+EOL
           fi
+          
+          # Ensure Flutter.framework exists
+          if [ ! -d "Flutter/Flutter.framework" ]; then
+            echo "Creating Flutter.framework structure"
+            mkdir -p Flutter/Flutter.framework/Headers
+            cp Flutter/Flutter.h Flutter/Flutter.framework/Headers/
+          fi
+          
           cd ..
 
       - name: 🍎 Install CocoaPods
@@ -60,8 +98,20 @@ jobs:
       - name: 🔧 Ensure Bridging Header Exists
         run: |
           cd ios
-          if [ ! -f "Runner/Runner-Bridging-Header.h" ]; then
-            echo "#import \"GeneratedPluginRegistrant.h\"" > Runner/Runner-Bridging-Header.h
+          # Create bridging header with all necessary imports
+          cat > Runner/Runner-Bridging-Header.h << 'EOL'
+#import "GeneratedPluginRegistrant.h"
+#import "Flutter/Flutter.h"
+#import "Flutter/FlutterPlugin.h"
+#import "Flutter/FlutterPluginRegistrar.h"
+EOL
+          
+          # Ensure GeneratedPluginRegistrant.h exists
+          if [ ! -f "Runner/GeneratedPluginRegistrant.h" ]; then
+            echo "#import <Flutter/Flutter.h>" > Runner/GeneratedPluginRegistrant.h
+            echo "@interface GeneratedPluginRegistrant : NSObject" >> Runner/GeneratedPluginRegistrant.h
+            echo "+ (void)registerWithRegistry:(NSObject<FlutterPluginRegistry>*)registry;" >> Runner/GeneratedPluginRegistrant.h
+            echo "@end" >> Runner/GeneratedPluginRegistrant.h
           fi
           cd ..
 

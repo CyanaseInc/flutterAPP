@@ -39,6 +39,17 @@ target 'Runner' do
 end
 
 post_install do |installer|
+  # First, ensure all xcconfig files have consistent ENABLE_BITCODE settings
+  installer.pods_project.targets.each do |target|
+    target.build_configurations.each do |config|
+      xcconfig_path = config.base_configuration_reference.real_path
+      xcconfig = File.read(xcconfig_path)
+      xcconfig_mod = xcconfig.gsub(/ENABLE_BITCODE\s*=\s*.*/, 'ENABLE_BITCODE = NO')
+      File.write(xcconfig_path, xcconfig_mod)
+    end
+  end
+
+  # Then apply all other settings
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
     target.build_configurations.each do |config|
@@ -64,9 +75,12 @@ post_install do |installer|
       config.build_settings['GCC_OPTIMIZATION_LEVEL'] = '0'
       config.build_settings['SWIFT_OPTIMIZATION_LEVEL'] = '-Onone'
       
-      # Fix bridging header issues
+      # Fix bridging header and precompiled header issues
       config.build_settings['SWIFT_OBJC_BRIDGING_HEADER'] = '${PODS_ROOT}/../Runner/Runner-Bridging-Header.h'
       config.build_settings['SWIFT_OBJC_INTERFACE_HEADER_NAME'] = ''
+      config.build_settings['SWIFT_PRECOMPILE_BRIDGING_HEADER'] = 'NO'
+      config.build_settings['SWIFT_USE_PARALLEL_WHOLE_MODULE_OPTIMIZATION'] = 'NO'
+      config.build_settings['SWIFT_COMPILATION_MODE'] = 'singlefile'
       
       # Disable module interfaces and ensure bridging headers work
       config.build_settings['SWIFT_ENABLE_MODULE_INTERFACE'] = 'NO'
@@ -83,6 +97,8 @@ post_install do |installer|
       config.build_settings['HEADER_SEARCH_PATHS'] ||= ['$(inherited)']
       config.build_settings['HEADER_SEARCH_PATHS'] << '${PODS_ROOT}/Headers/Public'
       config.build_settings['HEADER_SEARCH_PATHS'] << '${PODS_ROOT}/Headers/Public/Flutter'
+      config.build_settings['HEADER_SEARCH_PATHS'] << '${PODS_ROOT}/Headers/Private'
+      config.build_settings['HEADER_SEARCH_PATHS'] << '${PODS_ROOT}/Headers/Private/Flutter'
     end
   end
 end
