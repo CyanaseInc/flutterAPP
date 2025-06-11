@@ -33,6 +33,13 @@ jobs:
             ios/Pods
           key: ${{ runner.os }}-flutter-${{ hashFiles('**/pubspec.lock') }}
 
+      - name: 🔎 Check for Merge Conflicts in project.pbxproj
+        run: |
+          if grep -E "^<<<<<<<|^=======|^>>>>>>>" ios/Runner.xcodeproj/project.pbxproj; then
+            echo "❌ Merge conflicts detected in project.pbxproj"
+            exit 1
+          fi
+
       - name: ✅ Validate Xcode Project
         run: xcodebuild -project ios/Runner.xcodeproj -list
 
@@ -40,66 +47,30 @@ jobs:
         run: |
           flutter clean
           flutter pub get
-          flutter precache --ios
 
-      - name: 🔧 Set up Flutter Framework
+      - name: 🍎 Install CocoaPods with Patch for Distribution Setting
         run: |
-          cd ios
-          mkdir -p Flutter
-          FLUTTER_ROOT=$(dirname $(which flutter))/..
-          cp -r "$FLUTTER_ROOT/packages/flutter_tools/templates/ios/Flutter/"* Flutter/
-          if [ ! -f "Flutter/Flutter.h" ]; then
-            echo "Creating Flutter.h"
-            cat > Flutter/Flutter.h << 'EOL'
-#ifndef FLUTTER_FLUTTER_H_
-#define FLUTTER_FLUTTER_H_
-
-#import <Foundation/Foundation.h>
-
-@protocol FlutterPlugin;
-@class FlutterPluginRegistrar;
-
-NS_ASSUME_NONNULL_BEGIN
-
-@interface FlutterPlugin : NSObject
-+ (void)registerWithRegistrar:(NSObject<FlutterPluginRegistrar>*)registrar;
-@end
-
-@protocol FlutterPluginRegistrar
-- (void)addMethodCallDelegate:(id<FlutterPlugin>)delegate channel:(id)channel;
-@end
-
-NS_ASSUME_NONNULL_END
-
-#endif  // FLUTTER_FLUTTER_H_
-EOL
-          fi
-          if [ ! -d "Flutter/Flutter.framework" ]; then
-            echo "Creating Flutter.framework structure"
-            mkdir -p Flutter/Flutter.framework/Headers
-            cp Flutter/Flutter.h Flutter/Flutter.framework/Headers/
-          fi
-          cd ..
-
-      - name: 🍎 Install CocoaPods
-        run: |
+          echo "🔧 Patching Podfile to disable BUILD_LIBRARY_FOR_DISTRIBUTION"
+          echo '
+          post_install do |installer|
+            installer.pods_project.targets.each do |target|
+              target.build_configurations.each do |config|
+                config.build_settings["BUILD_LIBRARY_FOR_DISTRIBUTION"] = "NO"
+              end
+            end
+          end
+          ' >> ios/Podfile
           cd ios
           pod install --repo-update
           cd ..
 
-      - name: 🔧 Ensure Bridging Header Exists
+      - name: ➕ Add Bridging Header for GeneratedPluginRegistrant
         run: |
           cd ios
           echo '#import "GeneratedPluginRegistrant.h"' > Runner/Runner-Bridging-Header.h
-          echo '#import "Flutter/Flutter.h"' >> Runner/Runner-Bridging-Header.h
-          echo '#import "Flutter/FlutterPlugin.h"' >> Runner/Runner-Bridging-Header.h
-          echo '#import "Flutter/FlutterPluginRegistrar.h"' >> Runner/Runner-Bridging-Header.h
-          if [ ! -f "Runner/GeneratedPluginRegistrant.h" ]; then
-            echo '#import <Flutter/Flutter.h>' > Runner/GeneratedPluginRegistrant.h
-            echo '@interface GeneratedPluginRegistrant : NSObject' >> Runner/GeneratedPluginRegistrant.h
-            echo '+ (void)registerWithRegistry:(NSObject<FlutterPluginRegistry>*)registry;' >> Runner/GeneratedPluginRegistrant.h
-            echo '@end' >> Runner/GeneratedPluginRegistrant.h
-          fi
+          sed -i '' '/buildSettings = {/a\
+            \t\t\t\tSWIFT_OBJC_BRIDGING_HEADER = Runner/Runner-Bridging-Header.h;
+          ' Runner.xcodeproj/project.pbxproj
           cd ..
 
       - name: 🚫 Disable User Script Sandboxing
@@ -122,19 +93,6 @@ EOL
             next
           }1' Runner.xcodeproj/project.pbxproj > temp.pbxproj
           mv temp.pbxproj Runner.xcodeproj/project.pbxproj
-          cd ..
-
-      - name: 🔨 Force Disable BUILD_LIBRARY_FOR_DISTRIBUTION in Xcode Project
-        run: |
-          cd ios
-          sed -i '' '/BUILD_LIBRARY_FOR_DISTRIBUTION/d' Runner.xcodeproj/project.pbxproj
-          cd ..
-
-      - name: 🧹 Disable Swift Module Interface & Defines Module
-        run: |
-          cd ios
-          sed -i '' '/SWIFT_INTERFACE_GENERATION_MODE/d' Runner.xcodeproj/project.pbxproj
-          sed -i '' '/DEFINES_MODULE = YES;/d' Runner.xcodeproj/project.pbxproj
           cd ..
 
       - name: 🔓 Set Permissions
