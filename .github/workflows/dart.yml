@@ -95,26 +95,7 @@ jobs:
           mv temp.pbxproj Runner.xcodeproj/project.pbxproj
           cd ..
 
-      - name: 🚫 Fix Test Target Conflicts (ENABLE_BITCODE + LIBRARY_FOR_DISTRIBUTION)
-        run: |
-          gem install xcodeproj
-          ruby -e '
-            require "xcodeproj"
-            project = Xcodeproj::Project.open("ios/Runner.xcodeproj")
-            project.targets.each do |target|
-              if target.name == "RunnerTests"
-                target.build_configurations.each do |config|
-                  # Set correct build setting for distribution
-                  config.build_settings["BUILD_LIBRARY_FOR_DISTRIBUTION"] = "$(inherited)"
-                  # Remove ENABLE_BITCODE to avoid CocoaPods override conflict
-                  config.build_settings.delete("ENABLE_BITCODE")
-                end
-              end
-            end
-            project.save
-          '
-          echo "✅ Cleaned ENABLE_BITCODE and updated BUILD_LIBRARY_FOR_DISTRIBUTION in RunnerTests"
-
+  
       - name: 🔓 Reset Permissions
         run: chmod -R u+rw .
 

@@ -27,10 +27,6 @@ target 'Runner' do
   use_frameworks!
   use_modular_headers!
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
-
-  target 'RunnerTests' do
-    inherit! :search_paths
-  end
 end
 
 post_install do |installer|
@@ -44,7 +40,6 @@ post_install do |installer|
       config.build_settings['CODE_SIGNING_IDENTITY'] = ''
       config.build_settings['DEVELOPMENT_TEAM'] = ''
       config.build_settings['PROVISIONING_PROFILE_SPECIFIER'] = ''
-      # Ensure header search paths include Flutter framework
       config.build_settings['HEADER_SEARCH_PATHS'] ||= ['$(inherited)']
       config.build_settings['HEADER_SEARCH_PATHS'] << '${PODS_ROOT}/Flutter/Flutter.framework/Headers'
       config.build_settings['HEADER_SEARCH_PATHS'] << '${SRCROOT}/Flutter/Flutter.framework/Headers'
