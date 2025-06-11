@@ -1,4 +1,3 @@
-
 name: cyanase_ipa
 
 on:
@@ -136,8 +135,28 @@ jobs:
 
           flutter build ipa --release --no-codesign --verbose
 
-      - name: 📤 Upload IPA Artifact
+      - name: 📄 Rename IPA for Release Upload
+        run: |
+          mkdir -p release-artifacts
+          IPA_PATH=$(find build/ios -name "*.ipa" | head -n 1)
+          if [ -z "$IPA_PATH" ]; then
+            echo "❌ No IPA found"
+            exit 1
+          fi
+          cp "$IPA_PATH" release-artifacts/cyanase_ios_unsigned.ipa
+
+      - name: 🪄 Upload to GitHub Release
+        uses: softprops/action-gh-release@v1
+        if: success()
+        with:
+          name: "Cyanase iOS Release"
+          tag_name: "ios-${{ github.run_number }}"
+          files: release-artifacts/cyanase_ios_unsigned.ipa
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 📤 Upload IPA Artifact (optional for CI downloads)
         uses: actions/upload-artifact@v4
         with:
           name: cyanase_ios_ipa_unsigned
-          path: build/ios/ipa
+          path: release-artifacts/cyanase_ios_unsigned.ipa
