@@ -4,6 +4,9 @@ platform :ios, '12.0'
 # CocoaPods analytics sends network stats synchronously affecting flutter build latency.
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
 
+# This is the minimum version for Flutter
+ENV['FLUTTER_FRAMEWORK_DIR'] = File.expand_path(File.join('..', 'Flutter'), __FILE__)
+
 ENV['FLUTTER_ROOT'] ||= File.expand_path('../../flutter', __FILE__)
 
 project 'Runner', {
@@ -84,6 +87,7 @@ target 'Runner' do
         config.build_settings['FRAMEWORK_SEARCH_PATHS'] << '${PODS_ROOT}/../Flutter'
         config.build_settings['FRAMEWORK_SEARCH_PATHS'] << '${PODS_CONFIGURATION_BUILD_DIR}'
         config.build_settings['FRAMEWORK_SEARCH_PATHS'] << '${PODS_ROOT}/Flutter'
+        config.build_settings['FRAMEWORK_SEARCH_PATHS'] << '${PODS_ROOT}/Flutter/Flutter.framework'
         
         # Ensure proper header search paths
         config.build_settings['HEADER_SEARCH_PATHS'] ||= ['$(inherited)']
@@ -94,6 +98,8 @@ target 'Runner' do
         config.build_settings['HEADER_SEARCH_PATHS'] << '${PODS_ROOT}/Flutter'
         config.build_settings['HEADER_SEARCH_PATHS'] << '${PODS_ROOT}/Flutter/Flutter.framework/Headers'
         config.build_settings['HEADER_SEARCH_PATHS'] << '${PODS_ROOT}/Flutter/Flutter.framework/Headers/Flutter'
+        config.build_settings['HEADER_SEARCH_PATHS'] << '${FLUTTER_FRAMEWORK_DIR}/Flutter.framework/Headers'
+        config.build_settings['HEADER_SEARCH_PATHS'] << '${FLUTTER_FRAMEWORK_DIR}/Flutter.framework/Headers/Flutter'
       end
     end
   end
