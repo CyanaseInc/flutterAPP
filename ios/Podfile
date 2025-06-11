@@ -35,7 +35,6 @@ target 'Runner' do
 
   target 'RunnerTests' do
     inherit! :search_paths
-    pod 'Flutter', :path => File.join(File.dirname(File.realpath(__FILE__)), '..', 'Flutter')
   end
 end
 
@@ -43,6 +42,7 @@ post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
     target.build_configurations.each do |config|
+      # Ensure consistent settings across all targets
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '12.0'
       config.build_settings['ENABLE_BITCODE'] = 'NO'
       
