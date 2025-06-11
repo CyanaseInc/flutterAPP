@@ -1,70 +1,65 @@
 name: Build iOS IPA
 
 on:
+  push:
+    branches: [ main ]  # Or your deployment branch
   workflow_dispatch:
 
 jobs:
-  build:
-    name: 🏗️ Build IPA for iOS
+  build_ios:
     runs-on: macos-latest
 
     steps:
-      - name: 🧾 Checkout repository
+      - name: ⬇️ Checkout code
         uses: actions/checkout@v3
 
-      - name: 🔧 Set up Flutter
+      - name: 🧰 Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.32.2' # or whatever you're using
-          channel: stable
+          flutter-version: '3.32.2'  # Or your Flutter version
 
-      - name: 📦 Install Flutter dependencies
+      - name: 📦 Install dependencies
         run: flutter pub get
 
-      - name: 🛠️ Build Flutter iOS artifacts
-        run: flutter build ios --release --no-codesign
+      - name: 🧹 Clean old builds
+        run: flutter clean
 
-      - name: 🍎 Install CocoaPods
+      - name: ⚙️ Set iOS file permissions
         run: |
-          cd ios
+          chmod -R 777 ios
+          chmod -R 777 build
+
+      - name: 📥 Install CocoaPods
+        working-directory: ios
+        run: |
           pod install
-          cd ..
 
-      - name: 🔧 Patch Pod xcconfig (disable bitcode and others)
+      - name: 🔧 Update Pod Permissions
         run: |
-          echo 'Updating Pod settings...'
-          find ios/Pods/Target\ Support\ Files -name "*.xcconfig" -print0 | xargs -0 sed -i '' 's/ENABLE_BITCODE = YES/ENABLE_BITCODE = NO/g'
-          find ios/Pods/Target\ Support\ Files -name "*.xcconfig" -print0 | xargs -0 sed -i '' 's/BUILD_LIBRARY_FOR_DISTRIBUTION = YES/BUILD_LIBRARY_FOR_DISTRIBUTION = NO/g'
+          sudo chmod -R 777 ios/Pods
+          sudo chmod -R 777 ios/Podfile.lock
 
-      - name: 🧯 Patch Runner project to disable module interfaces
-        run: |
-          gem install xcodeproj
-          ruby -e '
-            require "xcodeproj"
-            proj = Xcodeproj::Project.open("ios/Runner.xcodeproj")
-            proj.targets.each do |target|
-              if target.name == "Runner"
-                target.build_configurations.each do |config|
-                  config.build_settings["BUILD_LIBRARY_FOR_DISTRIBUTION"] = "NO"
-                end
-              end
-            end
-            proj.save
-          '
-
-      - name: 🏗️ Rebuild iOS for distribution
+      - name: 🛠️ Build iOS app
         run: flutter build ios --release --no-codesign
 
-      - name: 📦 Archive .ipa
+      - name: 📦 Archive IPA
         run: |
-          cd ios
-          mkdir -p Payload
-          cp -r build/ios/iphoneos/Runner.app Payload/
-          zip -r Runner.ipa Payload
-          mv Runner.ipa ../Runner.ipa
+          xcodebuild -workspace ios/Runner.xcworkspace \
+            -scheme Runner \
+            -configuration Release \
+            -sdk iphoneos \
+            -archivePath build/Runner.xcarchive \
+            archive
+
+      - name: 📦 Export IPA
+        run: |
+          xcodebuild -exportArchive \
+            -archivePath build/Runner.xcarchive \
+            -exportOptionsPlist ios/ExportOptions.plist \
+            -exportPath build/ios/ipa
 
       - name: 📤 Upload IPA artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
-          name: Cyanase-Runner-IPA
-          path: Runner.ipa
+          name: iOS-IPA
+          path: build/ios/ipa/*.ipa
