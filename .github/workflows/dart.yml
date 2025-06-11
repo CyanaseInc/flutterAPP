@@ -83,6 +83,14 @@ jobs:
           pod install --repo-update
           cd ..
 
+      - name: 🔧 Ensure Bridging Header Exists
+        run: |
+          cd ios
+          if [ ! -f "Runner/Runner-Bridging-Header.h" ]; then
+            echo "#import \"GeneratedPluginRegistrant.h\"" > Runner/Runner-Bridging-Header.h
+          fi
+          cd ..
+
       - name: 🚫 Disable User Script Sandboxing
         run: |
           cd ios
