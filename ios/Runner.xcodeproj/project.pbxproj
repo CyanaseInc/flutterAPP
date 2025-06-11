@@ -126,7 +126,7 @@
 /* Begin PBXNativeTarget section */
         331C8080294A63A400263BE5 /* RunnerTests */ = {
             isa = PBXNativeTarget;
-            buildConfigurationList = 331C8087294A63A400263BE congestion;
+            buildConfigurationList = 331C8087294A63A400263BE5 /* Build configuration list for PBXNativeTarget "RunnerTests" */;
             buildPhases = (
                 331C807D294A63A400263BE5 /* Sources */,
                 331C807F294A63A400263BE5 /* Resources */,
@@ -164,7 +164,7 @@
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
-97C146E61CF9000F007C117D /* Project object */ = {
+        97C146E61CF9000F007C117D /* Project object */ = {
             isa = PBXProject;
             attributes = {
                 BuildIndependentTargetsInParallel = YES;
