@@ -58,11 +58,7 @@ jobs:
           find ios/Pods/Target\ Support\ Files -name "*.xcconfig" -print0 | \
           xargs -0 sed -i '' '/BUILD_LIBRARY_FOR_DISTRIBUTION/d'
 
-      - name: 📁 Add Bridging Header
-        run: |
-          echo '#import <Flutter/Flutter.h>' > ios/Runner/Runner-Bridging-Header.h
-          echo '#import "GeneratedPluginRegistrant.h"' >> ios/Runner/Runner-Bridging-Header.h
-          cat ios/Runner/Runner-Bridging-Header.h
+      
 
       - name: 🔐 Disable User Script Sandboxing
         run: |
@@ -81,7 +77,7 @@ jobs:
             print "\t\t\t\tDEVELOPMENT_TEAM = \"\";";
             print "\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = \"\";";
             print "\t\t\t\tENABLE_BITCODE = NO;";
-            print "\t\t\t\tSWIFT_OBJC_BRIDGING_HEADER = \"Runner/Runner-Bridging-Header.h\";";
+            
             next
           }1' Runner.xcodeproj/project.pbxproj > temp.pbxproj
           mv temp.pbxproj Runner.xcodeproj/project.pbxproj
