@@ -55,6 +55,11 @@ jobs:
           pod install --repo-update || { echo "❌ Pod install failed"; cat Podfile; exit 1; }
           cd ..
 
+      - name: Patch Pod xcconfig to fix BUILD_LIBRARY_FOR_DISTRIBUTION error
+        run: |
+          find ios/Pods/Target\ Support\ Files -name "*.xcconfig" -print0 | \
+          xargs -0 sed -i '' '/BUILD_LIBRARY_FOR_DISTRIBUTION/d'
+
       - name: Verify Pod Install
         run: |
           if [ ! -f "ios/Podfile.lock" ] || [ ! -d "ios/Pods" ]; then
