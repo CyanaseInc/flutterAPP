@@ -58,8 +58,12 @@ jobs:
       - name: Verify Pod Install
         run: |
           cd ios
-          pod list
-          cd ..
+          if [ ! -f "Podfile.lock" ] || [ ! -d "Pods" ]; then
+            echo "❌ Pod install failed: Podfile.lock or Pods directory missing"
+            exit 1
+          fi
+          echo "✅ Pod install verified"
+          
 
       - name: ➕ Add Bridging Header for GeneratedPluginRegistrant
         run: |
