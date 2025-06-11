@@ -32,7 +32,7 @@ jobs:
             ~/.pub-cache
             ios/Pods
             ios/Podfile.lock
-          key: ${{ runner.os }}-flutter-${{ hashFiles('**/pubspec.lock') }}-v1
+          key: ${{ runner.os }}-flutter-${{ hashFiles('**/pubspec.lock') }}-v2 # Changed to v2 to refresh cache
           restore-keys: |
             ${{ runner.os }}-flutter-
 
@@ -53,6 +53,12 @@ jobs:
           pod cache clean --all
           pod repo update
           pod install --repo-update || { echo "❌ Pod install failed"; cat Podfile; exit 1; }
+          cd ..
+
+      - name: Verify Pod Install
+        run: |
+          cd ios
+          pod list
           cd ..
 
       - name: ➕ Add Bridging Header for GeneratedPluginRegistrant
@@ -104,6 +110,10 @@ jobs:
           '
           echo "✅ Fixed BUILD_LIBRARY_FOR_DISTRIBUTION for RunnerTests"
 
+      - name: Verify BUILD_LIBRARY_FOR_DISTRIBUTION
+        run: |
+          xcodebuild -project ios/Runner.xcodeproj -showBuildSettings | grep BUILD_LIBRARY_FOR_DISTRIBUTION
+
       - name: 🔓 Reset Permissions
         run: chmod -R u+rw .
 
@@ -112,22 +122,29 @@ jobs:
           mkdir -p ${{ github.workspace }}/build/ios_derived
           echo "XCODE_DERIVED_DATA_PATH=${{ github.workspace }}/build/ios_derived" >> $GITHUB_ENV
 
+      - name: Verify Flutter Environment
+        run: |
+          flutter doctor -v
+          flutter --version
+
       - name: 📦 Build iOS App
         run: |
           set -euo pipefail
-          flutter build ios --release --no-codesign --verbose 2>&1 | tee build.log
+          flutter build ios --release --no-codesign --verbose > build.log 2>&1 || { echo "❌ Build failed"; cat build.log; exit 1; }
           echo "✅ iOS build completed"
-
-      - name: Display Build Log Tail
-        run: tail -n 50 build.log
-        if: always()
 
       - name: Verify Build Output
         run: |
           if [ ! -d "build/ios/iphoneos/Runner.app" ]; then
             echo "Error: Runner.app not found in build/ios/iphoneos"
+            cat build.log
             exit 1
           fi
+
+      - name: 🧪 List Build Folder Before IPA
+        run: |
+          echo "🔍 Listing all contents of build/ios/iphoneos:"
+          find build/ios/iphoneos
 
       - name: 📦 Create IPA
         run: |
