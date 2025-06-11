@@ -73,15 +73,7 @@ jobs:
           fi
           echo "✅ Pod install verified"
 
-      - name: ➕ Add Bridging Header for GeneratedPluginRegistrant
-        run: |
-          cd ios
-          echo '#import <Flutter/Flutter.h>' > Runner/Runner-Bridging-Header.h
-          echo '#import "GeneratedPluginRegistrant.h"' >> Runner/Runner-Bridging-Header.h
-          echo "✅ Bridging header created at ios/Runner/Runner-Bridging-Header.h"
-          cat Runner/Runner-Bridging-Header.h
-          cd ..
-
+      
       - name: 🚫 Disable User Script Sandboxing
         run: |
           cd ios
@@ -99,7 +91,7 @@ jobs:
             print "\t\t\t\tDEVELOPMENT_TEAM = \"\";";
             print "\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = \"\";";
             print "\t\t\t\tENABLE_BITCODE = NO;";
-            print "\t\t\t\tSWIFT_OBJC_BRIDGING_HEADER = \"Runner/Runner-Bridging-Header.h\";";
+          
             next
           }1' Runner.xcodeproj/project.pbxproj > temp.pbxproj
           mv temp.pbxproj Runner.xcodeproj/project.pbxproj
