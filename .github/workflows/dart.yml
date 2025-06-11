@@ -45,14 +45,9 @@ jobs:
       - name: 🔧 Set up Flutter Framework
         run: |
           cd ios
-          # Create Flutter directory if it doesn't exist
           mkdir -p Flutter
-          
-          # Copy Flutter framework files
           FLUTTER_ROOT=$(dirname $(which flutter))/..
           cp -r "$FLUTTER_ROOT/packages/flutter_tools/templates/ios/Flutter/"* Flutter/
-          
-          # Ensure Flutter.h exists
           if [ ! -f "Flutter/Flutter.h" ]; then
             echo "Creating Flutter.h"
             cat > Flutter/Flutter.h << 'EOL'
@@ -79,14 +74,11 @@ NS_ASSUME_NONNULL_END
 #endif  // FLUTTER_FLUTTER_H_
 EOL
           fi
-          
-          # Ensure Flutter.framework exists
           if [ ! -d "Flutter/Flutter.framework" ]; then
             echo "Creating Flutter.framework structure"
             mkdir -p Flutter/Flutter.framework/Headers
             cp Flutter/Flutter.h Flutter/Flutter.framework/Headers/
           fi
-          
           cd ..
 
       - name: 🍎 Install CocoaPods
@@ -98,13 +90,10 @@ EOL
       - name: 🔧 Ensure Bridging Header Exists
         run: |
           cd ios
-          # Create bridging header with all necessary imports
           echo '#import "GeneratedPluginRegistrant.h"' > Runner/Runner-Bridging-Header.h
           echo '#import "Flutter/Flutter.h"' >> Runner/Runner-Bridging-Header.h
           echo '#import "Flutter/FlutterPlugin.h"' >> Runner/Runner-Bridging-Header.h
           echo '#import "Flutter/FlutterPluginRegistrar.h"' >> Runner/Runner-Bridging-Header.h
-          
-          # Ensure GeneratedPluginRegistrant.h exists
           if [ ! -f "Runner/GeneratedPluginRegistrant.h" ]; then
             echo '#import <Flutter/Flutter.h>' > Runner/GeneratedPluginRegistrant.h
             echo '@interface GeneratedPluginRegistrant : NSObject' >> Runner/GeneratedPluginRegistrant.h
