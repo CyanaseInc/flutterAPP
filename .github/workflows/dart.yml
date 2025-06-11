@@ -21,7 +21,7 @@ jobs:
       - name: 💙 Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.32.2' # Verify with `flutter --version` locally
+          flutter-version: '3.22.2' # Verify with `flutter --version` locally
           channel: stable
           architecture: x64
 
@@ -32,7 +32,7 @@ jobs:
             ~/.pub-cache
             ios/Pods
             ios/Podfile.lock
-          key: ${{ runner.os }}-flutter-${{ hashFiles('**/pubspec.lock') }}-v2 # Changed to v2 to refresh cache
+          key: ${{ runner.os }}-flutter-${{ hashFiles('**/pubspec.lock') }}-v2
           restore-keys: |
             ${{ runner.os }}-flutter-
 
@@ -57,13 +57,11 @@ jobs:
 
       - name: Verify Pod Install
         run: |
-          cd ios
-          if [ ! -f "Podfile.lock" ] || [ ! -d "Pods" ]; then
+          if [ ! -f "ios/Podfile.lock" ] || [ ! -d "ios/Pods" ]; then
             echo "❌ Pod install failed: Podfile.lock or Pods directory missing"
             exit 1
           fi
           echo "✅ Pod install verified"
-          
 
       - name: ➕ Add Bridging Header for GeneratedPluginRegistrant
         run: |
@@ -106,17 +104,13 @@ jobs:
             project.targets.each do |target|
               if target.name == "RunnerTests"
                 target.build_configurations.each do |config|
-                  config.build_settings["BUILD_LIBRARY_FOR_DISTRIBUTION"] = "NO"
+                  config.build_settings["BUILD_LIBRARY_FOR_DISTRIBUTION"] = "$(inherited)"
                 end
               end
             end
             project.save
           '
           echo "✅ Fixed BUILD_LIBRARY_FOR_DISTRIBUTION for RunnerTests"
-
-      - name: Verify BUILD_LIBRARY_FOR_DISTRIBUTION
-        run: |
-          xcodebuild -project ios/Runner.xcodeproj -showBuildSettings | grep BUILD_LIBRARY_FOR_DISTRIBUTION
 
       - name: 🔓 Reset Permissions
         run: chmod -R u+rw .
@@ -125,11 +119,6 @@ jobs:
         run: |
           mkdir -p ${{ github.workspace }}/build/ios_derived
           echo "XCODE_DERIVED_DATA_PATH=${{ github.workspace }}/build/ios_derived" >> $GITHUB_ENV
-
-      - name: Verify Flutter Environment
-        run: |
-          flutter doctor -v
-          flutter --version
 
       - name: 📦 Build iOS App
         run: |
@@ -144,11 +133,6 @@ jobs:
             cat build.log
             exit 1
           fi
-
-      - name: 🧪 List Build Folder Before IPA
-        run: |
-          echo "🔍 Listing all contents of build/ios/iphoneos:"
-          find build/ios/iphoneos
 
       - name: 📦 Create IPA
         run: |
