@@ -1,173 +1,42 @@
-name: cyanase_ipa
+name: iOS-ipa-build
 
 on:
   workflow_dispatch:
 
 jobs:
   build-ios:
-    name: 🚀 Build iOS Test IPA (No Signing)
-    runs-on: macos-14
-
+    name: 🎉 iOS Build
+    runs-on: macos-latest
     steps:
-      - name: 🛎️ Checkout Code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v3
 
-      - name: 🔧 Set up Ruby
-        uses: ruby/setup-ruby@v1
+      - uses: subosito/flutter-action@v2
         with:
-          ruby-version: '3.0'
-          bundler-cache: true
-
-      - name: 💙 Set up Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.32.2' # Verify with `flutter --version` locally
-          channel: stable
+          channel: 'stable'
           architecture: x64
-
-      - name: 📦 Cache Flutter and Pods
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.pub-cache
-            ios/Pods
-            ios/Podfile.lock
-          key: ${{ runner.os }}-flutter-${{ hashFiles('**/pubspec.lock') }}-v2
-          restore-keys: |
-            ${{ runner.os }}-flutter-
-
-      - name: 🧹 Clean and Get Packages
-        run: |
-          flutter clean
-          flutter pub get
-          flutter precache --ios
-          echo "✅ Flutter version:"
-          flutter --version
-
-      - name: 🍎 Install CocoaPods
-        run: |
-          cd ios
-          rm -rf Pods
-          rm -f Podfile.lock
-          pod deintegrate
-          pod cache clean --all
-          pod repo update
-          pod install --repo-update || { echo "❌ Pod install failed"; cat Podfile; exit 1; }
-          cd ..
-
-      - name: Patch Pod xcconfig to fix BUILD_LIBRARY_FOR_DISTRIBUTION error
-        run: |
-          find ios/Pods/Target\ Support\ Files -name "*.xcconfig" -print0 | \
-          xargs -0 sed -i '' '/BUILD_LIBRARY_FOR_DISTRIBUTION/d'
-
-      - name: 📌 Patch Runner project build settings
-        run: |
-          gem install xcodeproj
-          ruby -e 'require "xcodeproj"; proj = Xcodeproj::Project.open("ios/Runner.xcodeproj"); proj.targets.each do |t| if t.name == "Runner"; t.build_configurations.each{|c| c.build_settings["BUILD_LIBRARY_FOR_DISTRIBUTION"] = "NO"}; end; end; proj.save'
-
-      - name: Verify Pod Install
-        run: |
-          if [ ! -f "ios/Podfile.lock" ] || [ ! -d "ios/Pods" ]; then
-            echo "❌ Pod install failed: Podfile.lock or Pods directory missing"
-            exit 1
-          fi
-          echo "✅ Pod install verified"
-
+      - run: flutter pub get
       
-      - name: 🚫 Disable User Script Sandboxing
-        run: |
-          cd ios
-          awk '/buildSettings = {/ {print; print "\t\t\t\tENABLE_USER_SCRIPT_SANDBOXING = NO;"; next}1' Runner.xcodeproj/project.pbxproj > temp.pbxproj
-          mv temp.pbxproj Runner.xcodeproj/project.pbxproj
-          cd ..
 
-      - name: ❌ Disable Code Signing & Bitcode
-        run: |
-          cd ios
-          awk '/buildSettings = {/ {
-            print;
-            print "\t\t\t\tCODE_SIGN_STYLE = Manual;";
-            print "\t\t\t\tCODE_SIGN_IDENTITY = \"\";";
-            print "\t\t\t\tDEVELOPMENT_TEAM = \"\";";
-            print "\t\t\t\tPROVISIONING_PROFILE_SPECIFIER = \"\";";
-            print "\t\t\t\tENABLE_BITCODE = NO;";
-          
-            next
-          }1' Runner.xcodeproj/project.pbxproj > temp.pbxproj
-          mv temp.pbxproj Runner.xcodeproj/project.pbxproj
-          cd ..
+      - run: pod repo update
+        working-directory: ios
 
-  
-      - name: 🔓 Reset Permissions
-        run: chmod -R u+rw .
+      - run: flutter build ios --release --no-codesign --build-dir=/Users/runner/work/flutterAPP/temp_build
 
-      - name: 🛠 Set Writable Derived Data Path
-        run: |
-          mkdir -p ${{ github.workspace }}/build/ios_derived
-          echo "XCODE_DERIVED_DATA_PATH=${{ github.workspace }}/build/ios_derived" >> $GITHUB_ENV
+      - run: mkdir Payload
+        working-directory: build/ios/iphoneos
 
-      - name: 📦 Build iOS App
-        run: |
-          set -euo pipefail
-          flutter build ios-framework --release --no-codesign --verbose > build.log 2>&1 || { echo "❌ Build failed"; cat build.log; exit 1; }
-          echo "✅ iOS framework build completed"
+      - run: mv Runner.app/ Payload
+        working-directory: build/ios/iphoneos
 
-      - name: Verify Build Output
-        run: |
-          if [ ! -d "build/ios/framework" ]; then
-            echo "Error: iOS framework not found in build/ios/framework"
-            cat build.log
-            exit 1
-          fi
+      - name: Zip output
+        run: zip -qq -r -9 FlutterIpaExport.ipa Payload
+        working-directory: build/ios/iphoneos
 
-      - name: Display Build Log Tail
-        run: tail -n 50 build.log
-        if: always()
-
-      - name: 📦 Create IPA
-        run: |
-          cd build/ios/framework
-          mkdir -p Payload
-          mv App.framework Payload/
-          zip -r app.ipa Payload
-          mv app.ipa ../../..
-          cd ../../..
-          echo "✅ IPA created at app.ipa"
-          ls -la
-
-      - name: 🧪 List Build Folder (Debugging)
-        run: |
-          echo "🔍 Listing all contents of build/ios:"
-          find build/ios
-          echo "🔍 Contents of build.log:"
-          cat build.log
-
-      - name: 📄 Rename IPA for Release Upload
-        run: |
-          mkdir -p release-artifacts
-          IPA_PATH=$(find . -type f -name "*.ipa" | head -n 1)
-          if [ -z "$IPA_PATH" ]; then
-            echo "❌ No IPA found. Here's what was built:"
-            find build
-            echo "🔍 Build log:"
-            cat build.log
-            exit 1
-          fi
-          echo "✅ IPA found at $IPA_PATH"
-          cp "$IPA_PATH" release-artifacts/cyanase_ios_unsigned.ipa
-
-      - name: 🪄 Upload to GitHub Release
-        uses: softprops/action-gh-release@v1
-        if: success()
+      - name: Upload binaries to release
+        uses: svenstaro/upload-release-action@v2
         with:
-          name: "Cyanase iOS Release"
-          tag_name: "ios-${{ github.run_number }}"
-          files: release-artifacts/cyanase_ios_unsigned.ipa
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: 📤 Upload IPA Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: cyanase_ios_ipa_unsigned
-          path: release-artifacts/cyanase_ios_unsigned.ipa
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: build/ios/iphoneos/FlutterIpaExport.ipa
+          tag: v1.0
+          overwrite: true
+          body: "This is first release"
