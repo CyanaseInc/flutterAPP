@@ -12,7 +12,7 @@ jobs:
 
       - name: 🛠️ Fix Build Permissions
         run: |
-          sudo chown -R runner:runner .
+          sudo chown -R $USER:staff .
           sudo chmod -R 777 .
           mkdir -p build/ios/Release-iphoneos
           mkdir -p build/ios/archive
