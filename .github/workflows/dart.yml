@@ -10,32 +10,30 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: 🛠️ Fix Build Permissions
+      - name: 🛠️ Set Safe Build Permissions
         run: |
-          sudo chown -R runner:wheel .
-          sudo chmod -R 777 .
-          mkdir -p build/ios/Release-iphoneos
-          mkdir -p build/ios/archive
-          mkdir -p build/ios/ipa
-          chmod -R 777 build
+          sudo chown -R runner:staff .
+          sudo chmod -R u+rwX,go-w .
+          mkdir -p build/ios/{Release-iphoneos,archive,ipa}
+          chmod -R u+rwX build
 
       - uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
           architecture: x64
+
       - run: flutter pub get
       
       - run: pod repo update
         working-directory: ios
 
-      - name: 🛠️ Fix iOS Build Permissions
+      - name: 🛠️ Set Safe iOS Permissions
         run: |
           sudo chown -R runner:staff .
-          chmod -R 777 ios
-          chmod -R 777 build
-          chmod -R 777 build/ios
+          chmod -R u+rwX ios
+          chmod -R u+rwX build
           mkdir -p build/ios/Release-iphoneos
-          chmod -R 777 build/ios/Release-iphoneos
+          chmod -R u+rwX build/ios/Release-iphoneos
 
       - name: Install CocoaPods
         run: |
@@ -43,8 +41,7 @@ jobs:
           pod install --repo-update
 
       - name: Build iOS Release
-        run: |
-          flutter build ios --release --no-codesign --verbose
+        run: flutter build ios --release --no-codesign --verbose
 
       - name: Create IPA Folder
         run: mkdir -p build/ios/iphoneos/Payload
