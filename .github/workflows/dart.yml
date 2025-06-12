@@ -10,13 +10,6 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: 🧹 Clean and Fix Build Directories
-        run: |
-          rm -rf build tmp_build
-          mkdir -p build/ios/Release-iphoneos tmp_build/ios/Release-iphoneos
-          sudo chown -R runner:staff build tmp_build
-          sudo chmod -R u+rwX build tmp_build
-
       - name: 🛠️ Set Safe Build Permissions
         run: |
           sudo chown -R runner:staff .
@@ -42,18 +35,11 @@ jobs:
           cd ios
           pod install --repo-update
 
-      - name: 🔗 Symlink build directory (workaround)
-        run: |
-          rm -rf build
-          ln -s tmp_build build
-
       - name: 🔧 Clean Previous Builds (Optional but Recommended)
         run: flutter clean
 
       - name: 🚀 Build iOS Release (No Code Sign)
         run: flutter build ios --release --no-codesign --build-dir tmp_build --verbose
-        env:
-          SYMROOT: ${{ github.workspace }}/tmp_build/ios
 
       - name: 📁 Create IPA Payload Folder
         run: mkdir -p tmp_build/ios/iphoneos/Payload
