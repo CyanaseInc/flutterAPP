@@ -10,47 +10,50 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - uses: subosito/flutter-action@v2
+      - name: 🛠️ Set Safe Build Permissions
+        run: |
+          sudo chown -R runner:staff .
+          sudo chmod -R u+rwX,go-w .
+          mkdir -p tmp_build/ios/{Release-iphoneos,archive,ipa}
+          chmod -R u+rwX tmp_build
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
           architecture: x64
-      - run: flutter pub get
-      
-      - run: pod repo update
-        working-directory: ios
 
-      - name: 🛠️ Fix Build Permissions
-        run: |
-          sudo chown -R runner:runner .
-          sudo chmod -R 777 .
-          mkdir -p build/ios/Release-iphoneos
-          mkdir -p build/ios/archive
-          mkdir -p build/ios/ipa
-          sudo chown -R runner:runner build
-          sudo chmod -R 777 build
+      - name: Install Flutter Dependencies
+        run: flutter pub get
+
+      - name: Update CocoaPods Repo
+        run: pod repo update
+        working-directory: ios
 
       - name: Install CocoaPods
         run: |
           cd ios
           pod install --repo-update
 
-      - name: Build iOS Release
+      - name: 🔧 Clean Previous Builds (Optional but Recommended)
+        run: flutter clean
+
+      - name: 🚀 Build iOS Release (No Code Sign)
+        run: flutter build ios --release --no-codesign --build-dir tmp_build --verbose
+
+      - name: 📁 Create IPA Payload Folder
+        run: mkdir -p tmp_build/ios/iphoneos/Payload
+
+      - name: 📦 Move Runner.app into Payload
+        run: mv tmp_build/ios/iphoneos/Runner.app tmp_build/ios/iphoneos/Payload/
+
+      - name: 🗜️ Archive IPA
         run: |
-          flutter build ios --release --no-codesign --verbose
-
-      - name: Create IPA Folder
-        run: mkdir -p build/ios/iphoneos/Payload
-
-      - name: Move Runner.app into Payload
-        run: mv build/ios/iphoneos/Runner.app build/ios/iphoneos/Payload/
-
-      - name: Archive IPA
-        run: |
-          cd build/ios/iphoneos
+          cd tmp_build/ios/iphoneos
           zip -r -9 FlutterApp.ipa Payload
 
-      - name: Upload IPA
+      - name: ☁️ Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
           name: iOS-Unsigned-IPA
-          path: build/ios/iphoneos/FlutterApp.ipa
+          path: tmp_build/ios/iphoneos/FlutterApp.ipa
