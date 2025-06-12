@@ -10,15 +10,32 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
+      - name: 🛠️ Fix Build Permissions
+        run: |
+          sudo chown -R runner:runner .
+          sudo chmod -R 777 .
+          mkdir -p build/ios/Release-iphoneos
+          mkdir -p build/ios/archive
+          mkdir -p build/ios/ipa
+          chmod -R 777 build
+
       - uses: subosito/flutter-action@v2
         with:
-          channel: stable
+          channel: 'stable'
           architecture: x64
+      - run: flutter pub get
+      
+      - run: pod repo update
+        working-directory: ios
 
-      - name: Install Dependencies
+      - name: 🛠️ Fix iOS Build Permissions
         run: |
-          flutter clean
-          flutter pub get
+          sudo chown -R runner:runner .
+          chmod -R 777 ios
+          chmod -R 777 build
+          chmod -R 777 build/ios
+          mkdir -p build/ios/Release-iphoneos
+          chmod -R 777 build/ios/Release-iphoneos
 
       - name: Install CocoaPods
         run: |
