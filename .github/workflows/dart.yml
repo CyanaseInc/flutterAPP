@@ -30,7 +30,7 @@ jobs:
 
       - name: 🛠️ Fix iOS Build Permissions
         run: |
-          sudo chown -R runner:runner .
+          sudo chown -R runner:staff .
           chmod -R 777 ios
           chmod -R 777 build
           chmod -R 777 build/ios
