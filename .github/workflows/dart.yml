@@ -5,43 +5,49 @@ on:
 
 jobs:
   build-ios:
+    name: 🎉 iOS Build
     runs-on: macos-latest
-
     steps:
       - uses: actions/checkout@v3
+
+      - name: 🛠️ Fix iOS Build Permissions
+        run: |
+          chmod -R 777 ios
+          chmod -R 777 build
+          chmod -R 777 build/ios
 
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
           architecture: x64
 
-      - name: Install Dependencies
+      - run: flutter pub get
+
+      - run: pod repo update
+        working-directory: ios
+
+      - name: Build iOS archive
         run: |
-          flutter clean
-          flutter pub get
+          flutter build ios --release --no-codesign
+          xcodebuild -workspace ios/Runner.xcworkspace \
+            -scheme Runner \
+            -configuration Release \
+            -sdk iphoneos \
+            -archivePath build/ios/archive/Runner.xcarchive \
+            archive
 
-      - name: Install CocoaPods
+      - name: Export IPA
         run: |
-          cd ios
-          pod install --repo-update
+          xcodebuild -exportArchive \
+            -archivePath build/ios/archive/Runner.xcarchive \
+            -exportOptionsPlist ios/ExportOptions.plist \
+            -exportPath build/ios/ipa
 
-      - name: Build iOS Release
-        run: |
-          flutter build ios --release --no-codesign --verbose
-
-      - name: Create IPA Folder
-        run: mkdir -p build/ios/iphoneos/Payload
-
-      - name: Move Runner.app into Payload
-        run: mv build/ios/iphoneos/Runner.app build/ios/iphoneos/Payload/
-
-      - name: Archive IPA
-        run: |
-          cd build/ios/iphoneos
-          zip -r -9 FlutterApp.ipa Payload
-
-      - name: Upload IPA
-        uses: actions/upload-artifact@v4
+      - name: Upload binaries to release
+        uses: svenstaro/upload-release-action@v2
         with:
-          name: iOS-Unsigned-IPA
-          path: build/ios/iphoneos/FlutterApp.ipa
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: build/ios/ipa/Runner.ipa
+          tag: v1.0
+          overwrite: true
+          body: "This is first release"
