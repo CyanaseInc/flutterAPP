@@ -17,6 +17,9 @@ jobs:
           mkdir -p build/ios/{Release-iphoneos,archive,ipa}
           chmod -R u+rwX build
 
+      - name: Fix Build Directory Permissions
+        run: chmod -R 777 /Users/runner/work/flutterAPP/flutterAPP/build/
+
       - uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
