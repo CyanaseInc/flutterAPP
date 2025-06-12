@@ -8,17 +8,10 @@ jobs:
     runs-on: macos-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - name: 🛠️ Checkout Repository
+        uses: actions/checkout@v3
 
-      - name: 🛠️ Set Safe Build Permissions
-        run: |
-          sudo chown -R runner:staff .
-          sudo chmod -R u+rwX,go-w .
-          mkdir -p tmp_build/ios/{Release-iphoneos,archive,ipa}
-          chmod -R u+rwX tmp_build
-
-      - name: Install Flutter
-        uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
           architecture: x64
@@ -35,17 +28,15 @@ jobs:
           cd ios
           pod install --repo-update
 
-      - name: 🔧 Clean Previous Builds (Optional but Recommended)
-        run: flutter clean
+      - name: Build iOS Release
+        run: |
+          flutter build ios --release --no-codesign --verbose
 
-      - name: 🚀 Build iOS Release (No Code Sign)
-        run: flutter build ios --release --no-codesign --build-dir tmp_build --verbose
+      - name: Create IPA Folder
+        run: mkdir -p build/ios/iphoneos/Payload
 
-      - name: 📁 Create IPA Payload Folder
-        run: mkdir -p tmp_build/ios/iphoneos/Payload
-
-      - name: 📦 Move Runner.app into Payload
-        run: mv tmp_build/ios/iphoneos/Runner.app tmp_build/ios/iphoneos/Payload/
+      - name: Move Runner.app into Payload
+        run: mv build/ios/iphoneos/Runner.app build/ios/iphoneos/Payload/
 
       - name: 🗜️ Archive IPA
         run: |

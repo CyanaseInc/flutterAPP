@@ -299,6 +299,20 @@
                 SWIFT_VERSION = 5.0;
                 DEFINES_MODULE = NO;
                 SWIFT_INSTALL_OBJC_HEADER = NO;
+                CODE_SIGN_STYLE = Manual;
+                CODE_SIGN_IDENTITY = "";
+                DEVELOPMENT_TEAM = "";
+                PROVISIONING_PROFILE_SPECIFIER = "";
+                ENABLE_BITCODE = NO;
+                VALIDATE_PRODUCT = NO;
+                SWIFT_COMPILATION_MODE = singlefile;
+                CLANG_ENABLE_MODULES = YES;
+                CURRENT_PROJECT_VERSION = "$(FLUTTER_BUILD_NUMBER)";
+                VERSIONING_SYSTEM = "apple-generic";
+                LD_RUNPATH_SEARCH_PATHS = (
+                    "$(inherited)",
+                    "@executable_path/Frameworks",
+                );
             };
             name = Profile;
         };
