@@ -6,6 +6,7 @@ on:
 jobs:
   build-ios:
     runs-on: macos-latest
+
     steps:
       - uses: actions/checkout@v3
 
@@ -14,44 +15,33 @@ jobs:
           channel: stable
           architecture: x64
 
-      - name: Clean & Get Flutter Packages
+      - name: Install Dependencies
         run: |
           flutter clean
           flutter pub get
-
-      - name: Ensure iOS files exist
-        run: |
-          cd ios
-          ls -la ../ios/Flutter/Generated.xcconfig
-        continue-on-error: true
 
       - name: Install CocoaPods
         run: |
           cd ios
           pod install --repo-update
 
-      - name: Fix Permissions
+      - name: Build iOS Release
         run: |
-          chmod -R 777 ios
-          chmod -R 777 build || true
+          flutter build ios --release --no-codesign --verbose
 
-      - name: Build iOS App
-        run: flutter build ios --release --no-codesign
+      - name: Create IPA Folder
+        run: mkdir -p build/ios/iphoneos/Payload
 
-      - name: Create Payload folder
-        run: mkdir -p Payload
-        working-directory: build/ios/iphoneos
+      - name: Move Runner.app into Payload
+        run: mv build/ios/iphoneos/Runner.app build/ios/iphoneos/Payload/
 
-      - name: Move Runner.app
-        run: mv Runner.app Payload
-        working-directory: build/ios/iphoneos
-
-      - name: Zip IPA
-        run: zip -qq -r -9 FlutterIpaExport.ipa Payload
-        working-directory: build/ios/iphoneos
+      - name: Archive IPA
+        run: |
+          cd build/ios/iphoneos
+          zip -r -9 FlutterApp.ipa Payload
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: iOS_Unsigned_IPA
-          path: build/ios/iphoneos/FlutterIpaExport.ipa
+          name: iOS-Unsigned-IPA
+          path: build/ios/iphoneos/FlutterApp.ipa
