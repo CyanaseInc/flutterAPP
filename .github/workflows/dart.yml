@@ -19,14 +19,15 @@ jobs:
       - run: pod repo update
         working-directory: ios
 
-      - name: 🛠️ Fix iOS Build Permissions
+      - name: 🛠️ Fix Build Permissions
         run: |
           sudo chown -R runner:runner .
-          chmod -R 777 ios
-          chmod -R 777 build
-          chmod -R 777 build/ios
+          sudo chmod -R 777 .
           mkdir -p build/ios/Release-iphoneos
-          chmod -R 777 build/ios/Release-iphoneos
+          mkdir -p build/ios/archive
+          mkdir -p build/ios/ipa
+          sudo chown -R runner:runner build
+          sudo chmod -R 777 build
 
       - name: Install CocoaPods
         run: |
