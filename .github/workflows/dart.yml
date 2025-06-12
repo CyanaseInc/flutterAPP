@@ -40,6 +40,11 @@ jobs:
       - name: 🛠️ Create Build Directory
         run: mkdir -p build/ios/Release-iphoneos
 
+      - name: 🛠️ Fix Build Directory Permissions
+        run: |
+          sudo chown -R runner:staff build/ios
+          sudo chmod -R u+rwX,go-w build/ios
+
       - name: 🚀 Build iOS Release (No Code Sign)
         run: flutter build ios --release --no-codesign --verbose
 
@@ -59,4 +64,3 @@ jobs:
         with:
           name: iOS-Unsigned-IPA
           path: build/ios/iphoneos/FlutterApp.ipa
-
