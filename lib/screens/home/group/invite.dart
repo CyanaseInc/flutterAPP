@@ -40,7 +40,7 @@ class _InviteScreenState extends State<InviteScreen> {
   }
 
   String _generateServerLink() {
-    return "${'http://localhost:3000'}/join-group/${widget.inviteCode}";
+    return "${'https://cyanase.com'}/join-group/${widget.inviteCode}";
   }
 
   void _handleResetLink() {
