@@ -1,11 +1,13 @@
 //import 'package:cyanase/helpers/web_db.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'goal_screen.dart'; // Import the modified GoalScreen
 import 'add_goal.dart'; // Ensure this is implemented
 import 'package:cyanase/theme/theme.dart';
 import 'package:cyanase/helpers/database_helper.dart';
 import 'package:cyanase/helpers/api_helper.dart';
 import 'dart:convert';
+import 'dart:io';
 
 class GoalsTab extends StatefulWidget {
   const GoalsTab({Key? key}) : super(key: key);
@@ -66,44 +68,113 @@ class _GoalsTabState extends State<GoalsTab> {
         isLoading = false;
       });
       print('Error fetching goals: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to load goals: $e')),
-      );
+      if (Platform.isIOS) {
+        showCupertinoDialog(
+          context: context,
+          builder: (context) => CupertinoAlertDialog(
+            title: const Text('Error'),
+            content: Text('Failed to load goals: $e'),
+            actions: [
+              CupertinoDialogAction(
+                child: const Text('OK'),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ],
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load goals: $e')),
+        );
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: white,
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: GoalScreen(
-                goals: goals,
-                isLoading: isLoading,
+    return Platform.isIOS
+        ? CupertinoPageScaffold(
+            backgroundColor: white,
+            child: SafeArea(
+              child: Stack(
+                children: [
+                  Column(
+                    children: [
+                      Expanded(
+                        child: GoalScreen(
+                          goals: goals,
+                          isLoading: isLoading,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Positioned(
+                    right: 16,
+                    bottom: 16,
+                    child: CupertinoButton(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (context) => const AddGoalScreen()),
+                        ).then((_) {
+                          fetchGoalData();
+                        });
+                      },
+                      padding: EdgeInsets.zero,
+                      child: Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          color: primaryTwo,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.2),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          CupertinoIcons.add,
+                          color: primaryColor,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const AddGoalScreen()),
-          ).then((_) {
-            // Refresh goals after adding a new one
-            fetchGoalData();
-          });
-        },
-        backgroundColor: primaryTwo,
-        child: const Icon(
-          Icons.add,
-          color: primaryColor,
-        ),
-      ),
-    );
+          )
+        : Scaffold(
+            backgroundColor: white,
+            body: SafeArea(
+              child: Column(
+                children: [
+                  Expanded(
+                    child: GoalScreen(
+                      goals: goals,
+                      isLoading: isLoading,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            floatingActionButton: FloatingActionButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const AddGoalScreen()),
+                ).then((_) {
+                  fetchGoalData();
+                });
+              },
+              backgroundColor: primaryTwo,
+              child: const Icon(
+                Icons.add,
+                color: primaryColor,
+              ),
+            ),
+          );
   }
 }

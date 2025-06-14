@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
+import 'dart:io' show Platform;
 import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:cyanase/helpers/link_handler.dart';
 import '/screens/splash.dart';
@@ -92,36 +94,60 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-  
-    return MaterialApp(
-      title: 'Cyanase',
-      theme: appTheme,
-      navigatorKey: navigatorKey,
-      debugShowCheckedModeBanner: false,
-      home: const SplashScreenWrapper(),
-      builder: (context, child) {
-        return MediaQuery(
-          data: MediaQuery.of(context).copyWith(textScaleFactor: 1.0),
-          child: child!,
-        );
-      },
-      // Enable route caching
-      onGenerateRoute: (settings) {
-        return PageRouteBuilder(
-          settings: settings,
-          pageBuilder: (context, animation, secondaryAnimation) {
-            return _buildPage(settings.name!, settings.arguments);
-          },
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            return FadeTransition(
-              opacity: animation,
-              child: child,
-            );
-          },
-          transitionDuration: const Duration(milliseconds: 200),
-        );
-      },
-    );
+    if (Platform.isIOS) {
+      return CupertinoApp(
+        title: 'Cyanase',
+        theme: CupertinoThemeData(
+          primaryColor: primaryColor,
+          brightness: Brightness.light,
+          scaffoldBackgroundColor: white,
+        ),
+        navigatorKey: navigatorKey,
+        debugShowCheckedModeBanner: false,
+        home: const SplashScreenWrapper(),
+        builder: (context, child) {
+          return MediaQuery(
+            data: MediaQuery.of(context).copyWith(textScaleFactor: 1.0),
+            child: child!,
+          );
+        },
+        onGenerateRoute: (settings) {
+          return CupertinoPageRoute(
+            settings: settings,
+            builder: (context) => _buildPage(settings.name!, settings.arguments),
+          );
+        },
+      );
+    } else {
+      return MaterialApp(
+        title: 'Cyanase',
+        theme: appTheme,
+        navigatorKey: navigatorKey,
+        debugShowCheckedModeBanner: false,
+        home: const SplashScreenWrapper(),
+        builder: (context, child) {
+          return MediaQuery(
+            data: MediaQuery.of(context).copyWith(textScaleFactor: 1.0),
+            child: child!,
+          );
+        },
+        onGenerateRoute: (settings) {
+          return PageRouteBuilder(
+            settings: settings,
+            pageBuilder: (context, animation, secondaryAnimation) {
+              return _buildPage(settings.name!, settings.arguments);
+            },
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              return FadeTransition(
+                opacity: animation,
+                child: child,
+              );
+            },
+            transitionDuration: const Duration(milliseconds: 200),
+          );
+        },
+      );
+    }
   }
 
   Widget _buildPage(String name, Object? arguments) {

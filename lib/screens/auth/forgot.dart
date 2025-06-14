@@ -4,10 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:cyanase/helpers/api_helper.dart';
 import 'package:pin_code_fields/pin_code_fields.dart';
 import '../../theme/theme.dart';
+import 'package:flutter/cupertino.dart';
+import 'dart:io' show Platform;
 
 class ForgotPasswordScreen extends StatefulWidget {
+  const ForgotPasswordScreen({super.key});
+
   @override
-  _ForgotPasswordScreenState createState() => _ForgotPasswordScreenState();
+  State<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
 }
 
 class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
@@ -190,6 +194,53 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (Platform.isIOS) {
+      return CupertinoPageScaffold(
+        navigationBar: CupertinoNavigationBar(
+          middle: const Text(
+            'Forgot password',
+            style: TextStyle(color: white),
+          ),
+          backgroundColor: primaryTwo,
+          leading: CupertinoButton(
+            padding: EdgeInsets.zero,
+            child: const Icon(CupertinoIcons.back, color: white),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ),
+        child: Stack(
+          children: [
+            Column(
+              children: [
+                Expanded(
+                  child: PageView(
+                    controller: _pageController,
+                    physics: const NeverScrollableScrollPhysics(),
+                    onPageChanged: (index) {
+                      setState(() {
+                        _currentPage = index;
+                      });
+                    },
+                    children: [
+                      _buildEmailStep(),
+                      _buildVerificationStep(),
+                      _buildNewPasswordStep(),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if (_isLoading)
+              Container(
+                color: Colors.black.withOpacity(0.5),
+                child: const Center(
+                  child: Loader(),
+                ),
+              ),
+          ],
+        ),
+      );
+    } else {
     return Scaffold(
       appBar: AppBar(
         title: const Text(
@@ -200,7 +251,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         ),
         backgroundColor: primaryTwo,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios, color: white),
+            icon: const Icon(Icons.arrow_back_ios, color: white),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -224,7 +275,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   ],
                 ),
               ),
-              _buildNavigationButtons(),
             ],
           ),
           if (_isLoading)
@@ -237,208 +287,278 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         ],
       ),
     );
+    }
   }
 
   Widget _buildEmailStep() {
+    if (Platform.isIOS) {
     return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Center(
+        padding: const EdgeInsets.all(20.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Text(
-              'Enter your email address',
+              'Reset Password',
               style: TextStyle(
-                  fontSize: 24, fontWeight: FontWeight.bold, color: primaryTwo),
-              textAlign: TextAlign.center,
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: primaryTwo,
+              ),
             ),
             const SizedBox(height: 20),
-            TextField(
+            const Text(
+              'Enter your email address to receive a verification code',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey),
+            ),
+            const SizedBox(height: 40),
+            CupertinoTextField(
               controller: _emailController,
-              onChanged: (_) {
-                setState(() {
-                  _isEmailValid =
-                      RegExp(r"^[a-zA-Z0-9._%-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}")
-                          .hasMatch(_emailController.text.trim());
-                });
-              },
-              keyboardType: TextInputType.emailAddress,
-              decoration: InputDecoration(
-                labelText: 'Email Address',
-                border: const UnderlineInputBorder(),
-                errorText: _isEmailValid ? null : 'Please enter a valid email',
+              placeholder: 'Email Address',
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey),
+                borderRadius: BorderRadius.circular(8),
               ),
+            ),
+            const SizedBox(height: 40),
+            CupertinoButton.filled(
+              onPressed: _isLoading ? null : _sendVerificationCode,
+              child: _isLoading
+                  ? const Loader()
+                  : const Text('Send Verification Code'),
             ),
           ],
         ),
-      ),
-    );
+      );
+    } else {
+      return Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text(
+              'Reset Password',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: primaryTwo,
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'Enter your email address to receive a verification code',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey),
+            ),
+            const SizedBox(height: 40),
+            TextField(
+              controller: _emailController,
+              decoration: const InputDecoration(
+                labelText: 'Email Address',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 40),
+            ElevatedButton(
+              onPressed: _isLoading ? null : _sendVerificationCode,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryTwo,
+                minimumSize: const Size(double.infinity, 50),
+              ),
+              child: _isLoading
+                  ? const Loader()
+                  : const Text('Send Verification Code'),
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   Widget _buildVerificationStep() {
+    if (Platform.isIOS) {
     return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Center(
+        padding: const EdgeInsets.all(20.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Text(
-              'Enter the verification code',
+              'Enter Verification Code',
               style: TextStyle(
-                  fontSize: 24, fontWeight: FontWeight.bold, color: primaryTwo),
-              textAlign: TextAlign.center,
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: primaryTwo,
+              ),
             ),
             const SizedBox(height: 20),
             const Text(
-              'Verification code was sent to your email address.',
-              style: TextStyle(fontSize: 15, color: Colors.grey),
+              'Please enter the verification code sent to your email',
               textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey),
             ),
-            const SizedBox(height: 30),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 40.0),
-              child: PinCodeTextField(
-                appContext: context,
-                length: 6,
-                controller: _verificationCodeController,
-                onChanged: (value) {
-                  setState(() {
-                    // Update state when code changes
-                  });
-                },
-                pinTheme: PinTheme(
-                  shape: PinCodeFieldShape.underline,
-                  fieldHeight: 50,
-                  fieldWidth: 40,
-                  activeFillColor: Colors.white,
-                  activeColor: primaryTwo,
-                  selectedColor: primaryTwo,
-                  inactiveColor: Colors.grey,
-                ),
-                keyboardType: TextInputType.number,
-                animationDuration: const Duration(milliseconds: 300),
+            const SizedBox(height: 40),
+            CupertinoTextField(
+              controller: _verificationCodeController,
+              placeholder: 'Verification Code',
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey),
+                borderRadius: BorderRadius.circular(8),
               ),
+            ),
+            const SizedBox(height: 40),
+            CupertinoButton.filled(
+              onPressed: _isLoading ? null : _sendVerificationCode,
+              child: _isLoading ? const Loader() : const Text('Verify Code'),
             ),
           ],
         ),
-      ),
-    );
+      );
+    } else {
+      return Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text(
+              'Enter Verification Code',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: primaryTwo,
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'Please enter the verification code sent to your email',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey),
+            ),
+            const SizedBox(height: 40),
+            TextField(
+                controller: _verificationCodeController,
+              decoration: const InputDecoration(
+                labelText: 'Verification Code',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 40),
+            ElevatedButton(
+              onPressed: _isLoading ? null : _sendVerificationCode,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryTwo,
+                minimumSize: const Size(double.infinity, 50),
+              ),
+              child: _isLoading ? const Loader() : const Text('Verify Code'),
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   Widget _buildNewPasswordStep() {
+    if (Platform.isIOS) {
     return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Center(
+        padding: const EdgeInsets.all(20.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Text(
-              'Set your new password',
+              'Set New Password',
               style: TextStyle(
-                  fontSize: 18, fontWeight: FontWeight.bold, color: primaryTwo),
-              textAlign: TextAlign.center,
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: primaryTwo,
+              ),
             ),
             const SizedBox(height: 20),
+            const Text(
+              'Please enter your new password',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey),
+            ),
+            const SizedBox(height: 40),
+            CupertinoTextField(
+              controller: _newPasswordController,
+              placeholder: 'New Password',
+              obscureText: true,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey),
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            const SizedBox(height: 20),
+            CupertinoTextField(
+              controller: _confirmPasswordController,
+              placeholder: 'Confirm Password',
+              obscureText: true,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey),
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            const SizedBox(height: 40),
+            CupertinoButton.filled(
+              onPressed: _isLoading ? null : _resetPassword,
+              child: _isLoading ? const Loader() : const Text('Reset Password'),
+            ),
+          ],
+        ),
+      );
+    } else {
+      return Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text(
+              'Set New Password',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: primaryTwo,
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'Please enter your new password',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey),
+            ),
+            const SizedBox(height: 40),
             TextField(
               controller: _newPasswordController,
-              obscureText: _obscureNewPassword,
-              onChanged: (_) {
-                setState(() {});
-              },
-              decoration: InputDecoration(
+              obscureText: true,
+              decoration: const InputDecoration(
                 labelText: 'New Password',
-                border: const UnderlineInputBorder(),
-                suffixIcon: IconButton(
-                  icon: Icon(
-                    _obscureNewPassword
-                        ? Icons.visibility
-                        : Icons.visibility_off,
-                    color: primaryTwo,
-                  ),
-                  onPressed: () {
-                    setState(() {
-                      _obscureNewPassword = !_obscureNewPassword;
-                    });
-                  },
-                ),
+                border: OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 20),
             TextField(
               controller: _confirmPasswordController,
-              obscureText: _obscureConfirmPassword,
-              onChanged: (_) {
-                setState(() {});
-              },
-              decoration: InputDecoration(
+              obscureText: true,
+              decoration: const InputDecoration(
                 labelText: 'Confirm Password',
-                border: const UnderlineInputBorder(),
-                suffixIcon: IconButton(
-                  icon: Icon(
-                    _obscureConfirmPassword
-                        ? Icons.visibility
-                        : Icons.visibility_off,
-                    color: primaryTwo,
-                  ),
-                  onPressed: () {
-                    setState(() {
-                      _obscureConfirmPassword = !_obscureConfirmPassword;
-                    });
-                  },
-                ),
+                border: OutlineInputBorder(),
               ),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNavigationButtons() {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          if (_currentPage > 0)
+            const SizedBox(height: 40),
             ElevatedButton(
-              onPressed: () {
-                _pageController.previousPage(
-                  duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeInOut,
-                );
-              },
+              onPressed: _isLoading ? null : _resetPassword,
               style: ElevatedButton.styleFrom(
                 backgroundColor: primaryTwo,
-                foregroundColor: Colors.white,
+                minimumSize: const Size(double.infinity, 50),
               ),
-              child: const Text('Back'),
-            ),
-          ElevatedButton(
-            onPressed: _isCurrentSlideValid()
-                ? () {
-                    if (_currentPage == 0) {
-                      _sendVerificationCode();
-                    } else {
-                      _nextPage();
-                    }
-                  }
-                : null,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: primaryTwo,
-              foregroundColor: Colors.white,
-              disabledBackgroundColor: Colors.grey,
-              disabledForegroundColor: Colors.white70,
-            ),
-            child: Text(
-              _currentPage < 2 ? 'Next' : 'Reset Password',
-            ),
+              child: _isLoading ? const Loader() : const Text('Reset Password'),
           ),
         ],
       ),
     );
+    }
   }
 }

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:syncfusion_flutter_gauges/gauges.dart';
 import 'package:cyanase/theme/theme.dart';
 import 'package:intl/intl.dart';
+import 'dart:io';
 
 class GoalHeader extends StatefulWidget {
   final double saved;
@@ -92,8 +94,8 @@ class _GoalHeaderState extends State<GoalHeader>
                         style: TextStyle(
                           fontSize: 30, // Reduced font size
                           fontWeight: FontWeight.bold,
-                          color:
-                              primaryColor, // Ensure the text color is visible
+                          color: primaryColor, // Ensure the text color is visible
+                          fontFamily: Platform.isIOS ? '.SF Pro Display' : null,
                         ),
                       ),
                       angle:
@@ -114,6 +116,7 @@ class _GoalHeaderState extends State<GoalHeader>
                 fontSize: 18, // Reduced font size
                 color: Colors.grey[600],
                 fontWeight: FontWeight.bold, // Using grey for the text color
+                fontFamily: Platform.isIOS ? '.SF Pro Text' : null,
               ),
             ),
           ),

@@ -9,6 +9,8 @@ import 'package:cyanase/helpers/database_helper.dart';
 import 'package:cyanase/helpers/loader.dart';
 import 'package:cyanase/helpers/api_helper.dart';
 import 'package:cyanase/helpers/web_db.dart';
+import 'package:flutter/cupertino.dart';
+import 'dart:io' show Platform;
 
 // Custom formatter to enforce '+' at the beginning
 class PhoneNumberFormatter extends TextInputFormatter {
@@ -431,188 +433,375 @@ class LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: white,
-      body: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Center(
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Image.asset(
-                  'assets/images/logo.png',
-                  height: 100,
-                  width: 70,
-                ),
-                const SizedBox(height: 20),
-                const Text(
-                  'Welcome to Cyanase!',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: primaryTwo,
-                  ),
-                ),
-                const SizedBox(height: 40),
-                TextFormField(
-                  controller: _phoneController,
-                  keyboardType: TextInputType.phone,
-                  inputFormatters: [
-                    PhoneNumberFormatter(),
-                    LengthLimitingTextInputFormatter(13), // +256XXXXXXXXXX
-                  ],
-                  decoration: const InputDecoration(
-                    labelText: 'Phone Number',
-                    prefixIcon: Icon(Icons.phone, color: primaryColor),
-                    border: UnderlineInputBorder(),
-                  ),
-                  onChanged: (value) {
-                    setState(() {
-                      if (value.startsWith('+')) {
-                        String stripped = value.substring(1);
-                        if (stripped.length >= 3) {
-                          countryCode = '+${stripped.substring(0, 3)}';
-                          phoneNumber = stripped.substring(3);
-                        } else {
-                          countryCode = value;
-                          phoneNumber = '';
-                        }
-                      }
-                    });
-                  },
-                ),
-                const SizedBox(height: 20),
-                TextFormField(
-                  obscureText: _obscurePassword,
-                  onChanged: (value) {
-                    setState(() {
-                      password = value;
-                    });
-                  },
-                  decoration: InputDecoration(
-                    labelText: 'Password',
-                    prefixIcon: const Icon(Icons.lock, color: primaryColor),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscurePassword
-                            ? Icons.visibility_off
-                            : Icons.visibility,
-                        color: primaryColor,
+    if (Platform.isIOS) {
+      return CupertinoPageScaffold(
+        backgroundColor: white,
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Center(
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Image.asset(
+                      'assets/images/logo.png',
+                      height: 100,
+                      width: 70,
+                    ),
+                    const SizedBox(height: 20),
+                    const Text(
+                      'Welcome to Cyanase!',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: primaryTwo,
                       ),
-                      onPressed: () {
+                    ),
+                    const SizedBox(height: 40),
+                    TextFormField(
+                      controller: _phoneController,
+                      keyboardType: TextInputType.phone,
+                      inputFormatters: [
+                        PhoneNumberFormatter(),
+                        LengthLimitingTextInputFormatter(13), // +256XXXXXXXXXX
+                      ],
+                      decoration: const InputDecoration(
+                        labelText: 'Phone Number',
+                        prefixIcon: Icon(Icons.phone, color: primaryColor),
+                        border: UnderlineInputBorder(),
+                      ),
+                      onChanged: (value) {
                         setState(() {
-                          _obscurePassword = !_obscurePassword;
+                          if (value.startsWith('+')) {
+                            String stripped = value.substring(1);
+                            if (stripped.length >= 3) {
+                              countryCode = '+${stripped.substring(0, 3)}';
+                              phoneNumber = stripped.substring(3);
+                            } else {
+                              countryCode = value;
+                              phoneNumber = '';
+                            }
+                          }
                         });
                       },
                     ),
-                    border: const UnderlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 40),
-                ElevatedButton(
-                  onPressed: _isLoading
-                      ? null
-                      : () {
-                          if (_phoneController.text.length < 4) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                  content: Text(
-                                      'Please enter a valid phone number')),
-                            );
-                            return;
-                          }
-                          setState(() {
-                            username = _phoneController.text;
-                            if (!username.startsWith('+')) {
-                              username = '+$username';
-                            }
-                          });
-                          _handleLogin(username, password);
-                        },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: primaryTwo,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(15),
-                    ),
-                    padding: const EdgeInsets.symmetric(vertical: 15),
-                    minimumSize: const Size(double.infinity, 60),
-                  ),
-                  child: _isLoading
-                      ? const Loader()
-                      : const Text(
-                          'Login',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: white,
+                    const SizedBox(height: 20),
+                    TextFormField(
+                      obscureText: _obscurePassword,
+                      onChanged: (value) {
+                        setState(() {
+                          password = value;
+                        });
+                      },
+                      decoration: InputDecoration(
+                        labelText: 'Password',
+                        prefixIcon: const Icon(Icons.lock, color: primaryColor),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _obscurePassword
+                                ? Icons.visibility_off
+                                : Icons.visibility,
+                            color: primaryColor,
                           ),
+                          onPressed: () {
+                            setState(() {
+                              _obscurePassword = !_obscurePassword;
+                            });
+                          },
                         ),
-                ),
-                const SizedBox(height: 20),
-                GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (context) => ForgotPasswordScreen()),
-                    );
-                  },
-                  child: const Text(
-                    'Forgot Password?',
-                    style: TextStyle(
-                      color: primaryColor,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                if (_showPasscodeOption)
-                  GestureDetector(
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) => const NumericLoginScreen()),
-                      );
-                    },
-                    child: const Text(
-                      'Login using Passcode?',
-                      style: TextStyle(
-                        color: primaryColor,
-                        fontWeight: FontWeight.bold,
+                        border: const UnderlineInputBorder(),
                       ),
                     ),
-                  ),
-                const SizedBox(height: 20),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Text('Don\'t have an account? '),
+                    const SizedBox(height: 40),
+                    ElevatedButton(
+                      onPressed: _isLoading
+                          ? null
+                          : () {
+                              if (_phoneController.text.length < 4) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                      content: Text(
+                                          'Please enter a valid phone number')),
+                                );
+                                return;
+                              }
+                              setState(() {
+                                username = _phoneController.text;
+                                if (!username.startsWith('+')) {
+                                  username = '+$username';
+                                }
+                              });
+                              _handleLogin(username, password);
+                            },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: primaryTwo,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(15),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 15),
+                        minimumSize: const Size(double.infinity, 60),
+                      ),
+                      child: _isLoading
+                          ? const Loader()
+                          : const Text(
+                              'Login',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: white,
+                              ),
+                            ),
+                    ),
+                    const SizedBox(height: 20),
                     GestureDetector(
                       onTap: () {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                              builder: (context) => SignupScreen()),
+                              builder: (context) => ForgotPasswordScreen()),
                         );
                       },
                       child: const Text(
-                        'Sign Up',
+                        'Forgot Password?',
                         style: TextStyle(
                           color: primaryColor,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                     ),
+                    const SizedBox(height: 20),
+                    if (_showPasscodeOption)
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (context) => const NumericLoginScreen()),
+                          );
+                        },
+                        child: const Text(
+                          'Login using Passcode?',
+                          style: TextStyle(
+                            color: primaryColor,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    const SizedBox(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Text('Don\'t have an account? '),
+                        GestureDetector(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (context) => SignupScreen()),
+                            );
+                          },
+                          child: const Text(
+                            'Sign Up',
+                            style: TextStyle(
+                              color: primaryColor,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
-      ),
-    );
+      );
+    } else {
+      return Scaffold(
+        backgroundColor: white,
+        body: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Center(
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Image.asset(
+                    'assets/images/logo.png',
+                    height: 100,
+                    width: 70,
+                  ),
+                  const SizedBox(height: 20),
+                  const Text(
+                    'Welcome to Cyanase!',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: primaryTwo,
+                    ),
+                  ),
+                  const SizedBox(height: 40),
+                  TextFormField(
+                    controller: _phoneController,
+                    keyboardType: TextInputType.phone,
+                    inputFormatters: [
+                      PhoneNumberFormatter(),
+                      LengthLimitingTextInputFormatter(13), // +256XXXXXXXXXX
+                    ],
+                    decoration: const InputDecoration(
+                      labelText: 'Phone Number',
+                      prefixIcon: Icon(Icons.phone, color: primaryColor),
+                      border: UnderlineInputBorder(),
+                    ),
+                    onChanged: (value) {
+                      setState(() {
+                        if (value.startsWith('+')) {
+                          String stripped = value.substring(1);
+                          if (stripped.length >= 3) {
+                            countryCode = '+${stripped.substring(0, 3)}';
+                            phoneNumber = stripped.substring(3);
+                          } else {
+                            countryCode = value;
+                            phoneNumber = '';
+                          }
+                        }
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                  TextFormField(
+                    obscureText: _obscurePassword,
+                    onChanged: (value) {
+                      setState(() {
+                        password = value;
+                      });
+                    },
+                    decoration: InputDecoration(
+                      labelText: 'Password',
+                      prefixIcon: const Icon(Icons.lock, color: primaryColor),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscurePassword
+                              ? Icons.visibility_off
+                              : Icons.visibility,
+                          color: primaryColor,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _obscurePassword = !_obscurePassword;
+                          });
+                        },
+                      ),
+                      border: const UnderlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 40),
+                  ElevatedButton(
+                    onPressed: _isLoading
+                        ? null
+                        : () {
+                            if (_phoneController.text.length < 4) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                    content: Text(
+                                        'Please enter a valid phone number')),
+                              );
+                              return;
+                            }
+                            setState(() {
+                              username = _phoneController.text;
+                              if (!username.startsWith('+')) {
+                                username = '+$username';
+                              }
+                            });
+                            _handleLogin(username, password);
+                          },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: primaryTwo,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(15),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 15),
+                      minimumSize: const Size(double.infinity, 60),
+                    ),
+                    child: _isLoading
+                        ? const Loader()
+                        : const Text(
+                            'Login',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: white,
+                            ),
+                          ),
+                  ),
+                  const SizedBox(height: 20),
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => ForgotPasswordScreen()),
+                      );
+                    },
+                    child: const Text(
+                      'Forgot Password?',
+                      style: TextStyle(
+                        color: primaryColor,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  if (_showPasscodeOption)
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (context) => const NumericLoginScreen()),
+                        );
+                      },
+                      child: const Text(
+                        'Login using Passcode?',
+                        style: TextStyle(
+                          color: primaryColor,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 20),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text('Don\'t have an account? '),
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (context) => SignupScreen()),
+                          );
+                        },
+                        child: const Text(
+                          'Sign Up',
+                          style: TextStyle(
+                            color: primaryColor,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
   }
 
   @override

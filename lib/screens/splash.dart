@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
+import 'dart:io' show Platform;
 
 class SplashScreen extends StatelessWidget {
   const SplashScreen({super.key});
@@ -14,33 +16,60 @@ class SplashScreen extends StatelessWidget {
         ? 'assets/images/logo.png' // Dark mode logo
         : 'assets/images/logo.png'; // Light mode logo
 
-    return Scaffold(
-      backgroundColor:
-          colorScheme.background, // Use the background color from the theme
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // Logo Image (changes based on theme)
-            Image.asset(
-              logoAsset, // Dynamic logo based on theme
-              width: 80, // Adjust the width as needed
-              height: 70, // Adjust the height as needed
-            ),
-            const SizedBox(height: 20),
-            // App Name or Tagline
-            Text(
-              'Cyanase',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color:
-                    colorScheme.onBackground, // Use text color from the theme
+    if (Platform.isIOS) {
+      return CupertinoPageScaffold(
+        backgroundColor: colorScheme.background,
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Logo Image (changes based on theme)
+              Image.asset(
+                logoAsset, // Dynamic logo based on theme
+                width: 80, // Adjust the width as needed
+                height: 70, // Adjust the height as needed
               ),
-            ),
-          ],
+              const SizedBox(height: 20),
+              // App Name or Tagline
+              Text(
+                'Cyanase',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: colorScheme.onBackground, // Use text color from the theme
+                ),
+              ),
+            ],
+          ),
         ),
-      ),
-    );
+      );
+    } else {
+      return Scaffold(
+        backgroundColor: colorScheme.background,
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Logo Image (changes based on theme)
+              Image.asset(
+                logoAsset, // Dynamic logo based on theme
+                width: 80, // Adjust the width as needed
+                height: 70, // Adjust the height as needed
+              ),
+              const SizedBox(height: 20),
+              // App Name or Tagline
+              Text(
+                'Cyanase',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: colorScheme.onBackground, // Use text color from the theme
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
   }
 }

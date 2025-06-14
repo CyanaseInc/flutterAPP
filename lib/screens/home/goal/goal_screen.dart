@@ -1,6 +1,7 @@
 import 'package:cyanase/helpers/endpoints.dart';
 import 'package:cyanase/screens/home/goal/add_goal.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:cyanase/theme/theme.dart';
 import 'goal_header.dart'; // Ensure this file is available
 import 'package:cyanase/helpers/deposit.dart';
@@ -155,31 +156,53 @@ class _GoalScreenState extends State<GoalScreen> {
               textAlign: TextAlign.center,
             ),
             SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => AddGoalScreen()),
-                ).then((newGoal) {
-                  if (newGoal != null && newGoal is Map<String, dynamic>) {
-                    setState(() {
-                      _goals.add(newGoal);
-                    });
-                  }
-                });
-              },
-              child: Text(
-                'Get Started',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: primaryColor,
-                ),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryTwo,
-                padding: EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-              ),
-            ),
+            Platform.isIOS
+                ? CupertinoButton.filled(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => AddGoalScreen()),
+                      ).then((newGoal) {
+                        if (newGoal != null && newGoal is Map<String, dynamic>) {
+                          setState(() {
+                            _goals.add(newGoal);
+                          });
+                        }
+                      });
+                    },
+                    child: Text(
+                      'Get Started',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: primaryColor,
+                      ),
+                    ),
+                  )
+                : ElevatedButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => AddGoalScreen()),
+                      ).then((newGoal) {
+                        if (newGoal != null && newGoal is Map<String, dynamic>) {
+                          setState(() {
+                            _goals.add(newGoal);
+                          });
+                        }
+                      });
+                    },
+                    child: Text(
+                      'Get Started',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: primaryColor,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: primaryTwo,
+                      padding: EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+                    ),
+                  ),
           ],
         ),
       );
@@ -198,42 +221,79 @@ class _GoalScreenState extends State<GoalScreen> {
       totalGoal += (goal['goal_amount'] as num? ?? 0).toDouble();
     }
 
-    return Scaffold(
-      backgroundColor: white,
-      body: Column(
-        children: [
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.all(16.0),
+    return Platform.isIOS
+        ? CupertinoPageScaffold(
+            backgroundColor: white,
+            child: Column(
               children: [
-                GoalHeader(
-                  saved: totalSaved,
-                  goal: totalGoal,
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.all(16.0),
+                    children: [
+                      GoalHeader(
+                        saved: totalSaved,
+                        goal: totalGoal,
+                      ),
+                      ..._goals.asMap().entries.map((entry) {
+                        final index = entry.key;
+                        final goal = entry.value;
+                        return GoalCard(
+                          goalData: goal,
+                          currency: currency,
+                          onTap: () async {
+                            final result = await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    GoalDetailsScreen(goalData: goal),
+                              ),
+                            );
+                            _handleGoalUpdate(result, index);
+                          },
+                        );
+                      }).toList(),
+                    ],
+                  ),
                 ),
-                ..._goals.asMap().entries.map((entry) {
-                  final index = entry.key;
-                  final goal = entry.value;
-                  return GoalCard(
-                    goalData: goal,
-                    currency: currency,
-                    onTap: () async {
-                      final result = await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              GoalDetailsScreen(goalData: goal),
-                        ),
-                      );
-                      _handleGoalUpdate(result, index);
-                    },
-                  );
-                }).toList(),
               ],
             ),
-          ),
-        ],
-      ),
-    );
+          )
+        : Scaffold(
+            backgroundColor: white,
+            body: Column(
+              children: [
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.all(16.0),
+                    children: [
+                      GoalHeader(
+                        saved: totalSaved,
+                        goal: totalGoal,
+                      ),
+                      ..._goals.asMap().entries.map((entry) {
+                        final index = entry.key;
+                        final goal = entry.value;
+                        return GoalCard(
+                          goalData: goal,
+                          currency: currency,
+                          onTap: () async {
+                            final result = await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    GoalDetailsScreen(goalData: goal),
+                              ),
+                            );
+                            _handleGoalUpdate(result, index);
+                          },
+                        );
+                      }).toList(),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
   }
 }
 
@@ -340,7 +400,6 @@ class GoalCard extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Drag handle
                 Container(
                   width: 40,
                   height: 4,
@@ -350,7 +409,6 @@ class GoalCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
-                // Scrollable content with constrained height
                 Expanded(
                   child: LayoutBuilder(
                     builder: (context, constraints) {
@@ -404,8 +462,6 @@ class GoalCard extends StatelessWidget {
             : "${ApiEndpoints.server}/${goalData['goal_picture']}")
         : null;
 
- 
-    // Create a NumberFormat instance for formatting numbers with commas
     final NumberFormat numberFormat = NumberFormat.currency(
       symbol: '$currency ',
       decimalDigits: 0,
@@ -486,7 +542,9 @@ class GoalCard extends StatelessWidget {
                                     ),
                                   ),
                                   Icon(
-                                    Icons.arrow_forward_ios,
+                                    Platform.isIOS
+                                        ? CupertinoIcons.chevron_right
+                                        : Icons.arrow_forward_ios,
                                     size: 14,
                                     color: primaryTwo.withOpacity(0.7),
                                   ),
@@ -521,39 +579,66 @@ class GoalCard extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                       
                         Row(
                           children: [
-                            ElevatedButton.icon(
-                              onPressed: () => _showDepositBottomSheet(context),
-                              icon: const Icon(Icons.account_balance_wallet, size: 18),
-                              label: const Text('Deposit'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: primaryTwo,
-                                foregroundColor: white,
-                                padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                              ),
-                            ),
+                            Platform.isIOS
+                                ? CupertinoButton.filled(
+                                    onPressed: () => _showDepositBottomSheet(context),
+                                    padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(CupertinoIcons.money_dollar_circle, size: 18),
+                                        const SizedBox(width: 4),
+                                        const Text('Deposit'),
+                                      ],
+                                    ),
+                                  )
+                                : ElevatedButton.icon(
+                                    onPressed: () => _showDepositBottomSheet(context),
+                                    icon: const Icon(Icons.account_balance_wallet, size: 18),
+                                    label: const Text('Deposit'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: primaryTwo,
+                                      foregroundColor: white,
+                                      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                    ),
+                                  ),
                             const SizedBox(width: 8),
-                            IconButton(
-                              onPressed: () async {
-                                await _setReminder(context);
-                              },
-                              icon: Icon(
-                                reminderSet
-                                    ? Icons.notifications_active
-                                    : Icons.notifications,
-                                color: reminderSet ? primaryTwo : Colors.grey[400],
-                                size: 20,
-                              ),
-                              style: IconButton.styleFrom(
-                                backgroundColor: Colors.grey[100],
-                                padding: const EdgeInsets.all(5),
-                              ),
-                            ),
+                            Platform.isIOS
+                                ? CupertinoButton(
+                                    onPressed: () async {
+                                      await _setReminder(context);
+                                    },
+                                    padding: const EdgeInsets.all(5),
+                                    color: Colors.grey[100],
+                                    child: Icon(
+                                      reminderSet
+                                          ? CupertinoIcons.bell_fill
+                                          : CupertinoIcons.bell,
+                                      color: reminderSet ? primaryTwo : Colors.grey[400],
+                                      size: 20,
+                                    ),
+                                  )
+                                : IconButton(
+                                    onPressed: () async {
+                                      await _setReminder(context);
+                                    },
+                                    icon: Icon(
+                                      reminderSet
+                                          ? Icons.notifications_active
+                                          : Icons.notifications,
+                                      color: reminderSet ? primaryTwo : Colors.grey[400],
+                                      size: 20,
+                                    ),
+                                    style: IconButton.styleFrom(
+                                      backgroundColor: Colors.grey[100],
+                                      padding: const EdgeInsets.all(5),
+                                    ),
+                                  ),
                           ],
                         ),
                       ],

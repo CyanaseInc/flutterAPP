@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
+import 'dart:io';
 import '../../theme/theme.dart'; // Import your theme file
 import 'login_with_phone.dart';
 import 'signup.dart';
@@ -41,20 +43,35 @@ class _NumericLoginScreenState extends State<NumericLoginScreen> {
   Future<void> _verifyPasscode(String passcode) async {
     final dbHelper = DatabaseHelper(); // Get the DatabaseHelper instance
 
-    // Show a loading indicator
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Loader(),
-            const SizedBox(height: 20),
-          ],
+    if (Platform.isIOS) {
+      showCupertinoDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const CupertinoAlertDialog(
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CupertinoActivityIndicator(),
+              SizedBox(height: 20),
+            ],
+          ),
         ),
-      ),
-    );
+      );
+    } else {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Loader(),
+              const SizedBox(height: 20),
+            ],
+          ),
+        ),
+      );
+    }
 
     try {
       // Initialize the database
@@ -72,17 +89,32 @@ class _NumericLoginScreenState extends State<NumericLoginScreen> {
       });
 
       // Dismiss the loading indicator
+      Navigator.pop(context);
 
       // Check if the response indicates failure
       if (loginResponse.containsKey('success') && !loginResponse['success']) {
-        // Show a red SnackBar for errorsNavigato
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(loginResponse['message'] ?? 'Login failed'),
-            backgroundColor: Colors.red, // Red SnackBar for errors
-          ),
-        );
+        if (Platform.isIOS) {
+          showCupertinoDialog(
+            context: context,
+            builder: (context) => CupertinoAlertDialog(
+              title: const Text('Error'),
+              content: Text(loginResponse['message'] ?? 'Login failed'),
+              actions: [
+                CupertinoDialogAction(
+                  child: const Text('OK'),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(loginResponse['message'] ?? 'Login failed'),
+              backgroundColor: Colors.red, // Red SnackBar for errors
+            ),
+          );
+        }
         return;
       }
 
@@ -110,7 +142,7 @@ class _NumericLoginScreenState extends State<NumericLoginScreen> {
         final mypasscode = profile['passcode'] as String?;
         // Cast to String? for safety
 
- print(" i have  a passcde and its  $picture");
+        print(" i have  a passcde and its  $picture");
         final autoSave = profile['auto_save'] ?? false;
         final goalsAlert = profile['goals_alert'] ?? false;
         setState(() {
@@ -175,24 +207,56 @@ class _NumericLoginScreenState extends State<NumericLoginScreen> {
         }
       } else {
         Navigator.pop(context); // Show a red SnackBar for invalid response
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Invalid login response: Missing required fields'),
-            backgroundColor: Colors.red, // Red SnackBar for errors
-          ),
-        );
+        if (Platform.isIOS) {
+          showCupertinoDialog(
+            context: context,
+            builder: (context) => CupertinoAlertDialog(
+              title: const Text('Error'),
+              content: const Text('Invalid login response: Missing required fields'),
+              actions: [
+                CupertinoDialogAction(
+                  child: const Text('OK'),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Invalid login response: Missing required fields'),
+              backgroundColor: Colors.red, // Red SnackBar for errors
+            ),
+          );
+        }
       }
     } catch (e) {
       // Dismiss the loading indicator
       Navigator.pop(context);
       print('Error: ${e.toString()}');
       // Show a red SnackBar for errors
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Check your network connection'),
-          backgroundColor: Colors.red, // Red SnackBar for errors
-        ),
-      );
+      if (Platform.isIOS) {
+        showCupertinoDialog(
+          context: context,
+          builder: (context) => CupertinoAlertDialog(
+            title: const Text('Error'),
+            content: const Text('Check your network connection'),
+            actions: [
+              CupertinoDialogAction(
+                child: const Text('OK'),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ],
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Check your network connection'),
+            backgroundColor: Colors.red, // Red SnackBar for errors
+          ),
+        );
+      }
     }
   }
 
@@ -209,11 +273,12 @@ class _NumericLoginScreenState extends State<NumericLoginScreen> {
             width: 70,
           ),
           const SizedBox(height: 20),
-          const Text(
+          Text(
             'Enter pass code to login',
             style: TextStyle(
               fontSize: 20,
               color: primaryTwo,
+              fontFamily: Platform.isIOS ? '.SF Pro Text' : null,
             ),
           ),
           const SizedBox(height: 40),
@@ -257,7 +322,10 @@ class _NumericLoginScreenState extends State<NumericLoginScreen> {
                           width: 60,
                           height: 60,
                           alignment: Alignment.center,
-                          child: const Icon(Icons.backspace, size: 28),
+                          child: Icon(
+                            Platform.isIOS ? CupertinoIcons.delete : Icons.backspace,
+                            size: 28,
+                          ),
                         ),
                       );
                     } else {
@@ -275,9 +343,10 @@ class _NumericLoginScreenState extends State<NumericLoginScreen> {
                           ),
                           child: Text(
                             item,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 20,
                               color: primaryTwo,
+                              fontFamily: Platform.isIOS ? '.SF Pro Text' : null,
                             ),
                           ),
                         ),
@@ -297,11 +366,12 @@ class _NumericLoginScreenState extends State<NumericLoginScreen> {
                 ),
               );
             },
-            child: const Text(
+            child: Text(
               'Login using Phone number?',
               style: TextStyle(
                 color: primaryColor,
                 fontWeight: FontWeight.bold,
+                fontFamily: Platform.isIOS ? '.SF Pro Text' : null,
               ),
             ),
           ),
@@ -315,12 +385,13 @@ class _NumericLoginScreenState extends State<NumericLoginScreen> {
                 ),
               );
             },
-            child: const Text(
-              'Don’t have an account? Sign up!',
+            child: Text(
+              "Don't have an account? Sign up!",
               style: TextStyle(
                 color: primaryTwo,
                 fontWeight: FontWeight.bold,
                 fontSize: 18,
+                fontFamily: Platform.isIOS ? '.SF Pro Text' : null,
               ),
             ),
           ),

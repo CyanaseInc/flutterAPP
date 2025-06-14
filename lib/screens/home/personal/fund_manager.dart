@@ -1,6 +1,8 @@
 import 'package:cyanase/helpers/loader.dart';
 import 'package:cyanase/helpers/web_db.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
+import 'dart:io';
 import 'package:cyanase/helpers/database_helper.dart';
 import 'package:cyanase/helpers/api_helper.dart';
 
@@ -132,10 +134,17 @@ class _FundManagerSliderState extends State<FundManagerSlider> {
             padding: const EdgeInsets.symmetric(horizontal: 4.0),
             child: GestureDetector(
               onTap: () {
-                showModalBottomSheet(
-                  context: context,
-                  builder: (BuildContext context) => Deposit(),
-                );
+                if (Platform.isIOS) {
+                  showCupertinoModalPopup(
+                    context: context,
+                    builder: (BuildContext context) => Deposit(),
+                  );
+                } else {
+                  showModalBottomSheet(
+                    context: context,
+                    builder: (BuildContext context) => Deposit(),
+                  );
+                }
               },
               child: Card(
                 elevation: 5,
@@ -181,10 +190,11 @@ class _FundManagerSliderState extends State<FundManagerSlider> {
                       ),
                       Text(
                         option['investment_option'],
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: primaryTwo,
                           fontSize: 14,
                           fontWeight: FontWeight.bold,
+                          fontFamily: Platform.isIOS ? '.SF Pro Text' : null,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -195,6 +205,7 @@ class _FundManagerSliderState extends State<FundManagerSlider> {
                           color: Colors.grey[700],
                           fontSize: 12,
                           fontWeight: FontWeight.w500,
+                          fontFamily: Platform.isIOS ? '.SF Pro Text' : null,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -209,10 +220,11 @@ class _FundManagerSliderState extends State<FundManagerSlider> {
                         ),
                         child: Text(
                           option['class_name'],
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: primaryColor,
                             fontSize: 12,
                             fontWeight: FontWeight.w500,
+                            fontFamily: Platform.isIOS ? '.SF Pro Text' : null,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,

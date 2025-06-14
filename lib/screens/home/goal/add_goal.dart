@@ -1,6 +1,7 @@
 import 'package:cyanase/helpers/loader.dart';
 import 'package:cyanase/helpers/web_db.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cyanase/theme/theme.dart';
 import 'dart:io';
@@ -152,7 +153,59 @@ class _AddGoalScreenState extends State<AddGoalScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return Platform.isIOS
+        ? CupertinoPageScaffold(
+            backgroundColor: Colors.grey[100],
+            navigationBar: CupertinoNavigationBar(
+              backgroundColor: primaryTwo,
+              middle: const Text(
+                'New Savings Goal',
+                style: TextStyle(color: white, fontWeight: FontWeight.bold),
+              ),
+              leading: CupertinoButton(
+                padding: EdgeInsets.zero,
+                child: const Icon(CupertinoIcons.back, color: white),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ),
+            child: Stack(
+              children: [
+                Column(
+                  children: [
+                    LinearProgressIndicator(
+                      value: (_currentPage + 1) / 5,
+                      backgroundColor: primaryColor,
+                      color: primaryTwo,
+                      minHeight: 4,
+                    ),
+                    Expanded(
+                      child: PageView(
+                        controller: _pageController,
+                        physics: const NeverScrollableScrollPhysics(),
+                        onPageChanged: (page) => setState(() => _currentPage = page),
+                        children: [
+                          _buildStep1(),
+                          _buildStep2(),
+                          _buildStep3(),
+                          _buildStep4(),
+                          _buildStep5(),
+                        ],
+                      ),
+                    ),
+                    _buildNavigationButtons(),
+                  ],
+                ),
+                if (_isSubmitting)
+                  Container(
+                    color: Colors.black.withOpacity(0.5),
+                    child: const Center(
+                      child: Loader(),
+                    ),
+                  ),
+              ],
+            ),
+          )
+        : Scaffold(
       resizeToAvoidBottomInset: true,
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
@@ -228,10 +281,11 @@ class _AddGoalScreenState extends State<AddGoalScreen> {
             children: [
               Text(
                 title,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
                   color: primaryTwo,
+                  fontFamily: Platform.isIOS ? '.SF Pro Display' : null,
                 ),
               ),
               const SizedBox(height: 12),
@@ -252,7 +306,23 @@ class _AddGoalScreenState extends State<AddGoalScreen> {
           ..._defaultGoals.map((goal) {
             return Padding(
               padding: const EdgeInsets.only(bottom: 8),
-              child: ElevatedButton(
+              child: Platform.isIOS
+                  ? CupertinoButton.filled(
+                      onPressed: () {
+                        setState(() => goalName = goal);
+                        _pageController.nextPage(
+                          duration: const Duration(milliseconds: 300),
+                          curve: Curves.easeInOut,
+                        );
+                      },
+                      child: Text(
+                        goal,
+                        style: TextStyle(
+                          color: goalName == goal ? white : Colors.black,
+                        ),
+                      ),
+                    )
+                  : ElevatedButton(
                 onPressed: () {
                   setState(() => goalName = goal);
                   _pageController.nextPage(
@@ -278,12 +348,30 @@ class _AddGoalScreenState extends State<AddGoalScreen> {
             style: TextStyle(fontSize: 14, color: Colors.grey),
           ),
           const SizedBox(height: 8),
-          TextField(
+          Platform.isIOS
+              ? CupertinoTextField(
+                  controller: _customGoalController,
+                  placeholder: 'Enter goal',
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey[400]!),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  onSubmitted: (value) {
+                    if (value.isNotEmpty) {
+                      _pageController.nextPage(
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeInOut,
+                      );
+                    }
+                  },
+                )
+              : TextField(
             controller: _customGoalController,
             decoration: InputDecoration(
               hintText: 'Enter goal',
-              border:
-                  OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10)),
               enabledBorder: OutlineInputBorder(
                 borderSide: BorderSide(color: Colors.grey[400]!),
                 borderRadius: BorderRadius.circular(10),
@@ -316,7 +404,31 @@ class _AddGoalScreenState extends State<AddGoalScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           ...['Weekly', 'Monthly'].map((freq) {
-            return RadioListTile<String>(
+            return Platform.isIOS
+                ? CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    onPressed: () {
+                      setState(() {
+                        savingFrequency = freq;
+                        reminderDay = freq == 'Weekly' ? 'Monday' : '1';
+                      });
+                    },
+                    child: Row(
+                      children: [
+                        Icon(
+                          savingFrequency == freq
+                              ? CupertinoIcons.circle_fill
+                              : CupertinoIcons.circle,
+                          color: savingFrequency == freq
+                              ? primaryTwo
+                              : Colors.grey[400],
+                        ),
+                        const SizedBox(width: 8),
+                        Text(freq, style: const TextStyle(fontSize: 16)),
+                      ],
+                    ),
+                  )
+                : RadioListTile<String>(
               value: freq,
               groupValue: savingFrequency,
               onChanged: (value) {
@@ -339,13 +451,32 @@ class _AddGoalScreenState extends State<AddGoalScreen> {
             ),
           ),
           const SizedBox(height: 8),
-          TextField(
+          Platform.isIOS
+              ? CupertinoTextField(
+                  controller: _goalPeriodController,
+                  placeholder: 'Enter months (e.g., 12)',
+                  keyboardType: TextInputType.number,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey[400]!),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  onSubmitted: (value) {
+                    if (savingFrequency != null && value.isNotEmpty) {
+                      _pageController.nextPage(
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeInOut,
+                      );
+                    }
+                  },
+                )
+              : TextField(
             controller: _goalPeriodController,
             keyboardType: TextInputType.number,
             decoration: InputDecoration(
               hintText: 'Enter months (e.g., 12)',
-              border:
-                  OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10)),
               enabledBorder: OutlineInputBorder(
                 borderSide: BorderSide(color: Colors.grey[400]!),
                 borderRadius: BorderRadius.circular(10),
@@ -367,7 +498,20 @@ class _AddGoalScreenState extends State<AddGoalScreen> {
             },
           ),
           const SizedBox(height: 16),
-          ElevatedButton(
+          Platform.isIOS
+              ? CupertinoButton.filled(
+                  onPressed: () {
+                    if (savingFrequency != null &&
+                        _goalPeriodController.text.isNotEmpty) {
+                      _pageController.nextPage(
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeInOut,
+                      );
+                    }
+                  },
+                  child: const Text('Continue'),
+                )
+              : ElevatedButton(
             onPressed: () {
               if (savingFrequency != null &&
                   _goalPeriodController.text.isNotEmpty) {
@@ -397,13 +541,24 @@ class _AddGoalScreenState extends State<AddGoalScreen> {
       content: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          TextField(
+          Platform.isIOS
+              ? CupertinoTextField(
+                  controller: _amountController,
+                  placeholder: 'Enter amount (e.g., 10000)',
+                  keyboardType: TextInputType.number,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey[400]!),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                )
+              : TextField(
             controller: _amountController,
             keyboardType: TextInputType.number,
             decoration: InputDecoration(
               hintText: 'Enter amount (e.g., 10000)',
-              border:
-                  OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10)),
               enabledBorder: OutlineInputBorder(
                 borderSide: BorderSide(color: Colors.grey[400]!),
                 borderRadius: BorderRadius.circular(10),
@@ -433,9 +588,14 @@ class _AddGoalScreenState extends State<AddGoalScreen> {
                 border: Border.all(color: Colors.grey[400]!, width: 1),
               ),
               child: goalImage == null
-                  ? const Center(
-                      child:
-                          Icon(Icons.add_a_photo, color: primaryTwo, size: 40),
+                  ? Center(
+                      child: Icon(
+                        Platform.isIOS
+                            ? CupertinoIcons.photo
+                            : Icons.add_a_photo,
+                        color: primaryTwo,
+                        size: 40,
+                      ),
                     )
                   : ClipRRect(
                       borderRadius: BorderRadius.circular(15),
@@ -465,14 +625,32 @@ class _AddGoalScreenState extends State<AddGoalScreen> {
       title: 'When should we remind you?',
       content: Column(
         children: [
-          DropdownButtonFormField<String>(
+          Platform.isIOS
+              ? Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey[400]!),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: CupertinoPicker(
+                    itemExtent: 32,
+                    onSelectedItemChanged: (index) {
+                      setState(() => reminderDay = reminderOptions[index]);
+                    },
+                    children: reminderOptions
+                        .map((value) => Center(child: Text(value)))
+                        .toList(),
+                  ),
+                )
+              : DropdownButtonFormField<String>(
             value: reminderDay,
             onChanged: (value) => setState(() => reminderDay = value),
             decoration: InputDecoration(
-              border:
-                  OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-              labelText:
-                  savingFrequency == 'Weekly' ? 'Day of Week' : 'Day of Month',
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    labelText: savingFrequency == 'Weekly'
+                        ? 'Day of Week'
+                        : 'Day of Month',
             ),
             items: reminderOptions
                 .map((value) =>
@@ -480,7 +658,19 @@ class _AddGoalScreenState extends State<AddGoalScreen> {
                 .toList(),
           ),
           const SizedBox(height: 16),
-          ElevatedButton.icon(
+          Platform.isIOS
+              ? CupertinoButton.filled(
+                  onPressed: _pickTime,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(CupertinoIcons.time),
+                      const SizedBox(width: 8),
+                      Text('Set Time: ${reminderTime.format(context)}'),
+                    ],
+                  ),
+                )
+              : ElevatedButton.icon(
             onPressed: _pickTime,
             icon: const Icon(Icons.access_time),
             label: Text('Set Time: ${reminderTime.format(context)}'),
@@ -504,9 +694,8 @@ class _AddGoalScreenState extends State<AddGoalScreen> {
         ? amount / (period * 4.33)
         : amount / period;
 
-    // Format the amount with commas and dynamic currency
     final NumberFormat currencyFormat = NumberFormat.currency(
-      symbol: currency ?? '\$', // Use dynamic currency or fallback to '$'
+      symbol: currency ?? '\$',
       decimalDigits: 2,
     );
 
@@ -553,10 +742,22 @@ class _AddGoalScreenState extends State<AddGoalScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(fontSize: 16, color: Colors.grey)),
-          Text(value,
-              style:
-                  const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 16,
+              color: Colors.grey,
+              fontFamily: Platform.isIOS ? '.SF Pro Text' : null,
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              fontFamily: Platform.isIOS ? '.SF Pro Text' : null,
+            ),
+          ),
         ],
       ),
     );
@@ -570,14 +771,39 @@ class _AddGoalScreenState extends State<AddGoalScreen> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           if (_currentPage > 0)
-            TextButton(
+            Platform.isIOS
+                ? CupertinoButton(
+                    onPressed: () => _pageController.previousPage(
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeInOut,
+                    ),
+                    child: const Text('Back'),
+                  )
+                : TextButton(
               onPressed: () => _pageController.previousPage(
                 duration: const Duration(milliseconds: 300),
                 curve: Curves.easeInOut,
               ),
-              child: const Text('Back', style: TextStyle(color: primaryTwo)),
+                    child: const Text('Back',
+                        style: TextStyle(color: primaryTwo)),
             ),
-          ElevatedButton(
+          Platform.isIOS
+              ? CupertinoButton.filled(
+                  onPressed: isNextActive
+                      ? () {
+                          if (_currentPage == 4) {
+                            _submitGoal();
+                          } else {
+                            _pageController.nextPage(
+                              duration: const Duration(milliseconds: 300),
+                              curve: Curves.easeInOut,
+                            );
+                          }
+                        }
+                      : null,
+                  child: Text(_currentPage == 4 ? 'Save Goal' : 'Next'),
+                )
+              : ElevatedButton(
             onPressed: isNextActive
                 ? () {
                     if (_currentPage == 4) {
@@ -626,10 +852,45 @@ class _AddGoalScreenState extends State<AddGoalScreen> {
   }
 
   Future<void> _pickTime() async {
-    final time =
-        await showTimePicker(context: context, initialTime: reminderTime);
+    if (Platform.isIOS) {
+      final time = await showCupertinoModalPopup(
+        context: context,
+        builder: (BuildContext context) => Container(
+          height: 216,
+          padding: const EdgeInsets.only(top: 6.0),
+          margin: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+          ),
+          color: CupertinoColors.systemBackground.resolveFrom(context),
+          child: SafeArea(
+            top: false,
+            child: CupertinoDatePicker(
+              initialDateTime: DateTime(
+                DateTime.now().year,
+                DateTime.now().month,
+                DateTime.now().day,
+                reminderTime.hour,
+                reminderTime.minute,
+              ),
+              mode: CupertinoDatePickerMode.time,
+              use24hFormat: false,
+              onDateTimeChanged: (DateTime newTime) {
+                setState(() {
+                  reminderTime = TimeOfDay.fromDateTime(newTime);
+                });
+              },
+            ),
+          ),
+        ),
+      );
+    } else {
+      final time = await showTimePicker(
+        context: context,
+        initialTime: reminderTime,
+      );
     if (time != null) {
       setState(() => reminderTime = time);
+      }
     }
   }
 
@@ -661,7 +922,6 @@ class _AddGoalScreenState extends State<AddGoalScreen> {
         throw Exception('No authentication token found');
       }
 
-      // Save reminder data
       final data = {
         'goal_name': finalGoalName,
         'goal_period': goalPeriodText,
@@ -674,16 +934,53 @@ class _AddGoalScreenState extends State<AddGoalScreen> {
       final response = await ApiService.CreateGoal(token, data, goalImage);
 
       if (response['success'] == true) {
-        // Schedule the notification
         await _scheduleNotification();
 
+        if (Platform.isIOS) {
+          showCupertinoDialog(
+            context: context,
+            builder: (context) => CupertinoAlertDialog(
+              title: const Text('Success'),
+              content: const Text('Goal saved successfully!'),
+              actions: [
+                CupertinoDialogAction(
+                  child: const Text('OK'),
+                  onPressed: () {
+                    Navigator.pop(context); // Close dialog
+                    Navigator.pop(context); // Close screen
+                  },
+                ),
+              ],
+            ),
+          );
+        } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Goal saved successfully!')),
         );
         Navigator.pop(context);
+        }
       }
     } catch (e) {
       print('Error in _submitGoal: $e');
+      if (Platform.isIOS) {
+        showCupertinoDialog(
+          context: context,
+          builder: (context) => CupertinoAlertDialog(
+            title: const Text('Error'),
+            content: Text('Failed to save goal: $e'),
+            actions: [
+              CupertinoDialogAction(
+                child: const Text('OK'),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ],
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to save goal: $e')),
+        );
+      }
     } finally {
       setState(() => _isSubmitting = false);
     }
