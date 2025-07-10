@@ -404,7 +404,7 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
         };
         
         final status = message['status'] ?? (isMe ? 'sent' : 'unread');
-        
+         
         return {
           ...message,
           'isMe': isMe ? 1 : 0,

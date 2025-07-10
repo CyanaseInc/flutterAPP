@@ -545,6 +545,11 @@ Future<void> _handleNewMessage(String groupId, Map<String, dynamic> message) asy
       'sender_role': senderRole,
       'temp_id': tempId.isNotEmpty ? tempId : null,
       "attachment_url": message['attachment_url'] ?? '',
+      'blurhash': message['blurhash'] ?? '',
+      'reply_to_id': message['reply_to_id'] ?? null,
+      'reply_to_message': message['reply_to_message'] ?? null,
+      'reply_to_type': message['reply_to_type'] ?? null,
+       // Store reply_to if exists
        // Store null if tempId is empty
     };
 
