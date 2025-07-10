@@ -8,6 +8,7 @@ import 'package:cyanase/helpers/notification_service.dart';
 import 'package:cyanase/helpers/endpoints.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:cyanase/helpers/websocket_service.dart';
+import 'package:cyanase/helpers/chat_websocket_service.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:lottie/lottie.dart';
 import 'chatlist_header.dart';
@@ -58,6 +59,9 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
   bool _mounted = true;
   StreamSubscription? _messageStreamSubscription;
   StreamSubscription? _unreadCountStreamSubscription;
+  
+  // Add status checker timer for chat list
+  Timer? _chatStatusCheckerTimer;
 
   @override
   void initState() {
@@ -76,6 +80,7 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
       await _initializeWebSocket();
        _setupMessageStreams();
       _setupUnreadCountStream();
+      _startChatStatusChecker();
     });
 
     _animationController!.forward();
@@ -122,7 +127,7 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
     _messageStreamSubscription = _dbHelper.messageStream.listen((groupMessages) {
       if (!_mounted) return;
       
-      print('🔵 [ChatList] Received message stream update');
+      print('🔵 [ChatList] Received message stream update: ${groupMessages.length} groups');
       
       setState(() {
         for (final entry in groupMessages.entries) {
@@ -134,6 +139,8 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
             final chatIndex = _allChats.indexWhere((chat) => chat['id'].toString() == groupId);
             
             if (chatIndex != -1) {
+              print('🔵 [ChatList] Updating chat for group $groupId with status: ${lastMessage['status']}');
+              
               // Update chat with new message
               _allChats[chatIndex] = {
                 ..._allChats[chatIndex],
@@ -143,6 +150,11 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
                 'timestamp': lastMessage['timestamp'],
                 'unreadCount': _groupUnreadCounts[groupId] ?? 0,
                 'isMe': lastMessage['isMe'] == 1,
+                // Store additional message info for status updates
+                'lastMessageId': lastMessage['id'],
+                'lastMessageType': lastMessage['type'],
+                'lastMessageText': lastMessage['message'],
+                'lastMessageSender': lastMessage['sender_name'],
               };
             }
           }
@@ -154,7 +166,7 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
       });
     });
 
-    // Set up WebSocket message handler
+    // Set up WebSocket message handler for chat list updates
     WebSocketService.instance.onMessageReceived = (data) {
       if (!_mounted) return;
       
@@ -176,6 +188,16 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
           final groupId = data['group_id']?.toString();
           if (groupId != null) {
             _handleMessageStatusUpdate(groupId, data['status'], data['message_id']?.toString());
+          }
+        } else if (data['type'] == 'message_id_update') {
+          // Handle message ID updates (when temp_id becomes permanent id)
+          final oldId = data['old_id']?.toString();
+          final newId = data['new_id']?.toString();
+          final groupId = data['group_id']?.toString();
+          final status = data['status'];
+          
+          if (groupId != null && oldId != null && newId != null) {
+            _handleMessageIdUpdate(groupId, oldId, newId, status);
           }
         } else if (data['type'] == 'typing') {
           print('🔵 [ChatList] Handling typing status: $data');
@@ -199,6 +221,38 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
         }
       } catch (e, stackTrace) {
         print('🔴 [ChatList] Error processing WebSocket message: $e');
+        print('🔴 [ChatList] Stack trace: $stackTrace');
+      }
+    };
+
+    // Set up ChatWebSocket message handler for status updates
+    ChatWebSocketService.instance.onMessageReceived = (data) {
+      if (!_mounted) return;
+      
+      print('🔵 [ChatList] Received ChatWebSocket message: $data');
+      
+      try {
+        if (data['type'] == 'update_message_status') {
+          final messageId = data['message_id']?.toString();
+          final status = data['status'];
+          final groupId = data['group_id']?.toString();
+          
+          if (groupId != null && messageId != null && status != null) {
+            _handleMessageStatusUpdate(groupId, status, messageId);
+          }
+        } else if (data['type'] == 'message_id_update') {
+          // Handle message ID updates from ChatWebSocket
+          final oldId = data['old_id']?.toString();
+          final newId = data['new_id']?.toString();
+          final groupId = data['group_id']?.toString();
+          final status = data['status'];
+          
+          if (groupId != null && oldId != null && newId != null) {
+            _handleMessageIdUpdate(groupId, oldId, newId, status);
+          }
+        }
+      } catch (e, stackTrace) {
+        print('🔴 [ChatList] Error processing ChatWebSocket message: $e');
         print('🔴 [ChatList] Stack trace: $stackTrace');
       }
     };
@@ -242,21 +296,48 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
   Future<void> _handleMessageStatusUpdate(String groupId, String status, String? messageId) async {
     if (!_mounted) return;
 
+    print('🔵 [ChatList] Handling message status update: groupId=$groupId, status=$status, messageId=$messageId');
+
     try {
-      await _dbHelper.markMessagesAsRead(groupId, messageId: messageId);
+      // Update the database first
+      if (messageId != null) {
+        await _dbHelper.updateMessageStatus(messageId, status);
+      }
       
       // Get updated unread count for this group
       final unreadCount = await _dbHelper.getGroupUnreadCount(groupId);
       
-      // Update chat list without setState
+      // Update chat list immediately
       final chatIndex = _allChats.indexWhere((chat) => chat['id'].toString() == groupId);
       if (chatIndex != -1) {
         setState(() {
+          final currentChat = _allChats[chatIndex];
+          
+          // Update the chat with new status and unread count
           _allChats[chatIndex] = {
-            ..._allChats[chatIndex],
+            ...currentChat,
             'lastMessageStatus': status,
             'unreadCount': unreadCount,
           };
+          
+          // If this is a status update for the last message, update the message preview
+          if (messageId != null && currentChat['lastMessageId']?.toString() == messageId) {
+          
+            // Rebuild the last message preview with updated status
+            final lastMessage = {
+              'status': status,
+              'type': currentChat['lastMessageType'] ?? 'text',
+              'message': currentChat['lastMessageText'] ?? '',
+              'isMe': currentChat['isMe'] ?? false,
+              'sender_name': currentChat['lastMessageSender'] ?? '',
+            };
+            
+            _allChats[chatIndex] = {
+              ..._allChats[chatIndex],
+              'lastMessage': _buildLastMessagePreview(lastMessage),
+            };
+          }
+          
           _filteredChats = List.from(_allChats);
           
           // Update total unread count
@@ -264,6 +345,8 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
           _unreadCountController.add(_totalUnreadCount);
           widget.onUnreadCountChanged?.call(_totalUnreadCount);
         });
+        
+        print('🔵 [ChatList] Updated chat status for group $groupId: $status');
       }
     } catch (e) {
       print('🔴 [ChatList] Error handling message status update: $e');
@@ -386,6 +469,7 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
     _messageStatusSubscription?.cancel();
     _messageStreamSubscription?.cancel();
     _unreadCountStreamSubscription?.cancel();
+    _chatStatusCheckerTimer?.cancel();
     _channel?.sink.close();
     _animationController?.dispose();
     _searchController.dispose();
@@ -395,76 +479,134 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
 
 Future<void> _handleNewMessage(String groupId, Map<String, dynamic> message) async {
     try {
-      print('🔵 [ChatList] Handling new message in chatkist: $message');
+    debugPrint('🟢 [1] START _handleNewMessage for group: $groupId');
+    debugPrint('🟢 [1] Full raw message: ${jsonEncode(message)}');
       
       final db = await _dbHelper.database;
-      final messageId = message['id']?.toString() ?? '';
+    debugPrint('🟢 [2] Database connection established');
+
+    // Convert all IDs to strings for consistent comparison
+      final messageId = message['id'] ?? '';
       final tempId = message['temp_id']?.toString() ?? '';
-      final isMe = message['sender_id']?.toString() == _userId;
+    final senderId = message['sender_id']?.toString() ?? '';
+    final isMe = senderId == _userId;
       final messageStatus = isMe ? 'sent' : 'unread';
+    final group_Id = message['room_id']?.toString() ?? '';
+
+ 
+
+    // Get sender info
+    String senderName = message['full_name'] ?? 'Unknown';
+    String senderAvatar = message['sender_info']?['profile_picture'] ?? '';
+    String senderRole = message['sender_info']?['role'] ?? 'member';
+
+   
+
+    // Modified duplicate check - only include tempId if non-empty for incoming messages
+    final whereClause = isMe ? 'temp_id = ?' : 'id = ?' + (tempId.isNotEmpty ? ' OR temp_id = ?' : '');
+    final whereArgs = isMe ? [tempId] : tempId.isNotEmpty ? [messageId, tempId] : [messageId];
       
       final existingMessage = await db.query(
         'messages',
-        where: 'id = ? OR temp_id = ?',
-        whereArgs: [messageId, tempId],
-      );
+      where: whereClause,
+      whereArgs: whereArgs,
+    );
 
-      if (existingMessage.isEmpty) {
-        // Prepare message data with proper type conversions
+    debugPrint('🟢 [5] Existing message check: ${existingMessage.length} matches found');
+    if (existingMessage.isNotEmpty) {
+      debugPrint('🟡 [5] Message already exists in database:');
+      for (var msg in existingMessage) {
+        debugPrint('🟡 [5] Existing message details: $msg');
+      }
+      // Update UI with existing message if needed
+      setState(() {
+        final chatIndex = _allChats.indexWhere((chat) => chat['id'].toString() == group_Id);
+        if (chatIndex != -1) {
+          _allChats[chatIndex]['timestamp'] = DateTime.now().toIso8601String();
+          _allChats.sort((a, b) => DateTime.parse(b['timestamp']).compareTo(DateTime.parse(a['timestamp'])));
+          _filteredChats = List.from(_allChats);
+        }
+      });
+      return;
+    }
+
+    debugPrint('🟢 [6] Preparing new message data for insertion');
         final messageData = {
           'id': messageId,
-          'group_id': groupId,
-          'sender_id': message['sender_id']?.toString() ?? _userId,
+      'group_id': group_Id,
+      'sender_id': senderId,
           'message': message['content'] ?? '',
           'timestamp': message['timestamp'] ?? DateTime.now().toIso8601String(),
           'type': message['message_type'] ?? 'text',
           'isMe': isMe ? 1 : 0,
           'status': messageStatus,
-          'sender_name': message['username'] ?? 'Unknown',
-          'sender_avatar': message['sender_info']?['profile_picture'] ?? '',
-          'sender_role': message['sender_info']?['role'] ?? 'member',
-          'temp_id': tempId,
-        };
+      'sender_name': senderName,
+      'sender_avatar': senderAvatar,
+      'sender_role': senderRole,
+      'temp_id': tempId.isNotEmpty ? tempId : null,
+      "attachment_url": message['attachment_url'] ?? '',
+       // Store null if tempId is empty
+    };
 
-        // Insert message into database
+    debugPrint('🟢 [7] Inserting new message: ${jsonEncode(messageData)}');
+    try {
         await _dbHelper.insertMessage(messageData);
-        
-        // Get updated unread count for this group
-        final unreadCount = await _dbHelper.getGroupUnreadCount(groupId);
-        
+
+          if (messageData['type'] == 'image' ||messageData['type'] == 'audio') {
+        final attachmentUrl = messageData['attachment_url'];
+
+     
+          await _dbHelper.insertMedia(
+            messageId: messageData['id'],
+            type: messageData['type'],
+            url: attachmentUrl,
+            blurhash: messageData['blurhash'],
+            
+          );
+          print('🔵 [ChatScreen] Inserted media entry for message $messageId: and url $attachmentUrl');
+        } 
+      debugPrint('🟢 [7] Message inserted successfully');
+      // Verify insertion
+      final inserted = await db.query(
+        'messages',
+        where: 'id = ?',
+        whereArgs: [messageId],
+      );
+      debugPrint('🟢 [7.1] Verification: ${inserted.length} messages found with id $messageId');
+    } catch (e) {
+      debugPrint('🔴 [7] Insert failed: $e');
+      rethrow;
+    }
+
+    debugPrint('🟢 [8] Updating UI state');
         setState(() {
-          // Update chat list
-          final chatIndex = _allChats.indexWhere((chat) => chat['id'].toString() == groupId);
+      final chatIndex = _allChats.indexWhere((chat) => chat['id'].toString() == group_Id);
           if (chatIndex != -1) {
             _allChats[chatIndex] = {
               ..._allChats[chatIndex],
               'lastMessage': _buildLastMessagePreview(messageData),
               'lastMessageStatus': messageStatus,
-              'lastMessageTime': messageData['timestamp'],
               'timestamp': messageData['timestamp'],
-              'unreadCount': unreadCount,
-              'isMe': isMe,
+          'unreadCount': isMe ? 0 : (_allChats[chatIndex]['unreadCount'] ?? 0) + 1,
             };
-            
-            // Sort chats by most recent message
             _allChats.sort((a, b) => DateTime.parse(b['timestamp']).compareTo(DateTime.parse(a['timestamp'])));
             _filteredChats = List.from(_allChats);
-            
-            // Update total unread count
-            _totalUnreadCount = _groupUnreadCounts.values.fold(0, (sum, count) => sum + count);
-            _unreadCountController.add(_totalUnreadCount);
-            widget.onUnreadCountChanged?.call(_totalUnreadCount);
           }
         });
 
         if (!isMe) {
-          // Show notification for new message
-          _showMessageNotification(message);
-        }
-      }
+      debugPrint('🟢 [9] Showing notification for message $messageId');
+      _showMessageNotification({
+        ...message,
+        'full_name': senderName,
+        'id': messageId,
+      });
+    }
+
+    debugPrint('🟢 [10] _handleNewMessage completed for message $messageId');
     } catch (e, stackTrace) {
-      print('🔴 [ChatList] Error handling new message: $e');
-      print('🔴 [ChatList] Stack trace: $stackTrace');
+    debugPrint('🔴 [ERROR] in _handleNewMessage: $e');
+    debugPrint('🔴 [STACK TRACE]: $stackTrace');
     }
   }
 
@@ -514,12 +656,15 @@ Future<void> _handleNewMessage(String groupId, Map<String, dynamic> message) asy
                 }
                 await processGroupData({'success': true, 'data': chatList});
               } else if (response['type'] == 'new_message') {
-                print('🔵 Processing new_message');
+                print('🔵 Processing new_message $response');
                 final message = response['message'];
                 if (message != null && message['room_id'] != null) {
                   final groupId = message['room_id'].toString();
                   await _handleNewMessage(groupId, message);
                 }
+
+
+
               } else if (response['type'] == 'update_message_status') {
                 final groupId = response['group_id']?.toString();
                 if (groupId != null) {
@@ -681,7 +826,7 @@ Future<void> _handleNewMessage(String groupId, Map<String, dynamic> message) asy
           if (!isApproved && !isDenied && !(role == 'admin' || isAdminDynamic == true)) {
             pendingCount++;
           }
-
+   
           final participantDataToStore = {
             'group_id': groupId,
             'user_id': participantUserId,
@@ -695,7 +840,7 @@ Future<void> _handleNewMessage(String groupId, Map<String, dynamic> message) asy
             'is_approved': isApproved ? 1 : 0,
             'is_denied': isDenied ? 1 : 0,
             'is_removed': 0,
-            'profile_pic': participantData['profile_pic'] as String? ?? 'assets/images/avatar.png',
+            'profile_pic': participantData['profile_picture'] as String?,
           };
 
           final existingParticipant = await db.query(
@@ -704,7 +849,7 @@ Future<void> _handleNewMessage(String groupId, Map<String, dynamic> message) asy
             whereArgs: [groupId, participantUserId],
             limit: 1,
           );
-
+    
           if (existingParticipant.isEmpty) {
             await _dbHelper.insertParticipant(participantDataToStore);
           } else {
@@ -865,7 +1010,7 @@ Future<void> _handleNewMessage(String groupId, Map<String, dynamic> message) asy
       if (group.isEmpty) return;
 
       final groupName = group.first['name'] as String? ?? 'Group';
-      final senderName = message['username'] as String? ?? 'Someone';
+      final senderName = message['full_name'] as String? ?? 'Someone';
       final content = message['content'] as String? ?? 'New message';
       final messageType = message['message_type'] as String? ?? 'text';
 
@@ -963,30 +1108,26 @@ Future<void> _handleNewMessage(String groupId, Map<String, dynamic> message) asy
     if (!_mounted) return [];
 
     List<Map<String, dynamic>> chats = [];
-
     try {
       final db = await _dbHelper.database;
       final groups = await _dbHelper.getGroups();
       final unreadCounts = await _dbHelper.getGroupUnreadCounts();
+    
 
       for (var group in groups) {
         final isApproved = await _isUserApproved(group['id']);
-        if (!isApproved) continue;
+      if (!isApproved) {
+        print('🔵 [ChatList] Skipping group ${group['id']} (user not approved)');
+        continue;
+      }
 
         final groupId = group['id'].toString();
         final unreadCount = unreadCounts[groupId] ?? 0;
         _groupUnreadCounts[groupId] = unreadCount;
 
         // Get the last message for this group
-        final groupMessages = await db.query(
-          'messages',
-          where: 'group_id = ?',
-          whereArgs: [group['id']],
-          orderBy: 'timestamp DESC',
-          limit: 1,
-        );
-
-        final lastMessage = groupMessages.isNotEmpty ? groupMessages.first : null;
+      final lastMessage = await _dbHelper.getLastMessageById(group['id']);
+     
         Widget lastMessagePreview = const Text(
           "No messages yet",
           style: TextStyle(color: Colors.grey),
@@ -997,7 +1138,8 @@ Future<void> _handleNewMessage(String groupId, Map<String, dynamic> message) asy
         if (lastMessage != null) {
           lastMessagePreview = _buildLastMessagePreview(lastMessage);
           lastMessageStatus = lastMessage['status'] as String?;
-          timestamp = lastMessage['timestamp'] as String? ?? DateTime.now().toIso8601String();
+        timestamp = lastMessage['timestamp'] as String;
+       
         }
 
         chats.add({
@@ -1017,6 +1159,10 @@ Future<void> _handleNewMessage(String groupId, Map<String, dynamic> message) asy
           'has_user_paid': group['has_user_paid'] == 1,
           'subscription_amount': _parseDouble(group['subscription_amount']),
           'isMe': lastMessage?['isMe'] == 1,
+        'lastMessageId': lastMessage?['id'],
+        'lastMessageType': lastMessage?['type'],
+        'lastMessageText': lastMessage?['message'],
+        'lastMessageSender': lastMessage?['sender_name'],
         });
       }
 
@@ -1031,43 +1177,17 @@ Future<void> _handleNewMessage(String groupId, Map<String, dynamic> message) asy
         _totalUnreadCount = _groupUnreadCounts.values.fold(0, (sum, count) => sum + count);
         _unreadCountController.add(_totalUnreadCount);
         widget.onUnreadCountChanged?.call(_totalUnreadCount);
+      
       });
-    } catch (e) {
+  } catch (e, stackTrace) {
       print('🔴 [ChatList] Error loading chats: $e');
+    print('🔴 [ChatList] Stack trace: $stackTrace');
     }
     return _allChats;
   }
 
 
-  String _formatTime(String timestamp) {
-    try {
-      final dateTime = DateTime.parse(timestamp);
-      final now = DateTime.now();
-      final difference = now.difference(dateTime);
 
-      // Format time part
-      final timeStr = TimeOfDay.fromDateTime(dateTime).format(context);
-
-      // If message is from today, show time only
-      if (difference.inDays == 0) {
-        return timeStr;
-      }
-      // If message is from yesterday, show "Yesterday" and time
-      else if (difference.inDays == 1) {
-        return 'Yesterday, $timeStr';
-      }
-      // If message is from this year, show date and time
-      else if (dateTime.year == now.year) {
-        return '${dateTime.day}/${dateTime.month}, $timeStr';
-      }
-      // If message is from previous years, show full date and time
-      else {
-        return '${dateTime.day}/${dateTime.month}/${dateTime.year}, $timeStr';
-      }
-    } catch (e) {
-      return 'Just now';
-    }
-  }
 
   String _truncateMessage(String message, {int maxLength = 30}) {
     if (message.length > maxLength) {
@@ -1118,6 +1238,106 @@ Future<void> _handleNewMessage(String groupId, Map<String, dynamic> message) asy
       // The WebSocket will update the loan data automatically
       // No need for setState or full reload
     });
+
+     _loadChats().then((_) {
+    setState(() {
+      _filteredChats = List.from(_allChats);
+    });
+    _refreshController.add(null); // Notify ChatListComponent
+  });
+  }
+
+  // Add new method to handle message ID updates
+  void _handleMessageIdUpdate(String groupId, String oldId, String newId, String? status) {
+    if (!_mounted) return;
+    
+    print('🔵 [ChatList] Handling message ID update: $oldId -> $newId, status: $status');
+    
+    setState(() {
+      final chatIndex = _allChats.indexWhere((chat) => chat['id'].toString() == groupId);
+      if (chatIndex != -1) {
+        // Update the last message status if it matches the old ID
+        final currentChat = _allChats[chatIndex];
+        if (currentChat['lastMessageId']?.toString() == oldId) {
+          _allChats[chatIndex] = {
+            ...currentChat,
+            'lastMessageId': newId,
+            'lastMessageStatus': status ?? 'sent',
+          };
+          _filteredChats = List.from(_allChats);
+        }
+      }
+    });
+  }
+
+  // Add status checker method for chat list
+  void _startChatStatusChecker() {
+    _chatStatusCheckerTimer?.cancel();
+    _chatStatusCheckerTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
+      _checkChatMessageStatus();
+    });
+  }
+
+  // Method to check message status in database and update chat list
+  Future<void> _checkChatMessageStatus() async {
+    if (!_mounted) return;
+    
+    try {
+      final db = await _dbHelper.database;
+      bool hasChanges = false;
+      
+      for (int i = 0; i < _allChats.length; i++) {
+        final chat = _allChats[i];
+        final groupId = chat['id'].toString();
+        final lastMessageId = chat['lastMessageId']?.toString();
+        
+        if (lastMessageId == null) continue;
+        
+        // Check actual status in database
+        final dbMessage = await db.query(
+          'messages',
+          where: 'id = ? OR temp_id = ?',
+          whereArgs: [lastMessageId, lastMessageId],
+          limit: 1,
+        );
+        
+        if (dbMessage.isNotEmpty) {
+          final dbStatus = dbMessage.first['status'] as String?;
+          final uiStatus = chat['lastMessageStatus'] as String?;
+          
+          // Update chat list if status is different
+          if (dbStatus != null && dbStatus != uiStatus) {
+            
+            
+            // Rebuild the last message preview with updated status
+            final lastMessage = {
+              'status': dbStatus,
+              'type': chat['lastMessageType'] ?? 'text',
+              'message': chat['lastMessageText'] ?? '',
+              'isMe': chat['isMe'] ?? false,
+              'sender_name': chat['lastMessageSender'] ?? '',
+            };
+            
+            _allChats[i] = {
+              ...chat,
+              'lastMessageStatus': dbStatus,
+              'lastMessage': _buildLastMessagePreview(lastMessage),
+            };
+            
+            hasChanges = true;
+          }
+        }
+      }
+      
+      // Update UI if there were changes
+      if (hasChanges) {
+        setState(() {
+          _filteredChats = List.from(_allChats);
+        });
+      }
+    } catch (e) {
+      print('🔴 [ChatStatusChecker] Error checking chat message status: $e');
+    }
   }
 }
 

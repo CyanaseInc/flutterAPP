@@ -349,7 +349,8 @@ class NotificationService {
       debugPrint('🔵 [NotificationService] Group message notification shown successfully');
     } catch (e, stackTrace) {
       debugPrint('🔴 [NotificationService] Error showing group message notification: $e');
-      debugPrint('🔴 [NotificationService] Stack trace: $stackTrace');
+     
+     
     }
   }
 

@@ -7,7 +7,7 @@ import 'package:intl/intl.dart';
 
 class PendingAdminLoansScreen extends StatefulWidget {
   final List<Map<String, dynamic>> loans;
-  final VoidCallback onLoanProcessed;
+  final void Function(String loanId) onLoanProcessed;
 
   const PendingAdminLoansScreen({
     Key? key,
@@ -105,7 +105,7 @@ class _PendingAdminLoansScreenState extends State<PendingAdminLoansScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          'Pending Loan Requests',
+          'Pending loan requests',
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.w600,
@@ -329,7 +329,7 @@ class _PendingAdminLoansScreenState extends State<PendingAdminLoansScreen> {
               });
 
               try {
-                print("my loan is, $loan");
+           
                 // Ensure proper type casting for loan_id and group_id
                 final response = await processLoan(
                   loanId: int.parse(loan['loan_id'].toString()),
@@ -345,8 +345,8 @@ class _PendingAdminLoansScreenState extends State<PendingAdminLoansScreen> {
                     loans.removeWhere((l) => l['loan_id'] == loan['loan_id']);
                   });
 
-                  // Notify parent to refresh data and update counts
-                  widget.onLoanProcessed();
+                  // Notify parent to update badge/count instantly
+                  widget.onLoanProcessed(loan['loan_id'].toString());
 
                   if (mounted) {
                     // Show success message with remaining count

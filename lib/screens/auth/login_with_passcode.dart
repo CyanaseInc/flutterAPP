@@ -8,6 +8,8 @@ import '../home/home.dart';
 import 'package:cyanase/helpers/database_helper.dart';
 import 'package:cyanase/helpers/loader.dart';
 import 'package:cyanase/helpers/api_helper.dart';
+import 'package:cyanase/helpers/link_handler.dart';
+import 'package:cyanase/screens/home/group/group_invite.dart';
 
 class NumericLoginScreen extends StatefulWidget {
   const NumericLoginScreen({Key? key}) : super(key: key);
@@ -194,11 +196,28 @@ class _NumericLoginScreenState extends State<NumericLoginScreen> {
           }
           Navigator.pop(context);
           // Navigate to HomeScreen after successful login
+          // Handle pending deep link after login
+          if (PendingDeepLink.uri != null &&
+              PendingDeepLink.uri!.scheme == 'cyanase' &&
+              PendingDeepLink.uri!.host == 'join') {
+            final groupId = PendingDeepLink.uri!.queryParameters['group_id'];
+            if (groupId != null && groupId.isNotEmpty) {
+              PendingDeepLink.uri = null;
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => GroupInviteScreen(
+                    groupId: int.parse(groupId),
+                  ),
+                ),
+              );
+              return;
+            }
+          }
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) =>
-                  HomeScreen(passcode: _passcode, name: name, picture: picture),
+              builder: (context) => HomeScreen(passcode: _passcode, name: name, picture: picture),
             ),
           );
         } else {

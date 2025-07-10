@@ -1,13 +1,14 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cyanase/theme/theme.dart';
 import 'package:cyanase/helpers/database_helper.dart';
 import 'package:cyanase/helpers/api_helper.dart';
+import 'package:cyanase/helpers/endpoints.dart';
 
 class GroupMembers extends StatefulWidget {
   final bool isGroup;
   final int? groupId;
   final String name;
-  final String? profilePic;
   final List<Map<String, dynamic>> members;
   final String currencySymbol;
 
@@ -16,7 +17,6 @@ class GroupMembers extends StatefulWidget {
     required this.isGroup,
     this.groupId,
     required this.name,
-    this.profilePic,
     required this.members,
     this.currencySymbol = '',
   }) : super(key: key);
@@ -25,14 +25,57 @@ class GroupMembers extends StatefulWidget {
   _GroupMembersState createState() => _GroupMembersState();
 }
 
-class _GroupMembersState extends State<GroupMembers> {
+class _GroupMembersState extends State<GroupMembers>
+    with SingleTickerProviderStateMixin {
   final DatabaseHelper _dbHelper = DatabaseHelper();
   bool _isAdmin = false;
+  late AnimationController _animationController;
+  late List<Animation<double>> _scaleAnimations;
+  Map<String, String?> _profilePics = {};
 
   @override
   void initState() {
     super.initState();
     _checkAdminStatus();
+    _loadProfilePics();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+    _scaleAnimations = List.generate(
+      widget.members.length,
+      (index) => Tween<double>(begin: 0.7, end: 1.0).animate(
+        CurvedAnimation(
+          parent: _animationController,
+          curve: Interval(index * 0.1, 1.0, curve: Curves.easeOut),
+        ),
+      ),
+    );
+    _animationController.forward();
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadProfilePics() async {
+    for (var member in widget.members) {
+      final userId = member['user_id'] as String? ?? '';
+      if (userId.isEmpty) continue;
+      final profileP = member['profile_picture'] as String? ??
+          await _dbHelper.getgroupic(userId) ?? '';
+      final profilePic = profileP.startsWith('file://') || File(profileP).existsSync()
+          ? profileP // Local file path
+          : profileP.isNotEmpty
+              ? '${ApiEndpoints.server}$profileP' // Network URL
+              : '';
+      
+      setState(() {
+        _profilePics[userId] = profilePic;
+      });
+    }
   }
 
   Future<void> _checkAdminStatus() async {
@@ -40,25 +83,23 @@ class _GroupMembersState extends State<GroupMembers> {
       final db = await _dbHelper.database;
       final userProfile = await db.query('profile', limit: 1);
       if (userProfile.isNotEmpty) {
-        final userId = userProfile.first['user_id'] as String?;
-        final group = await db.query(
-          'groups',
-          where: 'id = ?',
-          whereArgs: [widget.groupId],
-          limit: 1,
-        );
-        if (group.isNotEmpty && group.first['amAdmin'] == 1) {
-          setState(() {
-            _isAdmin = true;
-          });
-        } else {
-          final userParticipant = widget.members.firstWhere(
-            (member) => member['user_id'] == userId,
-            orElse: () => {'role': 'member'},
+        final userId = userProfile.first['id'] as String?;
+        if (userId != null && widget.groupId != null) {
+          final participant = await db.query(
+            'participants',
+            where: 'group_id = ? AND user_id = ?',
+            whereArgs: [widget.groupId, userId],
+            limit: 1,
           );
-          setState(() {
-            _isAdmin = userParticipant['role'] == 'admin';
-          });
+          if (participant.isNotEmpty && participant.first['role'] == 'admin') {
+            setState(() {
+              _isAdmin = true;
+            });
+          } else {
+            setState(() {
+              _isAdmin = false;
+            });
+          }
         }
       }
     } catch (e) {
@@ -68,7 +109,6 @@ class _GroupMembersState extends State<GroupMembers> {
 
   Future<void> _updateMemberRole(String userId, String newRole) async {
     try {
-      // Verify user exists in members
       final member = widget.members.firstWhere(
         (m) => m['user_id'] == userId,
         orElse: () => throw Exception(
@@ -97,14 +137,12 @@ class _GroupMembersState extends State<GroupMembers> {
             widget.members[memberIndex]['role'] = newRole;
           }
         });
-        // Update role in participants table
         await db.update(
           'participants',
           {'role': newRole},
           where: 'group_id = ? AND user_id = ?',
           whereArgs: [widget.groupId, userId],
         );
-
         print('Updated role for user $userId to $newRole');
       } else {
         throw Exception(response['message'] ?? 'Failed to update role');
@@ -176,6 +214,7 @@ class _GroupMembersState extends State<GroupMembers> {
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
                   color: Colors.black87,
+                  fontFamily: 'Montserrat',
                 ),
               ),
               const SizedBox(height: 16),
@@ -189,6 +228,7 @@ class _GroupMembersState extends State<GroupMembers> {
                   filled: true,
                   fillColor: Colors.grey[100],
                 ),
+                style: const TextStyle(fontFamily: 'Montserrat'),
               ),
               const SizedBox(height: 16),
               Row(
@@ -198,7 +238,10 @@ class _GroupMembersState extends State<GroupMembers> {
                     onPressed: () => Navigator.pop(context),
                     child: const Text(
                       'Cancel',
-                      style: TextStyle(color: Colors.grey),
+                      style: TextStyle(
+                        color: Colors.grey,
+                        fontFamily: 'Montserrat',
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -211,7 +254,11 @@ class _GroupMembersState extends State<GroupMembers> {
                       } else {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                              content: Text('Please provide a reason')),
+                            content: Text(
+                              'Please provide a reason',
+                              style: TextStyle(fontFamily: 'Montserrat'),
+                            ),
+                          ),
                         );
                       }
                     },
@@ -223,7 +270,10 @@ class _GroupMembersState extends State<GroupMembers> {
                     ),
                     child: const Text(
                       'Remove',
-                      style: TextStyle(color: white),
+                      style: TextStyle(
+                        color: white,
+                        fontFamily: 'Montserrat',
+                      ),
                     ),
                   ),
                 ],
@@ -239,7 +289,12 @@ class _GroupMembersState extends State<GroupMembers> {
       BuildContext context, Map<String, dynamic> member) {
     if (!_isAdmin) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Only admins can modify member roles')),
+        const SnackBar(
+          content: Text(
+            'Only admins can modify member roles',
+            style: TextStyle(fontFamily: 'Montserrat'),
+          ),
+        ),
       );
       return;
     }
@@ -272,11 +327,12 @@ class _GroupMembersState extends State<GroupMembers> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      '$memberName',
+                      memberName,
                       style: const TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.bold,
                         color: Colors.black87,
+                        fontFamily: 'Montserrat',
                       ),
                     ),
                     IconButton(
@@ -314,7 +370,7 @@ class _GroupMembersState extends State<GroupMembers> {
                   context: context,
                   icon: Icons.delete,
                   color: Colors.red,
-                  label: 'report and Remove from Group',
+                  label: 'Report and Remove from Group',
                   onTap: () {
                     Navigator.pop(context);
                     _showRemoveMemberForm(context, userId);
@@ -347,6 +403,7 @@ class _GroupMembersState extends State<GroupMembers> {
             fontSize: 16,
             fontWeight: FontWeight.w500,
             color: Colors.black87,
+            fontFamily: 'Montserrat',
           ),
         ),
         onTap: onTap,
@@ -357,6 +414,23 @@ class _GroupMembersState extends State<GroupMembers> {
         hoverColor: Colors.grey[200],
       ),
     );
+  }
+
+  ImageProvider _getImageProvider(String profilePic) {
+    if (profilePic.isEmpty) {
+      return const AssetImage('assets/images/avatar.png');
+    }
+    if (profilePic.startsWith('file://')) {
+      final filePath = profilePic.replaceFirst('file://', '');
+      final file = File(filePath);
+      return file.existsSync() ? FileImage(file) : const AssetImage('assets/images/avatar.png');
+    }
+    if (profilePic.startsWith('http://') || profilePic.startsWith('https://')) {
+      return NetworkImage(profilePic);
+    }
+    // Assume plain file path
+    final file = File(profilePic);
+    return file.existsSync() ? FileImage(file) : const AssetImage('assets/images/avatar.png');
   }
 
   @override
@@ -371,39 +445,64 @@ class _GroupMembersState extends State<GroupMembers> {
             color: Colors.black87,
             fontSize: 16,
             fontWeight: FontWeight.bold,
+            fontFamily: 'Montserrat',
           ),
         ),
-        children: widget.members.map((member) {
-          return ListTile(
-            leading: CircleAvatar(
-              backgroundImage: (widget.profilePic?.isNotEmpty == true)
-                  ? NetworkImage(widget.profilePic!)
-                  : const AssetImage('assets/images/avatar.png')
-                      as ImageProvider,
-              radius: 20,
-            ),
-            title: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      member['full_name'] ?? 'Unknown',
-                      style: const TextStyle(fontSize: 16),
+        children: widget.members.asMap().entries.map((entry) {
+          final index = entry.key;
+          final member = entry.value;
+          final userId = member['user_id'] ?? '';
+          final profilePic = _profilePics[userId] ?? '';
+
+          return AnimatedBuilder(
+            animation: _scaleAnimations[index],
+            builder: (context, child) {
+              return Transform.scale(
+                scale: _scaleAnimations[index].value,
+                child: GestureDetector(
+                  onTap: () => _showMemberOptionsModal(context, member),
+                  child: MouseRegion(
+                    cursor: SystemMouseCursors.click,
+                    child: ListTile(
+                      leading: CircleAvatar(
+                        backgroundImage: _getImageProvider(profilePic),
+                        radius: 20,
+                        backgroundColor: Colors.grey[200],
+                        child: profilePic.isEmpty
+                            ? const Icon(Icons.person, color: Colors.grey)
+                            : null,
+                      ),
+                      title: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                member['full_name'] ?? 'Unknown',
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontFamily: 'Montserrat',
+                                ),
+                              ),
+                              Text(
+                                'Rank: ${member['savings_rank'] ?? 'N/A'}',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey,
+                                  fontFamily: 'Montserrat',
+                                ),
+                              ),
+                              _buildFinancialInfo(member),
+                            ],
+                          ),
+                          _buildRoleBreadcrumb(member['role'] ?? 'member'),
+                        ],
+                      ),
                     ),
-                    Text(
-                      'Rank: ${member['savings_rank'] ?? 'N/A'}',
-                      style: const TextStyle(fontSize: 14, color: Colors.grey),
-                    ),
-                    _buildFinancialInfo(member),
-                  ],
+                  ),
                 ),
-                _buildRoleBreadcrumb(member['role'] ?? 'member'),
-              ],
-            ),
-            onTap: () {
-              _showMemberOptionsModal(context, member);
+              );
             },
           );
         }).toList(),
@@ -439,6 +538,7 @@ class _GroupMembersState extends State<GroupMembers> {
           fontSize: 12,
           fontWeight: FontWeight.bold,
           color: white,
+          fontFamily: 'Montserrat',
         ),
       ),
     );
@@ -454,7 +554,11 @@ class _GroupMembersState extends State<GroupMembers> {
           deposits != null && deposits > 0
               ? 'Savings: ${widget.currencySymbol}${deposits.toStringAsFixed(2)}'
               : 'Savings: None',
-          style: const TextStyle(fontSize: 14, color: Colors.green),
+          style: const TextStyle(
+            fontSize: 14,
+            color: Colors.green,
+            fontFamily: 'Montserrat',
+          ),
         ),
       ],
     );

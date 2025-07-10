@@ -57,9 +57,8 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
       }
 
       final token = userProfile.first['token'] as String;
-      final userId = userProfile.first['id'] as String; // Current user's ID
-      final userName = userProfile.first['name'] as String? ??
-          'Creator'; // Fallback for creator's name
+      final userId = userProfile.first['id'] as String;
+      final userName = userProfile.first['name'] as String? ?? 'Creator';
 
       // Prepare the data for the POST request
       final Map<String, dynamic> groupData = {
@@ -94,56 +93,64 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
       if (response['success'] == true) {
         final groupId = response['data']['groupId'];
 
-        // Insert the group into the local SQLite database
-        await _dbHelper.insertGroup({
-          'id': groupId,
-          'name': groupName,
-          'description': _groupDescriptionController.text.trim(),
-          'profile_pic': _groupImage?.path ?? '',
-          'type': 'group',
-          'created_at': DateTime.now().toIso8601String(),
-          'created_by': userId,
-          'last_activity': DateTime.now().toIso8601String(),
-          'settings': '',
-        });
+        // Use a transaction to ensure all database operations are atomic
+        await db.transaction((txn) async {
+          // First insert the group
+          await txn.insert('groups', {
+            'id': groupId,
+            'name': groupName,
+            'description': _groupDescriptionController.text.trim(),
+            'profile_pic': _groupImage?.path ?? '',
+            'type': 'group',
+            'created_at': DateTime.now().toIso8601String(),
+            'created_by': userId,
+            'last_activity': DateTime.now().toIso8601String(),
+            'settings': '',
+            'amAdmin': 1,
+          });
 
-        // Insert the creator as an admin
-        await _dbHelper.insertParticipant({
-          'group_id': groupId,
-          'user_id': userId,
-          'user_name': userName,
-          'role': 'admin',
-          'joined_at': DateTime.now().toIso8601String(),
-          'muted': 0,
-          'is_admin': 1,
-          'is_approved': 1,
-          'is_denied': 0,
-        });
-
-        // Save other participants to the SQLite database
-        for (final contact in widget.selectedContacts) {
-          final contactId = contact['id'].toString();
-          if (contactId == userId) continue; // Skip creator (already added)
-
-          await _dbHelper.insertParticipant({
+          // Then insert the creator as an admin
+          await txn.insert('participants', {
             'group_id': groupId,
-            'user_id': contactId,
-            'user_name': contact['name'] ?? 'Unknown',
-            'role': 'member',
+            'user_id': userId,
+            'user_name': userName,
+            'role': 'admin',
             'joined_at': DateTime.now().toIso8601String(),
             'muted': 0,
-            'is_admin': 0,
+            'is_admin': 1,
             'is_approved': 1,
             'is_denied': 0,
+            'is_removed': 0,
+            'profile_pic': userProfile.first['profile_pic'] ?? 'assets/images/avatar.png',
           });
-        }
+
+          // Finally insert other participants
+          for (final contact in widget.selectedContacts) {
+            final contactId = contact['id'].toString();
+            if (contactId == userId) continue; // Skip creator (already added)
+
+            await txn.insert('participants', {
+              'group_id': groupId,
+              'user_id': contactId,
+              'user_name': contact['name'] ?? 'Unknown',
+              'role': 'member',
+              'joined_at': DateTime.now().toIso8601String(),
+              'muted': 0,
+              'is_admin': 0,
+              'is_approved': 1,
+              'is_denied': 0,
+              'is_removed': 0,
+              'profile_pic': contact['profilePic'] ?? 'assets/images/avatar.png',
+            });
+          }
+        });
 
         // Navigate to the home screen
         if (mounted) {
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(
-              builder: (context) => const HomeScreen(),
+              builder: (context) => const HomeScreen(passcode: true),
             ),
           );
 
@@ -152,8 +159,7 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
           );
         }
       } else {
-        throw Exception(
-            'Failed to create group: No group ID returned from API');
+        throw Exception('Failed to create group: No group ID returned from API');
       }
     } catch (e) {
       print("Error creating group: $e");

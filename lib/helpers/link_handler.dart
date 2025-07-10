@@ -38,6 +38,7 @@ class DeepLinkHandler {
 
   void _handleDeepLink(Uri uri) {
     debugPrint('Handling deep link: $uri');
+    PendingDeepLink.uri = uri; // Store globally
     if (uri.scheme == 'cyanase' && uri.host == 'join') {
       final groupId = uri.queryParameters['group_id'];
 
@@ -89,4 +90,8 @@ class DeepLinkHandler {
     debugPrint('Disposing DeepLinkHandler');
     _linkSubscription?.cancel();
   }
+}
+
+class PendingDeepLink {
+  static Uri? uri;
 }

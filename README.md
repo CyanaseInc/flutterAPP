@@ -14,7 +14,7 @@ cd /mnt/c/Users/User/Downloads/Cyanase/code/api
 source venv/bin/activate
  daphne -b 0.0.0.0 -p 8000 cyanase_api.asgi:application
 
- netsh interface portproxy add v4tov4 listenaddress=0.0.0.0 listenport=8000 connectaddress=172.19.112.1 connectport=8000
+ netsh interface portproxy add v4tov4 listenaddress=192.168.147.220 listenport=8000 connectaddress=172.19.119.45 connectport=8000
 
  impact fm savings  0776884201, ypa- 
 
@@ -29,7 +29,7 @@ ps aux | grep gunicorn
 /var/www/html/cyanase.com/venv/bin/gunicorn --access-logfile - --workers 3 --bind unix:/run/gunicorn.sock cyanase_api.wsgi:application
 
 
-see daphine terrminal logs  sudo journalctl -u daphne.service -f
+see daphine terrminal logs 
 
 
 restart daphine
@@ -44,3 +44,4 @@ sudo systemctl restart gunicorn
 
 
 
+ sudo journalctl -u daphne.service -f

@@ -161,7 +161,10 @@ class SearchAndHeaderComponent extends StatelessWidget {
             color: primaryDark,
             screen: PendingAdminLoansScreen(
               loans: pendingAdminLoans,
-              onLoanProcessed: onReloadChats,
+              onLoanProcessed: (loanId) {
+                pendingAdminLoans.removeWhere((loan) => loan['loan_id'].toString() == loanId.toString());
+                onReloadChats();
+              },
             ),
           ),
         if (pendingWithdraw.isNotEmpty)

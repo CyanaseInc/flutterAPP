@@ -201,14 +201,8 @@ class _GoalDetailsScreenState extends State<GoalDetailsScreen> {
   Widget build(BuildContext context) {
 
    
-    double totalDeposits = 0.0;
-    if (editableGoalData['deposit'] != null &&
-        (editableGoalData['deposit'] as List).isNotEmpty) {
-      totalDeposits =
-          double.tryParse(editableGoalData['deposit'][0].toString()) ?? 0.0;
-    }
-    final goalAmount =
-        double.tryParse(editableGoalData['goal_amount'].toString()) ?? 0.0;
+    double totalDeposits = (editableGoalData['net_contribution'] as num?)?.toDouble() ?? 0.0;
+    final goalAmount = (editableGoalData['goal_amount'] as num?)?.toDouble() ?? 0.0;
     final progress =
         goalAmount > 0 ? (totalDeposits / goalAmount).clamp(0.0, 1.0) : 0.0;
 

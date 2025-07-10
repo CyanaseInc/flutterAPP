@@ -415,6 +415,7 @@ class _SignupScreenState extends State<SignupScreen> {
                         _selectedCountryCode = code;
                       }),
                       selectCountry: _selectCountry,
+                      isLoading: _isCheckingUser,
                     ),
                     EmailBirthSlide(
                       yearController: _yearController,

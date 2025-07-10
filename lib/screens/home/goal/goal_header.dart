@@ -4,7 +4,7 @@ import 'package:syncfusion_flutter_gauges/gauges.dart';
 import 'package:cyanase/theme/theme.dart';
 import 'package:intl/intl.dart';
 import 'dart:io';
-
+                   
 class GoalHeader extends StatefulWidget {
   final double saved;
   final double goal;
@@ -33,8 +33,10 @@ class _GoalHeaderState extends State<GoalHeader>
       vsync: this,
     );
 
-    // Calculate the progress value (as a percentage)
-    final double progressValue = (widget.saved / widget.goal) * 100;
+    // Calculate the progress value (as a percentage), avoid division by zero
+    final double progressValue = (widget.goal > 0)
+        ? (widget.saved / widget.goal) * 100
+        : 0.0;
 
     // Define the animation using Tween
     _animation =

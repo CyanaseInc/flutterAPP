@@ -51,6 +51,32 @@ class _DepositScreenState extends State<DepositHelper> {
   }
 
   void _nextStep() {
+    if (_currentStep == 0) {
+      if (_selectedMethod == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please select a deposit method')),
+        );
+        return;
+      }
+    } else if (_currentStep == 1) {
+      if (_selectedMethod == 'Mobile Money') {
+        if (depositAmount == null || depositAmount! <= 0 || phonenumber.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Please enter a valid amount and phone number')),
+          );
+          return;
+        }
+      } else if (_selectedMethod == 'Bank Transfer') {
+        if (_bankAmountController.text.isEmpty ||
+            double.tryParse(_bankAmountController.text) == null ||
+            double.parse(_bankAmountController.text) <= 0) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Please enter a valid deposit amount')),
+          );
+          return;
+        }
+      }
+    }
     if (_currentStep < 2) {
       setState(() {
         _currentStep++;
@@ -101,6 +127,8 @@ class _DepositScreenState extends State<DepositHelper> {
         return await ApiService.groupTopUp(token, requestData);
       case 'group_investment_interest':
         return await ApiService.addInterest(token, requestData);
+        case 'personal_goals':
+        return await ApiService.personalGoal(token,requestData);
       default:
         throw Exception('Invalid deposit category: ${widget.depositCategory}');
     }
@@ -165,10 +193,6 @@ SWIFT Code: CYANUS33
             duration: Duration(seconds: 5),
           ),
         );
-        _pageController.nextPage(
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeInOut,
-        );
       } else {
         final dbHelper = DatabaseHelper();
         final db = await dbHelper.database;
@@ -215,6 +239,8 @@ SWIFT Code: CYANUS33
 
           final myData = {
             "group_id": widget.groupId,
+             "payment_means": _selectedMethod == 'Online' ? 'online' : 'online',
+             "deposit_category": widget.depositCategory,
             "msisdn": phonenumber,
             "internal_reference": internalRef,
             "amount": depositAmount,
@@ -223,6 +249,12 @@ SWIFT Code: CYANUS33
             "goal_id": widget.goalId,
             "loan_id": widget.loanId,
             "investment_id": widget.selectedOptionId,
+            "currency": currency,
+            "account_type": "basic",
+            "reference": _generateReference(),
+          "reference_id": _generateReferenceId(),
+          "tx_ref":_generateReference(),
+           
           };
 
           if (authPayment['success'] == true) {
@@ -273,7 +305,7 @@ SWIFT Code: CYANUS33
       backgroundColor: Colors.transparent,
       body: PageView(
         controller: _pageController,
-        physics: const BouncingScrollPhysics(),
+        physics: const NeverScrollableScrollPhysics(),
         onPageChanged: (index) {
           setState(() {
             _currentStep = index;
@@ -425,10 +457,12 @@ SWIFT Code: CYANUS33
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
                         ElevatedButton(
-                          onPressed: _isSubmitting ? null : submitDepositor,
+                          onPressed: (_isSubmitting || depositAmount == null || depositAmount! <= 0)
+                              ? null
+                              : submitDepositor,
                           style: ElevatedButton.styleFrom(
                             backgroundColor:
-                                _isSubmitting ? Colors.grey : primaryTwo,
+                                (_isSubmitting || depositAmount == null || depositAmount! <= 0) ? Colors.grey : primaryTwo,
                             foregroundColor: primaryLight,
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 20, vertical: 10),
@@ -579,6 +613,32 @@ SWIFT Code: CYANUS33
                             ),
                           ],
                         ),
+                      ),
+                      const SizedBox(height: 20),
+                      _textField('Enter Amount'),
+                      const SizedBox(height: 10),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          ElevatedButton(
+                            onPressed: (_isSubmitting || _bankAmountController.text.isEmpty || double.tryParse(_bankAmountController.text) == null || double.parse(_bankAmountController.text) <= 0)
+                                ? null
+                                : submitDepositor,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: (_isSubmitting || _bankAmountController.text.isEmpty || double.tryParse(_bankAmountController.text) == null || double.parse(_bankAmountController.text) <= 0)
+                                  ? Colors.grey
+                                  : primaryTwo,
+                              foregroundColor: primaryLight,
+                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                            child: _isSubmitting
+                                ? const SizedBox(height: 20, width: 20, child: Loader())
+                                : const Text('Submit'),
+                          ),
+                        ],
                       ),
                     ],
                   ),

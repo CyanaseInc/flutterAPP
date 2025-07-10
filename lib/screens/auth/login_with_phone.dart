@@ -10,6 +10,8 @@ import 'package:cyanase/helpers/loader.dart';
 import 'package:cyanase/helpers/api_helper.dart';
 import 'package:cyanase/helpers/web_db.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:cyanase/helpers/link_handler.dart';
+import 'package:cyanase/screens/home/group/group_invite.dart';
 import 'dart:io' show Platform;
 
 // Custom formatter to enforce '+' at the beginning
@@ -157,107 +159,109 @@ class LoginScreenState extends State<LoginScreen> {
         if (isVerified) {
           final dbHelper = DatabaseHelper();
           final db = await dbHelper.database;
-          final readExistingProfile = await db.query('profile');
-          // await WebSharedStorage.init();
-          // var existingProfile = WebSharedStorage();
-          // final readExistingProfile =
-          //     existingProfile.getCommon(userId.toString());
-          if (readExistingProfile.isNotEmpty) {
-            // we have some id already reated to this login user
-            //lets set some items to localstorage
-            // existingProfile.setCommon('token', token);
-            // existingProfile.setCommon('user_id', userId.toString());
-            // existingProfile.setCommon('username', userName);
-            // existingProfile.setCommon('country', userCountry);
-            // existingProfile.setCommon('phone_number', phoneNumber);
-            // existingProfile.setCommon('name', '$name $lastName');
-            // existingProfile.setCommon('picture', picture);
+          
+          // Use a transaction for all database operations
+          await db.transaction((txn) async {
+            final readExistingProfile = await txn.query('profile');
+            
+            if (readExistingProfile.isNotEmpty) {
+              await txn.update(
+                'profile',
+                {
+                  'email': email,
+                  'country': userCountry,
+                  'phone_number': phoneNumber,
+                  'token': token,
+                  'name': userName,
+                  'profile_pic': picture,
+                  'created_at': DateTime.now().toIso8601String(),
+                  'auto_save': autoSave,
+                  'goals_alert': goalAlert,
+                },
+              );
+            }
 
-            await db.update(
+            //Check if profile exists
+            final existingProfile = await txn.query(
               'profile',
-              {
-                'email': email,
-                'country': userCountry,
-                'phone_number': phoneNumber,
-                'token': token,
-                'name': userName,
-                'profile_pic': picture,
-                'created_at': DateTime.now().toIso8601String(),
-                'auto_save': autoSave,
-                'goals_alert': goalAlert,
-              },
+              where: 'id = ?',
+              whereArgs: [userId],
             );
-          }
 
-          //Check if profile exists
-          final existingProfile = await db.query(
+            if (existingProfile.isNotEmpty) {
+              // Update existing profile
+              final int updatedRows = await txn.update(
+                'profile',
+                {
+                  'email': email,
+                  'country': userCountry,
+                  'phone_number': phoneNumber,
+                  'token': token,
+                  'name': userName,
+                  'profile_pic': picture,
+                  'created_at': DateTime.now().toIso8601String(),
+                  'auto_save': autoSave,
+                  'goals_alert': goalAlert,
+                },
+                where: 'id = ?',
+                whereArgs: [userId],
+              );
+
+              if (updatedRows == 0) {
+                throw Exception('Failed to update profile in database');
+              }
+            } else {
+              // Insert new profile
+              final int insertedId = await txn.insert(
+                'profile',
+                {
+                  'id': userId,
+                  'email': email,
+                  'country': userCountry,
+                  'token': token,
+                  'phone_number': phoneNumber,
+                  'name': userName,
+                  'profile_pic': picture,
+                  'created_at': DateTime.now().toIso8601String(),
+                  'auto_save': autoSave,
+                  'goals_alert': goalAlert,
+                },
+              );
+
+              if (insertedId == 0) {
+                throw Exception('Failed to insert profile into database');
+              }
+            }
+          });
+
+          // Verify the operation was successful by querying the database
+          final verifiedProfile = await db.query(
             'profile',
             where: 'id = ?',
             whereArgs: [userId],
           );
 
-          bool dbOperationSuccess = false;
-
-          if (existingProfile.isNotEmpty) {
-            // Update existing profile
-            final int updatedRows = await db.update(
-              'profile',
-              {
-                'email': email,
-                'country': userCountry,
-                'phone_number': phoneNumber,
-                'token': token,
-                'name': userName,
-                'profile_pic': picture,
-                'created_at': DateTime.now().toIso8601String(),
-                'auto_save': autoSave,
-                'goals_alert': goalAlert,
-              },
-              where: 'id = ?',
-              whereArgs: [userId],
-            );
-
-            dbOperationSuccess = updatedRows > 0;
-
-            if (!dbOperationSuccess) {
-              throw Exception('Failed to update profile in database');
-            }
-          } else {
-            // Insert new profile
-            final int insertedId = await db.insert(
-              'profile',
-              {
-                'id': userId,
-                'email': email,
-                'country': userCountry,
-                'token': token,
-                'phone_number': phoneNumber,
-                'name': userName,
-                'profile_pic': picture,
-                'created_at': DateTime.now().toIso8601String(),
-                'auto_save': autoSave,
-                'goals_alert': goalAlert,
-              },
-            );
-
-            dbOperationSuccess = insertedId != 0;
-
-            if (!dbOperationSuccess) {
-              throw Exception('Failed to insert profile into database');
-            }
+          if (verifiedProfile.isEmpty) {
+            throw Exception(
+                'Profile verification failed - no profile found after operation');
           }
 
-          // Verify the operation was successful by querying the database
-          if (dbOperationSuccess) {
-            final verifiedProfile = await db.query(
-              'profile',
-              where: 'id = ?',
-              whereArgs: [userId],
-            );
-
-            if (verifiedProfile.isEmpty) {
-              throw Exception(
-                  'Profile verification failed - no profile found after operation');
+          // Handle pending deep link after login
+          if (PendingDeepLink.uri != null &&
+              PendingDeepLink.uri!.scheme == 'cyanase' &&
+              PendingDeepLink.uri!.host == 'join') {
+            final groupId = PendingDeepLink.uri!.queryParameters['group_id'];
+            if (groupId != null && groupId.isNotEmpty) {
+              PendingDeepLink.uri = null;
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => GroupInviteScreen(
+                    groupId: int.parse(groupId),
+                  ),
+                ),
+              );
+              return;
             }
           }
 
@@ -410,7 +414,7 @@ class LoginScreenState extends State<LoginScreen> {
       final response = await ApiService.VerificationEmail(userData);
 
       if (response['success'] == true) {
-        Navigator.pop(context);
+        
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Verification successful!')),
         );

@@ -16,11 +16,13 @@ import 'dart:io';
 class GoalScreen extends StatefulWidget {
   final List<Map<String, dynamic>> goals;
   final bool isLoading;
+  final double totalDeposit;
 
   const GoalScreen({
     Key? key,
     required this.goals,
     required this.isLoading,
+    required this.totalDeposit,
   }) : super(key: key);
 
   @override
@@ -211,14 +213,10 @@ class _GoalScreenState extends State<GoalScreen> {
     double totalSaved = 0.0;
     double totalGoal = 0.0;
     for (var goal in _goals) {
-      double deposits = 0.0;
-      if (goal['deposit'] != null && (goal['deposit'] as List).isNotEmpty) {
-        deposits = (goal['deposit'] as List)
-            .map((d) => double.tryParse(d.toString()) ?? 0.0)
-            .reduce((a, b) => a + b);
-      }
-      totalSaved += deposits;
-      totalGoal += (goal['goal_amount'] as num? ?? 0).toDouble();
+      double saved = (goal['net_contribution'] as num?)?.toDouble() ?? 0.0;
+      double goalAmount = (goal['goal_amount'] as num?)?.toDouble() ?? 0.0;
+      totalSaved += saved;
+      totalGoal += goalAmount;
     }
 
     return Platform.isIOS
@@ -231,7 +229,7 @@ class _GoalScreenState extends State<GoalScreen> {
                     padding: const EdgeInsets.all(16.0),
                     children: [
                       GoalHeader(
-                        saved: totalSaved,
+                        saved: widget.totalDeposit,
                         goal: totalGoal,
                       ),
                       ..._goals.asMap().entries.map((entry) {
@@ -267,7 +265,7 @@ class _GoalScreenState extends State<GoalScreen> {
                     padding: const EdgeInsets.all(16.0),
                     children: [
                       GoalHeader(
-                        saved: totalSaved,
+                        saved: widget.totalDeposit,
                         goal: totalGoal,
                       ),
                       ..._goals.asMap().entries.map((entry) {
@@ -297,6 +295,7 @@ class _GoalScreenState extends State<GoalScreen> {
   }
 }
 
+// ... (other imports remain the same)
 class GoalCard extends StatelessWidget {
   final Map<String, dynamic> goalData;
   final VoidCallback? onTap;
@@ -420,13 +419,16 @@ class GoalCard extends StatelessWidget {
                           ),
                           child: IntrinsicHeight(
                             child: DepositHelper(
-                              depositCategory: "goals",
+                              depositCategory: "personal_goals",
                               selectedFundClass: "default_class",
                               selectedOption: "default_option",
                               selectedFundManager: "default_manager",
                               selectedOptionId: 0,
-                              detailText: "Default detail text",
+                              detailText: "Deposit to ${goalData['goal_name'] ?? 'Goal'}",
                               groupId: 0,
+                              goalId: goalData['id'] ?? goalData['goal_id'] ?? 0, // Pass goalId
+                              
+                              
                             ),
                           ),
                         ),
@@ -516,7 +518,10 @@ class GoalCard extends StatelessWidget {
                               ),
                             ],
                             image: DecorationImage(
-                              image: NetworkImage(goalPicture),
+                              image: goalPicture != null
+                                  ? NetworkImage(goalPicture)
+                                  : const AssetImage('assets/images/goal.png')
+                                      as ImageProvider,
                               fit: BoxFit.cover,
                               onError: (exception, stackTrace) =>
                                   const AssetImage('assets/images/goal.png'),
@@ -532,7 +537,8 @@ class GoalCard extends StatelessWidget {
                                 children: [
                                   Expanded(
                                     child: Text(
-                                      goalData['goal_name'] as String? ?? 'Unnamed Goal',
+                                      goalData['goal_name'] as String? ??
+                                          'Unnamed Goal',
                                       style: const TextStyle(
                                         fontSize: 18,
                                         fontWeight: FontWeight.w600,
@@ -552,7 +558,7 @@ class GoalCard extends StatelessWidget {
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                numberFormat.format(totalDeposits),
+                                numberFormat.format((goalData['net_contribution'] as num?)?.toDouble() ?? 0.0),
                                 style: TextStyle(
                                   fontSize: 20,
                                   fontWeight: FontWeight.w700,
@@ -583,25 +589,32 @@ class GoalCard extends StatelessWidget {
                           children: [
                             Platform.isIOS
                                 ? CupertinoButton.filled(
-                                    onPressed: () => _showDepositBottomSheet(context),
-                                    padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
+                                    onPressed: () =>
+                                        _showDepositBottomSheet(context),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 13, vertical: 9),
                                     child: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        Icon(CupertinoIcons.money_dollar_circle, size: 18),
+                                        Icon(CupertinoIcons.money_dollar_circle,
+                                            size: 18),
                                         const SizedBox(width: 4),
                                         const Text('Deposit'),
                                       ],
                                     ),
                                   )
                                 : ElevatedButton.icon(
-                                    onPressed: () => _showDepositBottomSheet(context),
-                                    icon: const Icon(Icons.account_balance_wallet, size: 18),
+                                    onPressed: () =>
+                                        _showDepositBottomSheet(context),
+                                    icon: const Icon(
+                                        Icons.account_balance_wallet,
+                                        size: 18),
                                     label: const Text('Deposit'),
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: primaryTwo,
                                       foregroundColor: white,
-                                      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 13, vertical: 9),
                                       shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(8),
                                       ),
@@ -619,7 +632,9 @@ class GoalCard extends StatelessWidget {
                                       reminderSet
                                           ? CupertinoIcons.bell_fill
                                           : CupertinoIcons.bell,
-                                      color: reminderSet ? primaryTwo : Colors.grey[400],
+                                      color: reminderSet
+                                          ? primaryTwo
+                                          : Colors.grey[400],
                                       size: 20,
                                     ),
                                   )
@@ -631,7 +646,9 @@ class GoalCard extends StatelessWidget {
                                       reminderSet
                                           ? Icons.notifications_active
                                           : Icons.notifications,
-                                      color: reminderSet ? primaryTwo : Colors.grey[400],
+                                      color: reminderSet
+                                          ? primaryTwo
+                                          : Colors.grey[400],
                                       size: 20,
                                     ),
                                     style: IconButton.styleFrom(

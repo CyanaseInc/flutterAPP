@@ -277,7 +277,7 @@ class _MessageChatState extends State<MessageChat>
       }
 
       final media = await DatabaseHelper().getMedia(messageId);
-      
+       print("my media message is $media");
       if (mounted) {
         setState(() {
           _mediaData = media;
@@ -374,6 +374,43 @@ print("we got called 2");
         return "";
     }
   }
+ImageProvider _getImageProvider(String profilePic) {
+  // If profilePic is empty or null, return default image
+  if (profilePic.isEmpty || profilePic == 'null') {
+    print('🔵 [MessageChat] Using default avatar for empty profilePic');
+    return const AssetImage('assets/images/avatar.png');
+  }
+
+  // Handle file:// protocol for local files
+  if (profilePic.startsWith('file://')) {
+    final filePath = profilePic.replaceFirst('file://', '');
+    final file = File(filePath);
+    if (file.existsSync()) {
+      
+      return FileImage(file);
+    } else {
+      print('🔴 [MessageChat] Local file not found: $filePath');
+      return const AssetImage('assets/images/avatar.png');
+    }
+  }
+
+  // Handle network URLs
+  if (profilePic.startsWith('http://') || profilePic.startsWith('https://')) {
+    
+    return NetworkImage(profilePic);
+  }
+
+  // Handle plain file paths
+  final file = File(profilePic);
+  if (file.existsSync()) {
+    print('🔵 [MessageChat] Using local file image: $profilePic');
+    return FileImage(file);
+  }
+
+  // Fallback to default image if all else fails
+  print('🔴 [MessageChat] Falling back to default avatar for: $profilePic');
+  return const AssetImage('assets/images/avatar.png');
+}
 
   @override
   Widget build(BuildContext context) {
@@ -404,11 +441,14 @@ print("we got called 2");
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     if (!widget.isMe)
-                      CircleAvatar(
-                        radius: 14,
-                        backgroundImage: FileImage(File(widget.senderAvatar)),
-                        backgroundColor: Colors.grey[300],
-                        onBackgroundImageError: (_, __) => Container(),
+                      
+                    CircleAvatar(
+                        backgroundImage: _getImageProvider(widget.senderAvatar),
+                        radius: 12,
+                        backgroundColor: Colors.grey[200],
+                        child: widget.senderAvatar.isEmpty
+                            ? const Icon(Icons.person, color: Colors.grey)
+                            : null,
                       ),
                     if (!widget.isMe) const SizedBox(width: 8),
                     Column(

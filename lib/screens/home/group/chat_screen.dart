@@ -14,9 +14,11 @@ import 'message_chat.dart';
 import 'chat_input.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:cyanase/helpers/chat_websocket_service.dart';
+import 'package:cyanase/helpers/websocket_service.dart';
 import 'package:cyanase/helpers/notification_service.dart';
 import 'package:intl/intl.dart';
 import 'package:cyanase/screens/home/group/typing.dart';
+import 'package:cyanase/helpers/endpoints.dart';
 
 import 'dart:io';
 import 'dart:convert';
@@ -95,7 +97,6 @@ String? _lastMessageTimestamp;
 
   String? _token;
 
-
   // Add progress tracking maps
   Map<String, double> _uploadProgress = {};
   Map<String, double> _downloadProgress = {};
@@ -125,6 +126,9 @@ String? _lastMessageTimestamp;
 
   String _currentProfilePic = '';
 
+  // Add status checker timer
+  Timer? _statusCheckerTimer;
+
  @override
  void initState() {
     super.initState();
@@ -148,8 +152,78 @@ String? _lastMessageTimestamp;
       _resendPendingMessages();
     });
     _currentProfilePic = widget.profilePic;
+    
+    // Start status checker to periodically verify message status
+    _startStatusChecker();
   }
 
+  // Add status checker method
+  void _startStatusChecker() {
+    _statusCheckerTimer?.cancel();
+    _statusCheckerTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
+      _checkMessageStatus();
+    });
+  }
+
+  // Method to check message status in database and update UI
+  Future<void> _checkMessageStatus() async {
+    if (!mounted) return;
+    
+    try {
+      // Get all messages that are marked as "sent" in UI but might be different in DB
+      final messagesToCheck = _messages.where((msg) => 
+        msg['isMe'] == 1 && 
+        (msg['status'] == 'sent' || msg['status'] == 'sending' || msg['status'] == 'failed')
+      ).toList();
+      
+      if (messagesToCheck.isEmpty) return;
+      
+      final db = await _dbHelper.database;
+      bool hasChanges = false;
+      
+      for (final message in messagesToCheck) {
+        final messageId = message['id']?.toString() ?? message['temp_id']?.toString();
+        if (messageId == null) continue;
+        
+        // Check actual status in database
+        final dbMessage = await db.query(
+          'messages',
+          where: 'id = ? OR temp_id = ?',
+          whereArgs: [messageId, messageId],
+          limit: 1,
+        );
+        
+        if (dbMessage.isNotEmpty) {
+          final dbStatus = dbMessage.first['status'] as String?;
+          final uiStatus = message['status'] as String?;
+          
+          // Update UI if status is different
+          if (dbStatus != null && dbStatus != uiStatus) {
+            print('🔵 [StatusChecker] Updating message $messageId status from $uiStatus to $dbStatus');
+            
+            final index = _messages.indexWhere((msg) => 
+              msg['id']?.toString() == messageId || msg['temp_id']?.toString() == messageId
+            );
+            
+            if (index != -1) {
+              _messages[index]['status'] = dbStatus;
+              hasChanges = true;
+            }
+          }
+        }
+      }
+      
+      // Update UI if there were changes
+      if (hasChanges) {
+        setState(() {
+          _messages = MessageSort.sortMessagesByDate(_messages);
+          _groupedMessages = MessageSort.groupMessagesByDate(_messages);
+        });
+      }
+    } catch (e) {
+      print('🔴 [StatusChecker] Error checking message status: $e');
+    }
+  }
 
   @override
 @override
@@ -165,6 +239,7 @@ void dispose() {
   _unreadBadgeTimer?.cancel();
   _scrollDebounceTimer?.cancel();
   _messageStreamSubscription?.cancel(); // Cancel stream subscription
+  _statusCheckerTimer?.cancel(); // Cancel status checker timer
   super.dispose();
 }
 void _setupMessageStream() {
@@ -341,7 +416,8 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
           'isReply': message['reply_to_id'] != null,
           'sender_name': senderInfo['name'],
           'sender_role': senderInfo['role'],
-          'sender_avatar': senderInfo['avatar'],
+          'sender_avatar':'${ApiEndpoints.server}${senderInfo['avatar'] ?? ''}',
+
         };
       }).toList();
 
@@ -767,6 +843,26 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
         print('🔵 [DEBUG] No matching message found for update');
       }
     });
+
+    // Broadcast message ID update to other parts of the app
+    if (groupId != null) {
+      // Notify WebSocket services about the message ID update
+      WebSocketService.instance.onMessageReceived?.call({
+        'type': 'message_id_update',
+        'old_id': oldId,
+        'new_id': newId,
+        'status': status,
+        'group_id': groupId,
+      });
+      
+      ChatWebSocketService.instance.onMessageReceived?.call({
+        'type': 'message_id_update',
+        'old_id': oldId,
+        'new_id': newId,
+        'status': status,
+        'group_id': groupId,
+      });
+    }
   }
 
   void _handleMessageStatusUpdate(Map<String, dynamic> data) {
@@ -807,6 +903,24 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
       print('🔵 [DEBUG] Updating badge count for read message');
       NotificationService().updateBadgeCountFromDatabase();
     }
+
+    // Broadcast status update to other parts of the app
+    if (messageId != null && groupId != null) {
+      // Notify WebSocket services about the status update
+      WebSocketService.instance.onMessageReceived?.call({
+        'type': 'update_message_status',
+        'message_id': messageId,
+        'status': status,
+        'group_id': groupId,
+      });
+      
+      ChatWebSocketService.instance.onMessageReceived?.call({
+        'type': 'update_message_status',
+        'message_id': messageId,
+        'status': status,
+        'group_id': groupId,
+      });
+    }
   }
 
   void _sendTypingStatus(bool isTyping) {
@@ -828,10 +942,7 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
     try {
       final tempId = DateTime.now().millisecondsSinceEpoch.toString();
       
-      print('🔵 [DEBUG] Sending new message:');
-      print('🔵 [DEBUG] Temp ID: $tempId');
-      print('🔵 [DEBUG] Content: ${_controller.text.trim()}');
-
+     
       // Create the WebSocket message with the exact structure the server expects
       final Map<String, dynamic> wsMessage = {
         'type': 'send_message',
@@ -898,20 +1009,24 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
       await _dbHelper.insertMessage(dbMessage);
       print('🔵 [DEBUG] Message inserted into database');
      
+      // Mark as "sent" in UI immediately for better UX
+      setState(() {
+        final index = _messages.indexWhere((msg) => msg['temp_id'] == tempId);
+        if (index != -1) {
+          _messages[index]['status'] = 'sent';
+          _messages = MessageSort.sortMessagesByDate(_messages);
+          _groupedMessages = MessageSort.groupMessagesByDate(_messages);
+        }
+      });
+     
       try {
         print('🔵 [DEBUG] Sending message through WebSocket');
         await _wsService.sendMessage(wsMessage);
         print('🔵 [DEBUG] Message sent successfully through WebSocket');
         
-        // Update status to 'sent' after successful WebSocket send
-        setState(() {
-          final index = _messages.indexWhere((msg) => msg['temp_id'] == tempId);
-          if (index != -1) {
-            _messages[index]['status'] = 'sent';
-            _messages = MessageSort.sortMessagesByDate(_messages);
-            _groupedMessages = MessageSort.groupMessagesByDate(_messages);
-          }
-        });
+        // Update status to 'sent' in database after successful WebSocket send
+        await _dbHelper.updateMessageStatus(tempId, 'sent');
+        print('🔵 [DEBUG] Updated message status to sent in database');
       
         setState(() {
           _replyingToMessage = null;
@@ -920,6 +1035,9 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
       } catch (e) {
         print('🔴 [DEBUG] Error in WebSocket send: $e');
         print('🔴 [DEBUG] Stack trace: ${StackTrace.current}');
+        
+        // Update status to 'failed' if WebSocket send fails
+        await _dbHelper.updateMessageStatus(tempId, 'failed');
         
         setState(() {
           final index = _messages.indexWhere((msg) => msg['temp_id'] == tempId);
@@ -945,9 +1063,7 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
       widget.onMessageSent?.call();
       
     } catch (e) {
-      print('🔴 [DEBUG] Error in _sendMessage: $e');
-      print('🔴 [DEBUG] Stack trace: ${StackTrace.current}');
-      
+   
       setState(() {
         _groupedMessages = MessageSort.groupMessagesByDate(_messages);
       });
@@ -960,8 +1076,9 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
   }
 
   Future<void> _sendImageMessage(String imagePath) async {
+    final tempId = DateTime.now().millisecondsSinceEpoch.toString();
+    
     try {
-      final tempId = DateTime.now().millisecondsSinceEpoch.toString();
       final fileName = 'image_${DateTime.now().millisecondsSinceEpoch}.jpg';
 
       // Create a copy in the app's documents directory
@@ -1002,6 +1119,16 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
       // Store in database
       await _dbHelper.insertMessage(message);
 
+      // Mark as "sent" in UI immediately for better UX
+      setState(() {
+        final index = _messages.indexWhere((msg) => msg['temp_id'] == tempId);
+        if (index != -1) {
+          _messages[index]['status'] = 'sent';
+          _messages = MessageSort.sortMessagesByDate(_messages);
+          _groupedMessages = MessageSort.groupMessagesByDate(_messages);
+        }
+      });
+
       final wsMessage = {
         'type': 'send_message',
         'content': "image_message", // Send local path as content
@@ -1019,15 +1146,9 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
      
       await _wsService.sendMessage(wsMessage);
 
-      // Update status to 'sent' after successful WebSocket send
-      setState(() {
-        final index = _messages.indexWhere((msg) => msg['temp_id'] == tempId);
-        if (index != -1) {
-          _messages[index]['status'] = 'sent';
-          _messages = MessageSort.sortMessagesByDate(_messages);
-          _groupedMessages = MessageSort.groupMessagesByDate(_messages);
-        }
-      });
+      // Update status to 'sent' in database after successful WebSocket send
+      await _dbHelper.updateMessageStatus(tempId, 'sent');
+      print('🔵 [DEBUG] Updated image message status to sent in database');
 
       setState(() {
         _replyingToMessage = null;
@@ -1036,6 +1157,19 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
   
     } catch (e) {
        print("Failed to send image: $e");
+      
+      // Update status to 'failed' if WebSocket send fails
+      await _dbHelper.updateMessageStatus(tempId, 'failed');
+      
+      setState(() {
+        final index = _messages.indexWhere((msg) => msg['temp_id'] == tempId);
+        if (index != -1) {
+          _messages[index]['status'] = 'failed';
+          _messages = MessageSort.sortMessagesByDate(_messages);
+          _groupedMessages = MessageSort.groupMessagesByDate(_messages);
+        }
+      });
+      
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Failed to send image: $e")),
       );
@@ -1043,20 +1177,15 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
   }
 
   Future<void> _sendAudioMessage(String path) async {
+    final tempId = DateTime.now().millisecondsSinceEpoch.toString();
+    
     try {
-      
-
       if (_currentUserId == null) {
-
         return;
       }
 
-      
-
-      final tempId = DateTime.now().millisecondsSinceEpoch.toString();
       final fileName = 'audio_${DateTime.now().millisecondsSinceEpoch}.m4a';
       
-
       // Create a copy in the app's documents directory
      
       final extDir = await getExternalStorageDirectory();
@@ -1106,14 +1235,16 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
 
       // Store in database
       await _dbHelper.insertMessage(message);
-   
 
-      // Update UI immediately
-      // setState(() {
-      //   _messages.add(message);
-      //   _messages = MessageSort.sortMessagesByDate(_messages);
-      //   _groupedMessages = MessageSort.groupMessagesByDate(_messages);
-      // });
+      // Mark as "sent" in UI immediately for better UX
+      setState(() {
+        final index = _messages.indexWhere((msg) => msg['temp_id'] == tempId);
+        if (index != -1) {
+          _messages[index]['status'] = 'sent';
+          _messages = MessageSort.sortMessagesByDate(_messages);
+          _groupedMessages = MessageSort.groupMessagesByDate(_messages);
+        }
+      });
 
       final wsMessage = {
         'type': 'send_message',
@@ -1132,15 +1263,9 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
      
       await _wsService.sendMessage(wsMessage);
 
-      // Update status to 'sent' after successful WebSocket send
-      setState(() {
-        final index = _messages.indexWhere((msg) => msg['temp_id'] == tempId);
-        if (index != -1) {
-          _messages[index]['status'] = 'sent';
-          _messages = MessageSort.sortMessagesByDate(_messages);
-          _groupedMessages = MessageSort.groupMessagesByDate(_messages);
-        }
-      });
+      // Update status to 'sent' in database after successful WebSocket send
+      await _dbHelper.updateMessageStatus(tempId, 'sent');
+      print('🔵 [DEBUG] Updated audio message status to sent in database');
 
       setState(() {
         _replyingToMessage = null;
@@ -1151,6 +1276,18 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
       widget.onMessageSent?.call();
      
     } catch (e) {
+      
+      // Update status to 'failed' if WebSocket send fails
+      await _dbHelper.updateMessageStatus(tempId, 'failed');
+      
+      setState(() {
+        final index = _messages.indexWhere((msg) => msg['temp_id'] == tempId);
+        if (index != -1) {
+          _messages[index]['status'] = 'failed';
+          _messages = MessageSort.sortMessagesByDate(_messages);
+          _groupedMessages = MessageSort.groupMessagesByDate(_messages);
+        }
+      });
       
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Failed to send audio: $e")),
@@ -1264,58 +1401,85 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
 
 
 
-  void _handleNewMessage(Map<String, dynamic> data) async {
-    print("Handling new message in chatscreen");
-    if (!mounted) return;  // Use mounted instead of _mounted
+ void _handleNewMessage(Map<String, dynamic> data) async {
+  if (!mounted) return;
 
-    final messageData = data['message'] ?? data;
-    final groupId = messageData['group_id']?.toString() ?? messageData['room_id']?.toString();
+  final messageData = data['message'] ?? data;
+  final groupId = messageData['group_id']?.toString() ?? messageData['room_id']?.toString();
+  final senderId = messageData['sender_id']?.toString() ?? '';
 
-    if (groupId != widget.groupId.toString()) {
-      print('🔵 Ignoring message for different group: $groupId');
-      return;
-    }
-
-    final newMessage = {
-      'id': messageData['id']?.toString(),
-      'temp_id': messageData['temp_id']?.toString(),
-      'group_id': widget.groupId,
-      'sender_id': messageData['sender_id']?.toString(),
-      'message': messageData['content'] ?? messageData['message'] ?? '',
-      'type': messageData['type'] ?? messageData['message_type'] ?? 'text',
-      'isMe': messageData['sender_id']?.toString() == _currentUserId ? 1 : 0,  // Fix syntax error
-      'status': messageData['sender_id']?.toString() == _currentUserId ? 'sent' : 'unread',
-      'timestamp': messageData['Timestamp'] ?? DateTime.now().toIso8601String(),
-      'sender_name': messageData['sender_name'] ?? 'Unknown',
-      'sender_avatar': messageData['sender_avatar'] ?? '',
-      'sender_role': messageData['sender_role'] ?? 'member',
-      'reply_to_id': messageData['reply_to_id'],
-      'reply_to_message': messageData['reply_to_message'],
-    };
-
-    try {
-      final db = await _dbHelper.database;
-      final existingMessage = await db.query(
-        'messages',
-        where: 'id = ? OR temp_id = ?',
-        whereArgs: [newMessage['id'] ?? '', newMessage['temp_id'] ?? ''],
-      );
-
-      if (existingMessage.isEmpty) {
-        await _dbHelper.insertMessage(newMessage);
-        if (newMessage['isMe'] == 0) {
-          setState(() {
-            _unreadMessageIds.add(newMessage['id']);
-            _hasUnreadMessages = true;
-            _showUnreadBadge = true;
-          });
-        }
-        // Stream will handle UI updates
-      }
-    } catch (e) {
-      print('🔴 Error handling new message: $e');
-    }
+  if (groupId != widget.groupId.toString()) {
+    return;
   }
+
+  String senderName = messageData['username'] ?? 'Unknown';
+  final newMessage = {
+    'id': messageData['id']?.toString(),
+    'temp_id': messageData['temp_id']?.toString(),
+    'group_id': widget.groupId,
+    'sender_id': senderId,
+    'message': messageData['content'] ?? messageData['message'] ?? '',
+    'type': messageData['type'] ?? messageData['message_type'] ?? 'text',
+    'isMe': senderId == _currentUserId ? 1 : 0,
+    'status': senderId == _currentUserId ? 'sent' : 'unread',
+    'timestamp': messageData['timestamp'] ?? DateTime.now().toIso8601String(),
+    'sender_name': senderName,
+    'sender_avatar': '${ApiEndpoints.server}${messageData['profile_picture'] ?? ''}',
+    'sender_role': messageData['sender_role'] ?? 'member',
+    'reply_to_id': messageData['reply_to_id'],
+    'reply_to_message': messageData['reply_to_message'],
+    'attachment_url': messageData['attachment_url'],
+    'blurhash': messageData['blurhash'],
+  };
+
+  try {
+    final db = await _dbHelper.database;
+    final existingMessage = await db.query(
+      'messages',
+      where: 'id = ? OR temp_id = ?',
+      whereArgs: [newMessage['id'] ?? '', newMessage['temp_id'] ?? ''],
+    );
+
+    final participant = await db.query(
+      'participants',
+      where: 'group_id = ? AND user_id = ?',
+      whereArgs: [groupId, senderId],
+      limit: 1,
+    );
+    if (participant.isNotEmpty) {
+      senderName = participant.first['user_name'] as String? ?? senderName;
+      newMessage['sender_name'] = senderName;
+    }
+
+    if (existingMessage.isEmpty) {
+       await _dbHelper.insertMessage(newMessage);
+      if (newMessage['type'] == 'image' || newMessage['type'] == 'audio') {
+        final attachmentUrl = newMessage['attachment_url'];
+        if (attachmentUrl != null && attachmentUrl.isNotEmpty) {
+          await _dbHelper.insertMedia(
+            messageId: newMessage['id'],
+            type: newMessage['type'],
+            url: attachmentUrl,
+            blurhash: newMessage['blurhash'],
+            
+          );
+          print('🔵 [ChatScreen] Inserted media entry for message');
+        } else {
+          print('🔴 [ChatScreen] No attachment_url for media message');
+        }
+      }
+      if (newMessage['isMe'] == 0) {
+        setState(() {
+          _unreadMessageIds.add(newMessage['id']);
+          _hasUnreadMessages = true;
+          _showUnreadBadge = true;
+        });
+      }
+    }
+  } catch (e) {
+    print('🔴 Error handling new message: $e');
+  }
+}
 void _markVisibleMessagesAsRead() {
   if (!_scrollController.hasClients) return;
 
@@ -1572,6 +1736,7 @@ Future<void> _markMessageAsRead(String messageId) async {
                         messageContent: _buildMessageContent(message),
                         isHighlighted: message['isHighlighted'] ?? false,
                         isUnread: message['isMe'] == 0 && message['status'] == 'unread',
+                        
                       ),
                     ),
                   ],
@@ -1774,48 +1939,18 @@ Future<void> _markMessageAsRead(String messageId) async {
     final isMe = message['isMe'] == 1;
     
     if (message['type'] == 'image' || message['type'] == 'audio') {
-      // If we have a local path, show the file
-      if (message['local_path'] != null || message['message']?.startsWith('/') == true) {
-        final path = message['local_path'] ?? message['message'];
-        
-        if (path == null) {
-          print('🔴 [ChatScreen] File path is null for message: ${message['id']}');
-          return Container(
-            width: 200,
-            height: 200,
-            color: Colors.grey[300],
-            child: const Center(
-              child: Icon(Icons.error_outline, size: 50, color: Colors.red),
-            ),
-          );
-        }
+      final localPath = message['local_path'] ?? message['message'];
+      final hasLocalFile = localPath != null && File(localPath).existsSync();
+      final hasRemote = message['attachment_url'] != null;
+      final downloadProgress = _downloadProgress[message['id'].toString()];
 
-        // Check if file exists
-        final file = File(path);
-        if (!file.existsSync()) {
-          print('🔴 [ChatScreen] File does not exist: $path');
-          return Container(
-            width: 200,
-            height: 200,
-            color: Colors.grey[300],
-            child: const Center(
-              child: Icon(Icons.error_outline, size: 50, color: Colors.red),
-            ),
-          );
-        }
-
-        // Check if there's an upload in progress
-        final uploadProgress = _uploadProgress[message['id'].toString()];
-        if (uploadProgress != null && uploadProgress < 1.0) {
-          return _buildProgressIndicator(uploadProgress, 'Uploading...');
-        }
-
+      if (hasLocalFile) {
+        // Show the file (image/audio player)
         if (message['type'] == 'image') {
           return Image.file(
-            file,
+            File(localPath!),
             fit: BoxFit.cover,
             errorBuilder: (context, error, stackTrace) {
-              print('🔴 [ChatScreen] Error loading image: $error');
               return Container(
                 width: 200,
                 height: 200,
@@ -1829,21 +1964,18 @@ Future<void> _markMessageAsRead(String messageId) async {
         } else {
           // Audio file
           return AudioPlayerWidget(
-            audioPath: path,
+            audioPath: localPath!,
             isPlaying: _isPlayingMap[message['id'].toString()] ?? false,
             duration: _audioDurationMap[message['id'].toString()] ?? Duration.zero,
             position: _audioPositionMap[message['id'].toString()] ?? Duration.zero,
-            onPlay: () => _playAudio(message['id'], path),
+            onPlay: () => _playAudio(message['id'], localPath),
           );
         }
-      } else if (message['attachment_url'] != null) {
-        // Check if there's a download in progress
-        final downloadProgress = _downloadProgress[message['id'].toString()];
+      } else if (hasRemote) {
+        // Show download button (not loader), unless download is in progress
         if (downloadProgress != null && downloadProgress < 1.0) {
           return _buildProgressIndicator(downloadProgress, 'Downloading...');
         }
-
-        // Show download button
         return Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1888,6 +2020,16 @@ Future<void> _markMessageAsRead(String messageId) async {
               ),
             ),
           ],
+        );
+      } else {
+        // Show a static placeholder (not a loader)
+        return Container(
+          width: 200,
+          height: 200,
+          color: Colors.grey[300],
+          child: const Center(
+            child: Icon(Icons.error_outline, size: 50, color: Colors.red),
+          ),
         );
       }
     }

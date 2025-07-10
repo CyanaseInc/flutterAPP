@@ -10,6 +10,7 @@ class PhoneCountrySlide extends StatefulWidget {
   final TextEditingController emailController;
   final Function(String) onPhoneChanged;
   final VoidCallback selectCountry;
+  final bool isLoading;
 
   const PhoneCountrySlide({
     Key? key,
@@ -18,6 +19,7 @@ class PhoneCountrySlide extends StatefulWidget {
     required this.emailController,
     required this.onPhoneChanged,
     required this.selectCountry,
+    this.isLoading = false,
   }) : super(key: key);
 
   @override
@@ -79,110 +81,121 @@ class _PhoneCountrySlideState extends State<PhoneCountrySlide> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Center(
-                child: Image.asset(
-                  'assets/images/logo.png',
-                  height: 100,
-                  width: 70,
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Let\'s get you onboarded!',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: primaryTwo,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                "Enter your phone number, email, and select your country.",
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 50),
-
-              // Email field
-              SizedBox(
-                width: MediaQuery.of(context).size.width * 0.8,
-                child: TextField(
-                  controller: widget.emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: InputDecoration(
-                    labelText: 'Email',
-                    enabledBorder: UnderlineInputBorder(
-                      borderSide: BorderSide(),
-                    ),
-                    focusedBorder: UnderlineInputBorder(
-                      borderSide: BorderSide(),
+      body: Stack(
+        children: [
+          SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Center(
+                    child: Image.asset(
+                      'assets/images/logo.png',
+                      height: 100,
+                      width: 70,
                     ),
                   ),
-                ),
-              ),
-              const SizedBox(height: 16),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Let\'s get you onboarded!',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: primaryTwo,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    "Enter your phone number, email, and select your country.",
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 50),
 
-              // Phone number field with auto-detected country code
-              SizedBox(
-                width: MediaQuery.of(context).size.width * 0.8,
-                child: _isLoading
-                    ? const Center(child: CircularProgressIndicator())
-                    : IntlPhoneField(
-                        controller: widget.phoneNumberController,
-                        initialCountryCode: _selectedCountryISO, // Set ISO code
-                        style: TextStyle(fontSize: _inputFontSize),
-                        dropdownTextStyle: TextStyle(fontSize: _inputFontSize),
-                        decoration: InputDecoration(
-                          labelText: 'Phone Number',
-                          enabledBorder: UnderlineInputBorder(
-                            borderSide: BorderSide(),
-                          ),
-                          focusedBorder: UnderlineInputBorder(
-                            borderSide: BorderSide(),
-                          ),
+                  // Email field
+                  SizedBox(
+                    width: MediaQuery.of(context).size.width * 0.8,
+                    child: TextField(
+                      controller: widget.emailController,
+                      keyboardType: TextInputType.emailAddress,
+                      decoration: InputDecoration(
+                        labelText: 'Email',
+                        enabledBorder: UnderlineInputBorder(
+                          borderSide: BorderSide(),
                         ),
-                        onChanged: (phone) {
-                          setState(() {
-                            _selectedCountryCode = phone.countryCode;
-                          });
-                          widget.onPhoneChanged(phone.completeNumber);
-                        },
-                        onCountryChanged: (country) {
-                          _onCountryChanged(country);
-                        },
+                        focusedBorder: UnderlineInputBorder(
+                          borderSide: BorderSide(),
+                        ),
                       ),
-              ),
-              const SizedBox(height: 16),
-
-              // Country field (read-only, synced with phone code)
-              SizedBox(
-                width: MediaQuery.of(context).size.width * 0.8,
-                child: TextField(
-                  controller: widget.countryController,
-                  readOnly: true,
-                  onTap: () => widget.selectCountry(),
-                  style: TextStyle(fontSize: _inputFontSize),
-                  decoration: InputDecoration(
-                    labelText: 'Country',
-                    enabledBorder: UnderlineInputBorder(
-                      borderSide: BorderSide(),
-                    ),
-                    focusedBorder: UnderlineInputBorder(
-                      borderSide: BorderSide(),
                     ),
                   ),
-                ),
+                  const SizedBox(height: 16),
+
+                  // Phone number field with auto-detected country code
+                  SizedBox(
+                    width: MediaQuery.of(context).size.width * 0.8,
+                    child: _isLoading
+                        ? const Center(child: CircularProgressIndicator())
+                        : IntlPhoneField(
+                            controller: widget.phoneNumberController,
+                            initialCountryCode: _selectedCountryISO,
+                            style: TextStyle(fontSize: _inputFontSize),
+                            dropdownTextStyle: TextStyle(fontSize: _inputFontSize),
+                            decoration: InputDecoration(
+                              labelText: 'Phone Number',
+                              enabledBorder: UnderlineInputBorder(
+                                borderSide: BorderSide(),
+                              ),
+                              focusedBorder: UnderlineInputBorder(
+                                borderSide: BorderSide(),
+                              ),
+                            ),
+                            onChanged: (phone) {
+                              setState(() {
+                                _selectedCountryCode = phone.countryCode;
+                              });
+                              widget.onPhoneChanged(phone.completeNumber);
+                            },
+                            onCountryChanged: (country) {
+                              _onCountryChanged(country);
+                            },
+                          ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Country field (read-only, synced with phone code)
+                  SizedBox(
+                    width: MediaQuery.of(context).size.width * 0.8,
+                    child: TextField(
+                      controller: widget.countryController,
+                      readOnly: true,
+                      onTap: () => widget.selectCountry(),
+                      style: TextStyle(fontSize: _inputFontSize),
+                      decoration: InputDecoration(
+                        labelText: 'Country',
+                        enabledBorder: UnderlineInputBorder(
+                          borderSide: BorderSide(),
+                        ),
+                        focusedBorder: UnderlineInputBorder(
+                          borderSide: BorderSide(),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
+          if (widget.isLoading)
+            Container(
+              color: Colors.black.withOpacity(0.5),
+              child: const Center(
+                child: CircularProgressIndicator(),
+              ),
+            ),
+        ],
       ),
     );
   }

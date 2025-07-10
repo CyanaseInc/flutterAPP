@@ -19,6 +19,7 @@ class GoalsTab extends StatefulWidget {
 class _GoalsTabState extends State<GoalsTab> {
   bool isLoading = true;
   List<Map<String, dynamic>> goals = [];
+  double totalDeposit = 0.0;
 
   @override
   void initState() {
@@ -46,9 +47,11 @@ class _GoalsTabState extends State<GoalsTab> {
       final Map<String, dynamic> response =
           await ApiService.getAllUserGoals(token);
 
+          
+
       // Check if response contains goals, regardless of success field
-      if (response.containsKey('goal') && response['goal'] is List) {
-        final List<dynamic> goalList = response['goal'] as List<dynamic>;
+      if (response.containsKey('goals') && response['goals'] is List) {
+        final List<dynamic> goalList = response['goals'] as List<dynamic>;
         final List<Map<String, dynamic>> fetchedGoals = goalList
             .map((item) => Map<String, dynamic>.from(item as Map))
             .toList();
@@ -56,6 +59,11 @@ class _GoalsTabState extends State<GoalsTab> {
         setState(() {
           goals = fetchedGoals;
           isLoading = false;
+          totalDeposit = (response['total_deposit'] as num?)?.toDouble() ?? 0.0;
+          // Optionally, store summary fields here if you want to use them
+          // totalDeposit = response['total_deposit'];
+          // totalWithdraw = response['total_withdraw'];
+          // overallNet = response['overall_net'];
         });
       } else {
         setState(() {
@@ -73,7 +81,7 @@ class _GoalsTabState extends State<GoalsTab> {
           context: context,
           builder: (context) => CupertinoAlertDialog(
             title: const Text('Error'),
-            content: Text('Failed to load goals: $e'),
+            content: Text('Failed to load goals'),
             actions: [
               CupertinoDialogAction(
                 child: const Text('OK'),
@@ -84,7 +92,7 @@ class _GoalsTabState extends State<GoalsTab> {
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load goals: $e')),
+          SnackBar(content: Text('Failed to load goals')),
         );
       }
     }
@@ -104,6 +112,7 @@ class _GoalsTabState extends State<GoalsTab> {
                         child: GoalScreen(
                           goals: goals,
                           isLoading: isLoading,
+                          totalDeposit: totalDeposit,
                         ),
                       ),
                     ],
@@ -155,6 +164,7 @@ class _GoalsTabState extends State<GoalsTab> {
                     child: GoalScreen(
                       goals: goals,
                       isLoading: isLoading,
+                      totalDeposit: totalDeposit,
                     ),
                   ),
                 ],

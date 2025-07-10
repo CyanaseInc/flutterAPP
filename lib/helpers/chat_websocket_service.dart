@@ -354,7 +354,7 @@ class ChatWebSocketService {
         final groupName = groupInfo.isNotEmpty ? groupInfo.first['name'] as String : 'Group';
 
         // Show notification for new message
-        final senderName = messageData['username']?.toString() ?? 'Unknown';
+        final senderName = messageData['full_name']?.toString() ?? 'Unknown';
         final messageContent = messageData['content']?.toString() ?? '';
         final messageType = messageData['message_type']?.toString() ?? 'text';
         final groupId = messageData['room_id']?.toString();
@@ -506,9 +506,9 @@ class ChatWebSocketService {
   }
 
   Future<void> sendMessage(Map<String, dynamic> message) async {
-    print("We got to sendMessage Function");
+    
     try {
-      print('my message is $message');
+      
       
       // If WebSocket is not connected, add to queue
       if (!_isConnected || _webSocket == null) {

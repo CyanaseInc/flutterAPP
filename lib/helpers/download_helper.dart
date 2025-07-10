@@ -23,7 +23,7 @@ static final DatabaseHelper _dbHelper = DatabaseHelper();
         return null;
       }
  final fileUrl =  "${ApiEndpoints.server}$url";
-
+ print("my url is $fileUrl");
       final response = await http.get(Uri.parse(fileUrl));
       if (response.statusCode != 200) {
         print('🔴 [MediaDownloader] Failed to download: ${response.statusCode}');

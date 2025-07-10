@@ -310,13 +310,13 @@ class DatabaseHelper {
       );
 
       if (groupExists.isEmpty) {
-        print('🔴 [DatabaseHelper] Group ${participant['group_id']} does not exist, creating it first');
-        // Create the group if it doesn't exist
+      
         await db.insert('groups', {
           'id': participant['group_id'],
           'name': 'Group ${participant['group_id']}', // Default name
           'type': 'group',
           'created_at': DateTime.now().toIso8601String(),
+          'profile_pic':participant['profile_pic'],
           'created_by': participant['user_id'],
           'amAdmin': participant['is_admin'] is bool ? (participant['is_admin'] ? 1 : 0) : 
                     participant['is_admin'] is int ? participant['is_admin'] : 0,
@@ -699,7 +699,16 @@ class DatabaseHelper {
     _messageStreamController.add({groupId: messages});
     return result;
   }
-
+Future<String?> getgroupic(String userId) async {
+  final db = await database;
+  final result = await db.query(
+    'participants',
+    columns: ['profile_pic'], // Assuming the column name is 'profile_pic'
+    where: 'user_id = ?',
+    whereArgs: [userId],
+  );
+  return result.isNotEmpty ? result.first['profile_pic'] as String? : null;
+}
   Future<List<Map<String, dynamic>>> getMediaForGroup(int groupId) async {
     final db = await database;
     return await db.rawQuery('''
@@ -734,14 +743,35 @@ class DatabaseHelper {
   // Update methods
   Future<void> updateMessageStatus(String messageId, String status) async {
     final db = await database;
-    await db.update(
+    
+    // Get the message details before updating
+    final message = await db.query(
       'messages',
-      {'status': status},
-      where: 'id = ?',
-      whereArgs: [messageId],
+      where: 'id = ? OR temp_id = ?',
+      whereArgs: [messageId, messageId],
+      limit: 1,
     );
-    _notifyMessageUpdate();
-    _notifyUnreadCountUpdate();
+    
+    if (message.isNotEmpty) {
+      final groupId = message.first['group_id'] as int;
+      
+      // Update the message status
+      await db.update(
+        'messages',
+        {'status': status},
+        where: 'id = ? OR temp_id = ?',
+        whereArgs: [messageId, messageId],
+      );
+      
+      print('🔵 [DatabaseHelper] Updated message $messageId status to $status');
+      
+      // Fetch updated messages for the group and broadcast
+      final messages = await getMessages(groupId: groupId);
+      _messageStreamController.add({groupId: messages});
+      
+      // Also update unread counts
+      _notifyUnreadCountUpdate();
+    }
   }
 
   Future<List<Map<String, dynamic>>> getPendingMessages() async {
@@ -769,30 +799,42 @@ class DatabaseHelper {
 
   Future<void> updateMessageId(String tempId, String serverId, String? status) async {
     final db = await database;
-    final updateData = {
-      'id': serverId,
-      'temp_id': null, // Clear temp_id to prevent duplicates
-    };
-    if (status != null) {
-      updateData['status'] = status;
-    }
     
-    await db.update(
+    // Get the message details before updating
+    final message = await db.query(
       'messages',
-      updateData,
       where: 'temp_id = ?',
       whereArgs: [tempId],
+      limit: 1,
     );
     
-    // Broadcast updated messages
-    final message = (await db.query(
-      'messages',
-      where: 'id = ?',
-      whereArgs: [serverId],
-    )).first;
-    final groupId = message['group_id'] as int;
-    final messages = await getMessages(groupId: groupId);
-    _messageStreamController.add({groupId: messages});
+    if (message.isNotEmpty) {
+      final groupId = message.first['group_id'] as int;
+      
+      final updateData = {
+        'id': serverId,
+        'temp_id': null, // Clear temp_id to prevent duplicates
+      };
+      if (status != null) {
+        updateData['status'] = status;
+      }
+      
+      await db.update(
+        'messages',
+        updateData,
+        where: 'temp_id = ?',
+        whereArgs: [tempId],
+      );
+      
+      print('🔵 [DatabaseHelper] Updated message ID from $tempId to $serverId with status $status');
+      
+      // Fetch updated messages for the group and broadcast
+      final messages = await getMessages(groupId: groupId);
+      _messageStreamController.add({groupId: messages});
+      
+      // Also update unread counts
+      _notifyUnreadCountUpdate();
+    }
   }
 
   Future<void> updateMessageMediaId(String messageId, int mediaId) async {
@@ -958,5 +1000,18 @@ class DatabaseHelper {
     } catch (e) {
       print('🔴 Error marking messages as read: $e');
     }
+  }
+
+  // Fetch the last message for a group by largest id
+  Future<Map<String, dynamic>?> getLastMessageById(int groupId) async {
+    final db = await database;
+    final result = await db.query(
+      'messages',
+      where: 'group_id = ?',
+      whereArgs: [groupId],
+      orderBy: 'id DESC',
+      limit: 1,
+    );
+    return result.isNotEmpty ? result.first : null;
   }
 }

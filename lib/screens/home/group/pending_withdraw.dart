@@ -27,6 +27,19 @@ class _PendingWithdrawScreenState extends State<PendingWithdrawScreen> {
   void initState() {
     super.initState();
     withdraws = List.from(widget.withdraws);
+    debugPrint('Initialized withdraws: ${withdraws.length}');
+  }
+
+  @override
+  void didUpdateWidget(PendingWithdrawScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Update local withdraws list if the parent passes a new list
+    if (widget.withdraws != oldWidget.withdraws) {
+      setState(() {
+        withdraws = List.from(widget.withdraws);
+        debugPrint('Updated withdraws from parent: ${withdraws.length}');
+      });
+    }
   }
 
   Future<Map<String, dynamic>> processWithdraw({
@@ -41,7 +54,7 @@ class _PendingWithdrawScreenState extends State<PendingWithdrawScreen> {
         throw Exception('User profile not found');
       }
       final token = userProfile.first['token'] as String;
-
+      debugPrint('Processing withdraw: $withdrawId, Group: $groupId, Approved: $approved');
       final response = await ApiService.processWithdrawRequest(
         token: token,
         withdrawId: withdrawId,
@@ -53,57 +66,49 @@ class _PendingWithdrawScreenState extends State<PendingWithdrawScreen> {
         throw Exception(response['message'] ?? 'Withdraw processing failed');
       }
 
-      // Update local state to remove the processed withdraw
-      setState(() {
-        withdraws.removeWhere((w) => w['withdraw_id'] == withdrawId);
-      });
-
-      // If there are no more pending withdraws, notify parent to update badge
-      if (withdraws.isEmpty) {
-        widget.onWithdrawProcessed();
-      }
-
       return response;
     } catch (e) {
       debugPrint('Process withdraw error: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to process withdraw: $e')),
-      );
       return {'success': false, 'message': e.toString()};
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Withdraw Requests',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-            color: Colors.white,
-          ),
-        ),
-        backgroundColor: primaryTwo,
-        leading: IconButton(
-          icon:
-              const Icon(Icons.arrow_back_ios, color: white), // White back icon
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        elevation: 0,
-        centerTitle: true,
-      ),
-      body: withdraws.isEmpty
-          ? _buildEmptyState()
-          : ListView.builder(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              itemCount: withdraws.length,
-              itemBuilder: (context, index) {
-                final withdraw = withdraws[index];
-                return _buildWithdrawCard(context, withdraw);
-              },
+    debugPrint('Building UI with withdraws: ${withdraws.length}');
+    return WillPopScope(
+      onWillPop: () async {
+        return !_loadingStates.values.any((isLoading) => isLoading);
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text(
+            'Withdraw Requests',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
             ),
+          ),
+          backgroundColor: primaryTwo,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios, color: white),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+          elevation: 0,
+          centerTitle: true,
+        ),
+        body: withdraws.isEmpty
+            ? _buildEmptyState()
+            : ListView.builder(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                itemCount: withdraws.length,
+                itemBuilder: (context, index) {
+                  final withdraw = withdraws[index];
+                  return _buildWithdrawCard(context, withdraw);
+                },
+              ),
+      ),
     );
   }
 
@@ -140,8 +145,7 @@ class _PendingWithdrawScreenState extends State<PendingWithdrawScreen> {
     );
   }
 
-  Widget _buildWithdrawCard(
-      BuildContext context, Map<String, dynamic> withdraw) {
+  Widget _buildWithdrawCard(BuildContext context, Map<String, dynamic> withdraw) {
     final amount = withdraw['amount']?.toDouble() ?? 0.0;
     final totalSavings = withdraw['total_savings']?.toDouble() ?? 0.0;
     final createdAt =
@@ -283,28 +287,65 @@ class _PendingWithdrawScreenState extends State<PendingWithdrawScreen> {
           TextButton(
             onPressed: () async {
               Navigator.pop(context); // Close dialog
+
               final withdrawKey = '${withdraw['withdraw_id']}';
+              final withdrawId = int.tryParse(withdraw['withdraw_id'].toString());
+              final groupId = int.tryParse(withdraw['group_id'].toString());
+
+              if (withdrawId == null || groupId == null) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Invalid withdraw or group ID'),
+                    ),
+                  );
+                }
+                return;
+              }
+
+              // Store ScaffoldMessengerState before async operation
+              final scaffoldMessenger = ScaffoldMessenger.of(context);
+
+              if (!mounted) return; // Early exit if not mounted
+
               setState(() {
-                _loadingStates[
-                    '$withdrawKey-${approved ? 'approve' : 'deny'}'] = true;
+                _loadingStates['$withdrawKey-${approved ? 'approve' : 'deny'}'] =
+                    true;
               });
 
               final response = await processWithdraw(
-                withdrawId: withdraw['withdraw_id'] as int,
-                groupId: withdraw['group_id'] as int,
+                withdrawId: withdrawId,
+                groupId: groupId,
                 approved: approved,
               );
+
+              if (!mounted) return; // Exit if widget is no longer mounted
 
               setState(() {
                 _loadingStates
                     .remove('$withdrawKey-${approved ? 'approve' : 'deny'}');
+                if (response['success']) {
+                  // Remove the withdraw from the list
+                  withdraws.removeWhere((w) => w['withdraw_id'].toString() == withdrawId.toString());
+                  debugPrint(
+                      'Removed withdraw $withdrawId from list. Remaining: ${withdraws.length}');
+                }
               });
 
               if (response['success']) {
-                ScaffoldMessenger.of(context).showSnackBar(
+                // Notify parent to update badge or refresh state
+                widget.onWithdrawProcessed();
+                scaffoldMessenger.showSnackBar(
                   SnackBar(
                     content: Text(response['message'] ??
                         'Withdraw ${approved ? 'approved' : 'denied'} successfully'),
+                  ),
+                );
+              } else {
+                scaffoldMessenger.showSnackBar(
+                  SnackBar(
+                    content: Text(
+                        'Failed to process withdraw: ${response['message']}'),
                   ),
                 );
               }

@@ -274,7 +274,7 @@ class ApiService {
 
       return response as Map<String, dynamic>;
     } catch (e) {
-      throw Exception('Login failed: $e');
+      throw Exception('Login failed');
     }
   }
 
@@ -285,7 +285,7 @@ class ApiService {
 
       return response;
     } catch (e) {
-      throw Exception('Login failed: $e');
+      throw Exception('Login failed: ');
     }
   }
 
@@ -1725,6 +1725,24 @@ class ApiService {
       String token, Map<String, dynamic> requestData) async {
     final response = await http.post(
       Uri.parse(ApiEndpoints.goalContribute), // Replace with your API endpoint
+      headers: {
+        'Authorization': 'Token $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode(requestData), // Convert requestData to JSON
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to submit deposit: ${response.statusCode}');
+    } else {
+      return jsonDecode(response.body);
+    }
+  }
+
+  static Future<Map<String, dynamic>> personalGoal(
+      String token, Map<String, dynamic> requestData) async {
+    final response = await http.post(
+      Uri.parse(ApiEndpoints.personalGoal), // Replace with your API endpoint
       headers: {
         'Authorization': 'Token $token',
         'Content-Type': 'application/json',

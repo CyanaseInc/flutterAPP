@@ -1,6 +1,6 @@
 class ApiEndpoints {
-  static const myIp = "server.cyanase.app"; 
-  //  static const myIp = "192.168.124.220:8000";
+ static const myIp = "server.cyanase.app"; 
+//   static const myIp = "192.168.147.220:8000";
   static const String server = "https://$myIp";
   static const String checkuser = "$server/api/v1/en/checkUser/user/";
   static const String signup = "$server/api/v1/en/register/user/";
@@ -20,6 +20,8 @@ class ApiEndpoints {
   static const String denyRequest = "$server/api/v1/en/deny/request/group/";
   static const String goalContribute =
       "$server/api/v1/en/goal/contribution/group/";
+      static const String personalGoal =
+      "$server/api/v1/en/make/goal/deposit/";
   static const String addInvestmentUrl =
       "$server/api/v1/en/add/investment/group/";
   static const String payOutUrl = "$server/api/v1/en/pay/out/group/";
