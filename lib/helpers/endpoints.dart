@@ -160,4 +160,8 @@ class ApiEndpoints {
       "$server/api/v1/en/notifications/settings/";
   static const String apiUrlUpdateNotificationSettings =
       "$server/api/v1/en/auth/user/notification/settings/";
+
+       static const String allTransactions =
+      "$server/api/v1/en/user/top-transactions/";
+
 }

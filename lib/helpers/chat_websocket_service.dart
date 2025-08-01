@@ -37,10 +37,10 @@ class ChatWebSocketService {
       _isNetworkAvailable = result != ConnectivityResult.none;
 
       if (_isNetworkAvailable) {
-        print('Network available, attempting to reconnect WebSocket');
+        
         _reconnectAndProcessQueue();
       } else {
-        print('Network unavailable, marking WebSocket as disconnected');
+        
         _isConnected = false;
         onConnectionStatusChanged?.call(false);
       }
@@ -61,7 +61,7 @@ class ChatWebSocketService {
       final wsUrl =
           '$protocol://${ApiEndpoints.myIp}/ws/chat/$groupId/?token=$_token';
 
-      print('DEBUG [ChatWebSocket] Attempting to connect to: $wsUrl');
+      
 
       try {
         _webSocket = await WebSocket.connect(
@@ -72,7 +72,7 @@ class ChatWebSocketService {
             'Sec-WebSocket-Version': '13',
           },
         );
-        print('DEBUG [ChatWebSocket] Connection established successfully');
+        
         _isConnected = true;
         onConnectionStatusChanged?.call(true);
         _listenToMessages();
@@ -80,7 +80,7 @@ class ChatWebSocketService {
         // Process any queued messages
         await _processMessageQueue();
       } catch (e) {
-        print('ChatWebSocket connection error: $e');
+        
         _isConnected = false;
         onConnectionStatusChanged?.call(false);
         _startRetryTimer();
@@ -96,7 +96,7 @@ class ChatWebSocketService {
         _token = userProfile.first['token'] as String?;
       }
     } catch (e) {
-      print('Error getting token from database: $e');
+      
     }
   }
 
@@ -104,10 +104,10 @@ class ChatWebSocketService {
     _retryTimer?.cancel();
     _retryTimer = Timer.periodic(const Duration(seconds: 5), (timer) async {
       if (!_isConnected) {
-        print('Attempting to reconnect ChatWebSocket...');
+        
         await initialize(_groupId ?? '');
       } else if (_messageQueue.isNotEmpty) {
-        print('ChatWebSocket connected, processing message queue...');
+        
         await _processMessageQueue();
       }
     });
@@ -115,7 +115,7 @@ class ChatWebSocketService {
 
   Future<void> _processMessageQueue() async {
     if (!_isConnected || _webSocket == null || !_isNetworkAvailable) {
-      print('Cannot process queue: ChatWebSocket not connected or no network');
+      
       return;
     }
 
@@ -124,22 +124,22 @@ class ChatWebSocketService {
 
     for (final message in messagesToProcess) {
       try {
-        print('Processing queued message: ${message['id']}');
+        
         await _sendMessageInternal(message);
 
         if (message['id'] != null) {
           await _dbHelper.updateMessageStatus(message['id'].toString(), 'sent');
-          print('Updated message ${message['id']} status to sent');
+          
         }
 
         _messageQueue.remove(message);
         
       } catch (e) {
-        print('Error processing queued message: $e');
+        
         if (message['id'] != null) {
           await _dbHelper.updateMessageStatus(
               message['id'].toString(), 'failed');
-          print('Updated message ${message['id']} status to failed');
+          
         }
       }
     }
@@ -164,10 +164,10 @@ class ChatWebSocketService {
       'reply_to_message': message['reply_to_message'],
       'message_type': message['message_type'],
     };
- print("were are sending to websokets, $messageToSend");
+ 
 
     messageToSend.removeWhere((key, value) => value == null);
-    print('🔵 [CHAT] Sending message to WebSocket with temp_id: ${message['temp_id']}');
+    
     _webSocket?.add(json.encode(messageToSend));
   }
 
@@ -176,11 +176,11 @@ class ChatWebSocketService {
       (message) async {
         try {
           final data = json.decode(message);
-          print('Received ChatWebSocket message: $data');
+          
 
           switch (data['type']) {
             case 'initial_messages':
-              print('Processing initial messages');
+              
               if (data['messages'] != null) {
                 onMessageReceived?.call({
                   'type': 'initial_messages',
@@ -203,18 +203,19 @@ class ChatWebSocketService {
               break;
 
             case 'error':
-              print('🔴 [ChatWebSocket] Error from server: ${data['message']}');
+              
               break;
 
             default:
-              print('🔵 [ChatWebSocket] Unhandled message type: ${data['type']}');
+              
           }
         } catch (e) {
-          print('🔴 [ChatWebSocket] Error processing message: $e');
+          // Handle JSON parsing errors
+         
         }
       },
       onError: (error) {
-        print('🔴 [ChatWebSocket] WebSocket error: $error');
+        
         _isConnected = false;
         onConnectionStatusChanged?.call(false);
         _startRetryTimer();
@@ -229,11 +230,11 @@ class ChatWebSocketService {
       final newId = messageData['id']?.toString();
        
       if (tempId == null || newId == null) {
-        print('Missing temp_id or new_id in message confirmation');
+        
         return;
       }
 
-      print('Message confirmation received - tempId: $tempId, newId: $newId');
+      
 
       final db = await _dbHelper.database;
       
@@ -245,7 +246,7 @@ class ChatWebSocketService {
       );
 
       if (existingWithNewId.isNotEmpty) {
-        print('Message with new ID $newId already exists, skipping update');
+        
         return;
       }
 
@@ -281,11 +282,11 @@ class ChatWebSocketService {
           'group_id': messageData['room_id']?.toString(),
         });
       } else {
-        print('No message found with temp_id $tempId to update');
+        
       }
     } catch (e) {
-      print('Error in _handleSentMessageConfirmation: $e');
-      print('Error stack trace: ${StackTrace.current}');
+      
+      
     }
   }
 
@@ -295,7 +296,7 @@ class ChatWebSocketService {
       final messageData = data['message'] ?? data;
       final messageId = messageData['id']?.toString();
       final tempId = messageData['temp_id']?.toString();
-      print('🔵 [ChatWebSocket] Processing received message: $messageData');
+      
 
       // Check if message already exists in database using both id and temp_id
       final db = await _dbHelper.database;
@@ -338,9 +339,9 @@ class ChatWebSocketService {
               blurhash: messageData['thumbnail_id']?.toString(),
               mimeType: messageData['attachment_type'] == 'audio' ? 'audio/mpeg' : 'image/jpeg',
             );
-            print('🔵 [ChatWebSocket] Inserted media for message $messageId');
+            
           } else {
-            print('🔴 [ChatWebSocket] Missing attachment_url for ${messageData['message_type']} message $messageId');
+            
           }
         }
 
@@ -397,16 +398,16 @@ class ChatWebSocketService {
           'group_id': groupId,
         });
       } else {
-        print('🔵 [ChatWebSocket] Message already exists in database, skipping save');
+        
       }
     } catch (e, stackTrace) {
-      print('🔴 [ChatWebSocket] Error handling received message: $e');
-      print('🔴 [ChatWebSocket] Stack trace: $stackTrace');
+      
+      
     }
   }
 
   Future<void> _handleMessageStatusUpdate(Map<String, dynamic> data) async {
-    print('🔵 [ChatWebSocket] Handling message status update: $data');
+    
     try {
 
      
@@ -415,7 +416,7 @@ class ChatWebSocketService {
         final groupId = data['room_id']?.toString();
 
         if (messageId == null || status == null) {
-            print('Missing message_id or status in status update');
+            
             return;
         }
 
@@ -430,7 +431,7 @@ class ChatWebSocketService {
             where: 'id = ?',
             whereArgs: [messageId],
         );
-      print("yes we did it");
+      
         // Notify UI of status update
         onMessageReceived?.call({
             'type': 'update_message_status',
@@ -439,8 +440,8 @@ class ChatWebSocketService {
             'group_id': groupId,
         });
     } catch (e) {
-        print('Error in _handleMessageStatusUpdate: $e');
-        print('Error stack trace: ${StackTrace.current}');
+        
+        
     }
   }
 
@@ -472,7 +473,7 @@ class ChatWebSocketService {
         'group_id': _groupId,
       });
     } catch (e) {
-      print('Error sending delivered status: $e');
+      
     }
   }
 
@@ -483,7 +484,7 @@ class ChatWebSocketService {
       final db = await _dbHelper.database;
       final userProfile = await db.query('profile', limit: 1);
       if (userProfile.isEmpty) {
-        print('No user profile found in database');
+        
         return;
       }
 
@@ -501,7 +502,7 @@ class ChatWebSocketService {
 
       _webSocket?.add(json.encode(typingMessage));
     } catch (e) {
-      print('Error sending typing status: $e');
+      
     }
   }
 
@@ -522,7 +523,7 @@ class ChatWebSocketService {
       // Don't update status here - wait for server confirmation
       // This prevents duplicate status updates
     } catch (e) {
-      print('Error sending message: $e');
+      
       rethrow;
     }
   }

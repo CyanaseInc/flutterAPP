@@ -10,6 +10,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cyanase/helpers/endpoints.dart';
 import 'package:sqflite/sqflite.dart';
 import 'dart:async';
+import 'package:cyanase/screens/home/home.dart';
 
 class GroupInviteScreen extends StatefulWidget {
   final int groupId;
@@ -88,7 +89,7 @@ class _GroupInviteScreenState extends State<GroupInviteScreen> {
             response['message'] as String? ?? 'Failed to load group details');
       }
     } catch (e) {
-      print('Error fetching group details: $e');
+      
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to load group details: $e')),
@@ -295,7 +296,7 @@ class _GroupInviteScreenState extends State<GroupInviteScreen> {
     final paymentAmount = _groupDetails['pay_amount'] as double? ?? 0.0;
 
     if (!requiresPayment || _hasPaid) {
-      print('No payment needed');
+      
       return true;
     }
 
@@ -433,105 +434,59 @@ class _GroupInviteScreenState extends State<GroupInviteScreen> {
     return paymentSuccessful;
   }
 
-  Future<void> _requestToJoin(BuildContext context, int groupId) async {
-    try {
-      if (!context.mounted) {
-        throw Exception('Context not mounted');
-      }
+Future<void> _requestToJoin(BuildContext context, int groupId) async {
+  // Show loading dialog immediately
+  final navigator = Navigator.of(context);
+  final messenger = ScaffoldMessenger.of(context);
+  
+ 
+  try {
+    final db = await _dbHelper.database;
+    final userProfile = await db.query('profile', limit: 1);
 
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => const Center(child: Loader()),
+    if (userProfile.isEmpty || userProfile.first['token'] == null) {
+      
+      navigator.pushReplacement(
+        MaterialPageRoute(builder: (context) => LoginScreen()),
       );
-
-      final db = await _dbHelper.database;
-      final userProfile = await db.query('profile', limit: 1);
-
-      if (userProfile.isEmpty || userProfile.first['token'] == null) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => LoginScreen(),
-          ),
-        );
-      }
-      final token = userProfile.first['token'] as String;
-      final userId = userProfile.first['user_id'] as String? ?? 'self';
-      final userName = userProfile.first['name'] as String? ?? 'User';
-
-      final joinData = {
-        'groupid': widget.groupId.toString(),
-        'participants': [
-          {
-            'user_id': userId,
-            'role': 'member',
-            'invite_code': widget.inviteCode ?? '',
-          }
-        ]
-      };
-
-      final response = await ApiService.addMembers(token, joinData)
-          .timeout(const Duration(seconds: 10), onTimeout: () {
-        throw TimeoutException('Join request timed out');
-      });
-
-      if (!response['success']) {
-        throw Exception(
-            response['message'] as String? ?? 'Failed to request join');
-      }
-
-      await db.insert(
-          'groups',
-          {
-            'id': widget.groupId,
-            'name': _groupName,
-            'description': _description,
-            'profile_pic': _profilePic ?? '',
-            'type': 'group',
-            'created_at': DateTime.now().toIso8601String(),
-            'created_by': 'unknown',
-            'last_activity': DateTime.now().toIso8601String(),
-            'settings': '',
-          },
-          conflictAlgorithm: ConflictAlgorithm.replace);
-
-      await db.insert(
-          'participants',
-          {
-            'group_id': widget.groupId,
-            'user_id': userId,
-            'role': 'member',
-            'joined_at': DateTime.now().toIso8601String(),
-            'muted': 0,
-            'is_approved': 0,
-            'is_denied': 0,
-            'user_name': userName,
-          },
-          conflictAlgorithm: ConflictAlgorithm.replace);
-
-      await _dbHelper.insertNotification(
-        groupId: widget.groupId,
-        message: "$userName has joined the group",
-        senderId: 'system',
-      );
-
-      if (context.mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text(
-                  'Request to join $_groupName sent. Awaiting admin approval.')),
-        );
-        Navigator.pop(context);
-      }
-    } catch (e) {
-      if (context.mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to join group: $e')),
-        );
-      }
+      return;
     }
+
+    final token = userProfile.first['token'] as String;
+    final userId = userProfile.first['id'] as String? ?? 'self';
+
+    final joinData = {
+      'groupid': widget.groupId.toString(),
+      'participants': [
+        {
+          'user_id': userId,
+          'role': 'member',
+          'invite_code': widget.inviteCode ?? '',
+        }
+      ]
+    };
+
+    final response = await ApiService.addMembers(token, joinData);
+
+    if (!response['success']) {
+      throw Exception(response['message'] ?? 'Failed to request join');
+    }
+
+    
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('Request to join $_groupName sent. Awaiting admin approval.'),
+      ),
+    );
+    navigator.pushReplacement(
+      MaterialPageRoute(builder: (context) => HomeScreen()),
+    );
+
+  } catch (e) {
+    
+    messenger.showSnackBar(
+      SnackBar(content: Text('Failed to join group: $e')),
+    );
   }
+}
 }

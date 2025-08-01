@@ -99,7 +99,7 @@ class _GoalScreenState extends State<GoalScreen> {
         });
       }
     } catch (e) {
-      print('Error fetching user currency: $e');
+      
     }
   }
 
@@ -149,7 +149,7 @@ class _GoalScreenState extends State<GoalScreen> {
             ),
             SizedBox(height: 10),
             Text(
-              'Set goal and start investing to archive them',
+              'Set goals and start investing to achieve them.',
               style: TextStyle(
                 fontSize: 18,
                 color: Colors.grey[600],

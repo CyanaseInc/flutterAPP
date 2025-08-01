@@ -53,7 +53,7 @@ class WithdrawSetting extends StatelessWidget {
             response['message'] ?? 'Failed to update withdrawal setting');
       }
     } catch (e) {
-      print('Error: $e');
+      
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to update setting: $e')),
       );
@@ -69,7 +69,7 @@ class WithdrawSetting extends StatelessWidget {
         style: TextStyle(color: Colors.black87),
       ),
       subtitle: const Text(
-        'Allow or restrict members from withdrawing',
+        'Restrict members from withdrawing',
         style: TextStyle(color: Colors.grey, fontSize: 12),
       ),
       trailing: Switch(

@@ -51,7 +51,7 @@ class _WithdrawState extends State<Withdraw> {
         currency = Mycurrency;
       });
     } catch (e) {
-      print('Error: $e');
+      
     }
   }
 
@@ -73,7 +73,7 @@ class _WithdrawState extends State<Withdraw> {
         }
       }
     } catch (e) {
-      print('Error fetching investment data: $e');
+      
       setState(() {
         isLoading = true;
       });

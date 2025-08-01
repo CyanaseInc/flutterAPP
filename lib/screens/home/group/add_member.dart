@@ -132,7 +132,7 @@ class _AddGroupMembersScreenState extends State<AddGroupMembersScreen>
         );
       }
     } catch (e) {
-      print('Sync error: $e');
+      
       if (mounted) {
         setState(() {
           _isSyncingContacts = false;
@@ -195,7 +195,7 @@ class _AddGroupMembersScreenState extends State<AddGroupMembersScreen>
               'normalizedPhone': normalizedNumber,
             });
           } catch (e) {
-            print('Error processing ${contact.displayName}: $e');
+            
           }
         }
       }
@@ -326,14 +326,14 @@ class _AddGroupMembersScreenState extends State<AddGroupMembersScreen>
               if ( ChatWebSocketService.instance.isConnected) {
                 await  ChatWebSocketService.instance.sendMessage(wsMessage);
               } else {
-                print('WebSocket not connected, skipping notification');
+                
               }
             } catch (wsError) {
-              print('WebSocket error: $wsError');
+              
               // Continue with other contacts even if WebSocket fails
             }
           } catch (e) {
-            print('Error processing contact ${contact['id']}: $e');
+            
             // Continue with other contacts even if one fails
           }
         }
@@ -399,7 +399,7 @@ class _AddGroupMembersScreenState extends State<AddGroupMembersScreen>
           );
         }
       } catch (e) {
-        print(e);
+        
       } finally {
         setState(() {
           _isOnlineSearching = false;

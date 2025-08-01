@@ -74,7 +74,7 @@ class _AddGoalScreenState extends State<AddGoalScreen> {
         });
       }
     } catch (e) {
-      print('Error fetching currency: $e');
+      
     }
   }
 
@@ -102,12 +102,12 @@ class _AddGoalScreenState extends State<AddGoalScreen> {
     AwesomeNotifications().setListeners(
       onActionReceivedMethod: (ReceivedAction receivedAction) async {
         // Handle when the user taps the notification
-        print('Notification tapped: ${receivedAction.payload}');
+        
       },
       onNotificationDisplayedMethod:
           (ReceivedNotification receivedNotification) async {
         // Handle when the notification is displayed
-        print('Notification displayed: ${receivedNotification.id}');
+        
       },
     );
   }
@@ -961,7 +961,7 @@ class _AddGoalScreenState extends State<AddGoalScreen> {
         }
       }
     } catch (e) {
-      print('Error in _submitGoal: $e');
+      
       if (Platform.isIOS) {
         showCupertinoDialog(
           context: context,

@@ -34,7 +34,7 @@ class _OngoingLoansScreenState extends State<OngoingLoansScreen> {
   @override
   Widget build(BuildContext context) {
 
-    print("my loans are, ${widget.loans}");
+    
     return Scaffold(
       appBar: AppBar(
         title: const Text(

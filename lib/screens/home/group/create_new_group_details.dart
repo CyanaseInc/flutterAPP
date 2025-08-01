@@ -162,7 +162,7 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
         throw Exception('Failed to create group: No group ID returned from API');
       }
     } catch (e) {
-      print("Error creating group: $e");
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("Failed to create group: ${e.toString()}")),

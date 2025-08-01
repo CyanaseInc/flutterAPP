@@ -103,7 +103,7 @@ class _GroupMembersState extends State<GroupMembers>
         }
       }
     } catch (e) {
-      print("Error checking admin status: $e");
+      
     }
   }
 
@@ -143,12 +143,12 @@ class _GroupMembersState extends State<GroupMembers>
           where: 'group_id = ? AND user_id = ?',
           whereArgs: [widget.groupId, userId],
         );
-        print('Updated role for user $userId to $newRole');
+        
       } else {
         throw Exception(response['message'] ?? 'Failed to update role');
       }
     } catch (e) {
-      print("Error updating member role: $e");
+      
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to update role: $e')),
       );
@@ -180,12 +180,12 @@ class _GroupMembersState extends State<GroupMembers>
           where: 'group_id = ? AND user_id = ?',
           whereArgs: [widget.groupId, userId],
         );
-        print('Removed user $userId from group ${widget.groupId}');
+        
       } else {
         throw Exception(response['message'] ?? 'Failed to remove member');
       }
     } catch (e) {
-      print("Error removing member: $e");
+      
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to remove member: $e')),
       );

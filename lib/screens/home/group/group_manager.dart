@@ -99,7 +99,7 @@ class _GroupFinancePageState extends State<GroupFinancePage> {
         _isAdmin = false;
       });
       if (mounted) {
-        print(_error!);
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(_error!),

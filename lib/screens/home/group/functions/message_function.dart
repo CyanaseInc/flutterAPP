@@ -14,7 +14,7 @@ class MessageFunctions {
       }
       return null;
     } catch (e) {
-      print("Error getting current user ID: $e");
+      
       return null;
     }
   }
@@ -43,7 +43,7 @@ class MessageFunctions {
         };
       }).toList();
     } catch (e) {
-      print("Error fetching messages: $e");
+      
       throw Exception("Failed to fetch messages");
     }
   }
@@ -135,7 +135,7 @@ class MessageFunctions {
       // Return the new message
       return messageData;
     } catch (e) {
-      print("Error sending text message: $e");
+      
       throw Exception("Failed to send text message: ${e.toString()}");
     }
   }

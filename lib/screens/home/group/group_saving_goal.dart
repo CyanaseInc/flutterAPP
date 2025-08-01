@@ -733,7 +733,7 @@ class _GroupSavingGoalsCardState extends State<GroupSavingGoalsCard> {
 
   void _showContributionDialog() {
     final amountController = TextEditingController();
-    print("Goal ID: ${widget.groupGoal.goalId}");
+    
     showDialog(
       context: context,
       builder: (context) => Dialog(

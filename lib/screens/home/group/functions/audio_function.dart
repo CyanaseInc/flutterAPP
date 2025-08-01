@@ -53,7 +53,7 @@ class AudioFunctions {
     try {
       await _audioPlayer.play(AssetSource('audio/beep.mp3'));
     } catch (e) {
-      print('Error playing beep sound: $e');
+      
     }
   }
 
@@ -62,7 +62,7 @@ class AudioFunctions {
       await initializeRecorder();
       
       if (!await _checkPermissions()) {
-        print('Microphone permission denied');
+        
         return null;
       }
 
@@ -72,10 +72,10 @@ class AudioFunctions {
         codec: Codec.aacADTS,
       );
 
-      print('Recording started at: $filePath');
+      
       return filePath;
     } catch (e) {
-      print('Error starting recording: $e');
+      
       return null;
     }
   }
@@ -85,7 +85,7 @@ class AudioFunctions {
       if (!_isRecorderInitialized) return null;
       return await _audioRecorder.stopRecorder();
     } catch (e) {
-      print('Error stopping recording: $e');
+      
       return null;
     }
   }
@@ -94,7 +94,7 @@ class AudioFunctions {
     try {
       await _audioPlayer.play(DeviceFileSource(path));
     } catch (e) {
-      print('Error playing audio: $e');
+      
     }
   }
 
@@ -102,7 +102,7 @@ class AudioFunctions {
     try {
       await _audioPlayer.pause();
     } catch (e) {
-      print('Error pausing audio: $e');
+      
     }
   }
 

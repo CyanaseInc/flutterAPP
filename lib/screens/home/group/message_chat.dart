@@ -266,25 +266,25 @@ class _MessageChatState extends State<MessageChat>
 
     try {
       if (widget.messageId.isEmpty) {
-        print('🔴 [MessageChat] Message ID is empty');
+        
         return;
       }
 
       final messageId = int.tryParse(widget.messageId);
       if (messageId == null) {
-        print('🔴 [MessageChat] Invalid message ID: ${widget.messageId}');
+        
         return;
       }
 
       final media = await DatabaseHelper().getMedia(messageId);
-       print("my media message is $media");
+       
       if (mounted) {
         setState(() {
           _mediaData = media;
         });
       }
     } catch (e) {
-      print('🔴 [MessageChat] Error loading media data: $e');
+      
       if (mounted) {
         setState(() {
           _mediaData = null;
@@ -295,9 +295,9 @@ class _MessageChatState extends State<MessageChat>
 
  
   Future<void> _downloadMedia() async {
-    print("we got called");
+    
     if (_mediaData == null || _mediaData!['url'] == null) return;
-print("we got called 2");
+
     setState(() {
       _isDownloading = true;
       _downloadProgress = 0.0;
@@ -344,7 +344,7 @@ print("we got called 2");
       await player.dispose();
       return duration ?? Duration.zero;
     } catch (e) {
-      print('🔴 [MessageChat] Error getting audio duration: $e');
+      
       return Duration.zero;
     }
   }
@@ -377,7 +377,7 @@ print("we got called 2");
 ImageProvider _getImageProvider(String profilePic) {
   // If profilePic is empty or null, return default image
   if (profilePic.isEmpty || profilePic == 'null') {
-    print('🔵 [MessageChat] Using default avatar for empty profilePic');
+    
     return const AssetImage('assets/images/avatar.png');
   }
 
@@ -389,7 +389,7 @@ ImageProvider _getImageProvider(String profilePic) {
       
       return FileImage(file);
     } else {
-      print('🔴 [MessageChat] Local file not found: $filePath');
+      
       return const AssetImage('assets/images/avatar.png');
     }
   }
@@ -403,12 +403,12 @@ ImageProvider _getImageProvider(String profilePic) {
   // Handle plain file paths
   final file = File(profilePic);
   if (file.existsSync()) {
-    print('🔵 [MessageChat] Using local file image: $profilePic');
+    
     return FileImage(file);
   }
 
   // Fallback to default image if all else fails
-  print('🔴 [MessageChat] Falling back to default avatar for: $profilePic');
+  
   return const AssetImage('assets/images/avatar.png');
 }
 
@@ -642,7 +642,7 @@ Widget _buildReplySection(BuildContext context) {
         onTap: () {
           if (widget.replyToId != null && widget.onReplyTap != null) {
             widget.onReplyTap!(widget.replyToId!);
-            print('🔵 [MessageChat] Tapped reply to message ID: ${widget.replyToId}');
+            
           }
         },
         child: Container(
@@ -842,7 +842,7 @@ Widget _buildReplyAudio(BuildContext context, bool fileExists) {
       final filePath = _mediaData!['file_path'];
       final file = File(filePath);
       if (!file.existsSync()) {
-        print('🔴 [MessageChat] Sent audio file not found: $filePath');
+        
         return Container(
           padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
           decoration: BoxDecoration(
@@ -988,7 +988,7 @@ Widget _buildReplyAudio(BuildContext context, bool fileExists) {
       // For received messages that are downloaded
       final filePath = _mediaData!['file_path'];
       if (filePath == null) {
-        print('🔴 [MessageChat] Downloaded audio file path is null');
+        
         return Container(
           padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
           decoration: BoxDecoration(
@@ -1010,7 +1010,7 @@ Widget _buildReplyAudio(BuildContext context, bool fileExists) {
 
       final file = File(filePath);
       if (!file.existsSync()) {
-        print('🔴 [MessageChat] Downloaded audio file not found: $filePath');
+        
         return Container(
           padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
           decoration: BoxDecoration(
@@ -1127,7 +1127,7 @@ Widget _buildImageViewer(BuildContext context) {
   if (widget.isMe) {
     final filePath = widget.message;
     if (filePath == null) {
-      print('🔴 [MessageChat] Sent image file path is null');
+      
       return Container(
         width: 180,
         height: 180,
@@ -1147,7 +1147,7 @@ Widget _buildImageViewer(BuildContext context) {
 
     final file = File(filePath);
     if (!file.existsSync()) {
-      print('🔴 [MessageChat] Sent image file not found: $filePath');
+      
       return Container(
         width: 180,
         height: 180,
@@ -1182,7 +1182,7 @@ Widget _buildImageViewer(BuildContext context) {
           height: 180,
           fit: BoxFit.cover,
           errorBuilder: (context, error, stackTrace) {
-            print('🔴 [MessageChat] Error loading sent image for message ${widget.messageId}: $error');
+            
             return const Center(
               child: Icon(
                 Icons.image_not_supported,
@@ -1269,7 +1269,7 @@ Widget _buildImageViewer(BuildContext context) {
     // For downloaded media
     final filePath = _mediaData!['file_path'];
     if (filePath == null) {
-      print('🔴 [MessageChat] Downloaded image file path is null');
+      
       return GestureDetector(
         onTap: _downloadMedia,
         child: Container(
@@ -1292,7 +1292,7 @@ Widget _buildImageViewer(BuildContext context) {
 
     final file = File(filePath);
     if (!file.existsSync()) {
-      print('🔴 [MessageChat] Downloaded image file not found: $filePath');
+      
       return GestureDetector(
         onTap: _downloadMedia,
         child: Container(
@@ -1330,7 +1330,7 @@ Widget _buildImageViewer(BuildContext context) {
           height: 180,
           fit: BoxFit.cover,
           errorBuilder: (context, error, stackTrace) {
-            print('🔴 [MessageChat] Error loading downloaded image for message ${widget.messageId}: $error');
+            
             return GestureDetector(
               onTap: _downloadMedia,
               child: const Center(

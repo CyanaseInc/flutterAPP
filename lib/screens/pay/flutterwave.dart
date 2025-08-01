@@ -30,7 +30,7 @@ class _FlutterPayState extends State<FlutterPay>
       // final db = await dbHelper.database;
       // final userProfile = await db.query('profile', limit: 1);
     } catch (e) {
-      print('Error during initialization: $e');
+      
     }
   }
 
@@ -42,6 +42,10 @@ class _FlutterPayState extends State<FlutterPay>
   @override
   Widget build(BuildContext context) {
     return TextButton(
-        onPressed: () => print('hi'), child: const Text("flutterwave"));
+      onPressed: () {
+        // Add your onPressed logic here
+      },
+      child: Text('Pay'), // Added required child parameter
+    );
   }
 }

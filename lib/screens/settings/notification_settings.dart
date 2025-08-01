@@ -52,7 +52,7 @@ class _NotificationsSettingsPageState extends State<NotificationsSettingsPage> {
             dbColumn = settingKey;
         }
 
-        print('Updating database: $dbColumn = ${value ? 1 : 0}');
+        
         await db.update('profile', {dbColumn: value ? 1 : 0});
 
         if (mounted) {
@@ -90,7 +90,7 @@ class _NotificationsSettingsPageState extends State<NotificationsSettingsPage> {
     final dbHelper = DatabaseHelper();
     final db = await dbHelper.database;
     final userProfile = await db.query('profile', limit: 1);
-    print('User Profile from DB: $userProfile');
+    
     if (mounted) {
       setState(() {
         if (userProfile.isNotEmpty) {

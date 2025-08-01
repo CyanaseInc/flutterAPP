@@ -144,7 +144,7 @@ class _NumericLoginScreenState extends State<NumericLoginScreen> {
         final mypasscode = profile['passcode'] as String?;
         // Cast to String? for safety
 
-        print(" i have  a passcde and its  $picture");
+        
         final autoSave = profile['auto_save'] ?? false;
         final goalsAlert = profile['goals_alert'] ?? false;
         setState(() {
@@ -252,7 +252,7 @@ class _NumericLoginScreenState extends State<NumericLoginScreen> {
     } catch (e) {
       // Dismiss the loading indicator
       Navigator.pop(context);
-      print('Error: ${e.toString()}');
+      
       // Show a red SnackBar for errors
       if (Platform.isIOS) {
         showCupertinoDialog(

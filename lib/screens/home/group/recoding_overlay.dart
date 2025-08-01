@@ -99,7 +99,7 @@ class ChatListState extends State<ChatList>
       final userId = userProfile.first['user_id'] as String? ?? '145';
 
       final dynamic response = await ApiService.getGroup(token);
-      print('response $response');
+      
       List<Map<String, dynamic>> groups;
       if (response is List && response.isNotEmpty) {
         final firstItem = response[0];
@@ -120,7 +120,7 @@ class ChatListState extends State<ChatList>
         throw Exception('Invalid API response format: $response');
       }
 
-      print('Groups received: ${groups.length}');
+      
       List<Map<String, dynamic>> adminGroups = [];
       int totalPending = 0;
 
@@ -135,14 +135,14 @@ class ChatListState extends State<ChatList>
         final createdBy = groupData['created_by'] as String?;
         final lastActivity = groupData['last_activity'] as String?;
         final participants = groupData['participants'] as List<dynamic>?;
-        print('Participants for group $groupId: $participants');
+        
 
         if (groupId == null || groupName == null) {
-          print('Skipping group: ID or name missing - $groupData');
+          
           continue;
         }
 
-        print('Processing group $groupId: $groupName');
+        
 
         final existingGroup = await db.query(
           'groups',
@@ -198,7 +198,7 @@ class ChatListState extends State<ChatList>
             } else if (mutedDynamic is int) {
               muted = mutedDynamic;
             } else {
-              print("Unexpected muted type: ${mutedDynamic?.runtimeType}");
+              
               muted = 0;
             }
             final bool isParticipantAdmin = (isAdminDynamic == true ||
@@ -291,7 +291,7 @@ class ChatListState extends State<ChatList>
   }
 
   Widget _buildPendingBanner() {
-    print('Building banner with count: $_pendingRequestCount');
+    
     return AnimatedOpacity(
       opacity: _fadeAnimation!.value,
       duration: const Duration(seconds: 1),

@@ -114,16 +114,16 @@ class HelpPage extends StatelessWidget {
   }) {
     return ListTile(
       leading: Container(
-        padding: EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: primaryTwo.withOpacity(0.1), // Light green background
+        padding: const EdgeInsets.all(8),
+        decoration: const BoxDecoration(
+          color: primaryTwo, // Light green background
           shape: BoxShape.circle,
         ),
         child: Icon(icon, color: primaryTwo), // WhatsApp green color
       ),
       title: Text(
         title,
-        style: TextStyle(
+        style: const TextStyle(
           fontSize: 16,
           fontWeight: FontWeight.w500,
         ),
@@ -135,7 +135,7 @@ class HelpPage extends StatelessWidget {
           color: Colors.grey[600],
         ),
       ),
-      trailing: Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+      trailing: const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
       onTap: onTap,
     );
   }

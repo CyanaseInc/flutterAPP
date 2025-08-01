@@ -23,7 +23,7 @@ class ImageFunctions {
       }
       return null;
     } catch (e) {
-      print('Error picking image: $e');
+      
       return null;
     }
   }
@@ -51,7 +51,7 @@ class ImageFunctions {
       }
       return null;
     } catch (e) {
-      print('Error picking document: $e');
+      
       return null;
     }
   }
@@ -78,7 +78,7 @@ class ImageFunctions {
     final savedFile = await imageFile.copy(filePath);
 
     // Debug log: Confirm file was saved
-    print('File saved: ${savedFile.path}');
+    
 
     return savedFile.path;
   }

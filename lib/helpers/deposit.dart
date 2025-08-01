@@ -106,7 +106,7 @@ class _DepositScreenState extends State<DepositHelper> {
         phonenumber = userPhone;
       });
     } catch (e) {
-      print('Error: $e');
+      
     }
   }
 
@@ -291,7 +291,7 @@ SWIFT Code: CYANUS33
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to submit deposit')),
       );
-      print('Failed to submit deposit: ${e.toString()}');
+      
     } finally {
       setState(() {
         _isSubmitting = false;

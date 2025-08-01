@@ -48,7 +48,7 @@ class SendMessagesSetting extends StatelessWidget {
             response['message'] ?? 'Failed to update message setting');
       }
     } catch (e) {
-      print('Error: $e');
+      
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to update setting: $e')),
       );
@@ -64,7 +64,7 @@ class SendMessagesSetting extends StatelessWidget {
         style: TextStyle(color: Colors.black87),
       ),
       subtitle: const Text(
-        'Allow or restrict members from sending messages',
+        ' Restrict members from sending messages',
         style: TextStyle(color: Colors.grey, fontSize: 12),
       ),
       trailing: Switch(

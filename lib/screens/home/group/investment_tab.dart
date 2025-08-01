@@ -316,7 +316,7 @@ class _InvestmentsTabState extends State<InvestmentsTab> {
         throw Exception(response['error'] ?? 'Failed to delete investment');
       }
     } catch (e) {
-      print('Failed to delete investment: $e');
+      
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to delete investment: $e')),
       );

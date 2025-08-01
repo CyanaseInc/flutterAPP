@@ -306,7 +306,7 @@ class _RiskProfilerFormState extends State<RiskProfilerForm> {
         }
       }
     } catch (e) {
-      print('Error: $e');
+      
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text("An error occurred: $e"),
         duration: Duration(seconds: 2),

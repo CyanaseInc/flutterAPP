@@ -179,7 +179,7 @@ class _SignupScreenState extends State<SignupScreen> {
       }
     } catch (e) {
       _showErrorPopup('Signup failed: ${e.toString()}');
-      print('Signup failed: ${e.toString()}');
+      
     } finally {
       setState(() {
         _isLoading = false; // Hide loader and enable button
@@ -316,7 +316,7 @@ class _SignupScreenState extends State<SignupScreen> {
         'email': _emailController.text.trim(),
         'phone': phoneno,
       });
-      print(response);
+      
 
       if (response['email_exists'] == false &&
           response['phone_exists'] == false) {

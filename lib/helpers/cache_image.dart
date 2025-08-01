@@ -20,7 +20,7 @@ class ImageHelper {
 
       return filePath; // Return the local file path
     } catch (e) {
-      print("Error downloading and saving image: $e");
+      
       return null;
     }
   }

@@ -77,7 +77,7 @@ class _WithdrawHelperState extends State<WithdrawHelper> {
         phoneNumber = userPhone;
       });
     } catch (e) {
-      print('Error: $e');
+      
     }
   }
 

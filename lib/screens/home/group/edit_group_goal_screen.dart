@@ -183,7 +183,7 @@ class _EditGroupGoalScreenState extends State<EditGroupGoalScreen> {
         final token = userProfile.first['token'] as String;
         final response = await ApiService.DeleteGroupGoal(token, data);
 
-        print('Delete response: $response');
+        
         if (response['success'] == false) {
           _showSnackBar(
               'Failed to delete goal: ${response['message']}', Colors.red);

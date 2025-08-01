@@ -19,14 +19,14 @@ static final DatabaseHelper _dbHelper = DatabaseHelper();
   }) async {
     try {
       if (!await requestStoragePermission()) {
-        print('🔴 [MediaDownloader] Storage permission denied');
+        
         return null;
       }
  final fileUrl =  "${ApiEndpoints.server}$url";
- print("my url is $fileUrl");
+ 
       final response = await http.get(Uri.parse(fileUrl));
       if (response.statusCode != 200) {
-        print('🔴 [MediaDownloader] Failed to download: ${response.statusCode}');
+        
         return null;
       }
 
@@ -50,7 +50,7 @@ static final DatabaseHelper _dbHelper = DatabaseHelper();
         await player.dispose();
       }
 
-      print('🔵 [MediaDownloader] Saved $type to $filePath, size: $fileSize bytes');
+      
 final db = await _dbHelper.database;
       // update database with file path, size, and duration
        await db.update(
@@ -65,7 +65,7 @@ final db = await _dbHelper.database;
         'duration': duration,
       };
     } catch (e) {
-      print('🔴 [MediaDownloader] Error downloading media: $e');
+      
       return null;
     }
   }

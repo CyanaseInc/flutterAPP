@@ -38,12 +38,12 @@ class _WithdrawState extends State<Withdraw> {
   void initState() {
     super.initState();
     goalData = widget.goalData;
-    print(goalData);
+    
   }
 
   void _withdraw() async {
     if (withdrawAmount == null || withdrawAmount! <= 0 || phoneNumber == null) {
-      print('i might be ignored');
+      
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
             content: Text('Please enter a valid amount and phone number')),
@@ -77,7 +77,7 @@ class _WithdrawState extends State<Withdraw> {
 
       // Fetch investment data from the API
       final response = await ApiService.goalWithdraw(token, requestData);
-      print(response);
+      
 
       if (response['success'] == true) {
         // If successful, navigate to the success screen

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart'; // For number formatting
+import 'package:intl/intl.dart';
 import '../../../theme/theme.dart';
 
 class ActivitySummaryCard extends StatelessWidget {
@@ -10,21 +10,15 @@ class ActivitySummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Calculate totals from portfolios
-    final totalDeposits = portfolios.fold<double>(0.0,
-        (sum, portfolio) => sum + (portfolio['deposit'] as double? ?? 0.0));
-    final totalNetWorth = portfolios.fold<double>(0.0,
-        (sum, portfolio) => sum + (portfolio['netWorth'] as double? ?? 0.0));
+    // Calculate totals
+    final totalDeposits = portfolios.fold<double>(
+        0.0, (sum, p) => sum + (p['deposit'] as double? ?? 0.0));
+    final totalNetWorth = portfolios.fold<double>(
+        0.0, (sum, p) => sum + (p['netWorth'] as double? ?? 0.0));
+    final totalProfitLoss = totalNetWorth - totalDeposits;
+    final totalWithdrawals = 0.0; // Replace with API data if available
 
-    // Infer withdrawals (assumption: if netWorth < deposits, difference could be withdrawals)
-    final totalWithdrawals = portfolios.fold<double>(0.0, (sum, portfolio) {
-      final deposit = portfolio['deposit'] as double? ?? 0.0;
-      final netWorth = portfolio['netWorth'] as double? ?? 0.0;
-      return sum + (deposit > netWorth ? deposit - netWorth : 0.0);
-    });
-
-    // Number formatter for clean display
-    final numberFormat = NumberFormat('#,###', 'en_US');
+    final numberFormat = NumberFormat('#,##0.0', 'en_US'); // Updated to show 1 decimal place
 
     return Padding(
       padding: const EdgeInsets.all(16.0),
@@ -34,30 +28,27 @@ class ActivitySummaryCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
         ),
         color: primaryTwo,
-        shadowColor: primaryTwo,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 24.0, horizontal: 16.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                'Activity',
+                'Investment Summary',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
                   color: white,
-                  letterSpacing: 1.1,
                 ),
               ),
               const SizedBox(height: 16),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _buildActivityStat('Deposits', totalDeposits, numberFormat),
-                  _buildActivityStat(
-                      'Withdrawals', totalWithdrawals, numberFormat),
-                  _buildActivityStat('Net Worth', totalNetWorth, numberFormat),
+                  _buildActivityStat('Total Deposits', totalDeposits, numberFormat),
+                  _buildActivityStat('Current Value', totalNetWorth, numberFormat),
+                  _buildProfitLossStat(totalProfitLoss, numberFormat, context),
                 ],
               ),
             ],
@@ -68,16 +59,13 @@ class ActivitySummaryCard extends StatelessWidget {
   }
 
   Widget _buildActivityStat(
-      String label, double value, NumberFormat numberFormat) {
-    // Format value based on magnitude
-    String displayValue;
-    if (value.abs() >= 1000000) {
-      displayValue = '${(value / 1000000).toStringAsFixed(1)}M';
-    } else if (value.abs() >= 1000) {
-      displayValue = '${(value / 1000).toStringAsFixed(1)}k';
-    } else {
-      displayValue = numberFormat.format(value);
-    }
+    String label,
+    double value,
+    NumberFormat numberFormat, {
+    Color? color,
+  }) {
+    final displayValue = _formatValue(value, numberFormat);
+    final textColor = color ?? white;
 
     return Column(
       children: [
@@ -86,7 +74,7 @@ class ActivitySummaryCard extends StatelessWidget {
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,
-            color: white,
+            color: textColor,
           ),
         ),
         const SizedBox(height: 4),
@@ -94,11 +82,82 @@ class ActivitySummaryCard extends StatelessWidget {
           label,
           style: TextStyle(
             fontSize: 14,
-            fontWeight: FontWeight.w500,
-            color: white,
+            color: textColor.withOpacity(0.9),
           ),
         ),
       ],
     );
+  }
+
+  Widget _buildProfitLossStat(
+    double value,
+    NumberFormat numberFormat,
+    BuildContext context,
+  ) {
+    final isProfit = value >= 0;
+    final displayValue = _formatValue(value.abs(), numberFormat);
+    final textColor = isProfit ? Colors.green : Colors.red;
+    final label = isProfit ? 'Profit' : 'Loss';
+    final icon = isProfit
+        ? Icons.trending_up_rounded
+        : Icons.trending_down_rounded;
+
+    return GestureDetector(
+      onTap: () {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '$label: ${isProfit ? "Gains" : "Losses"} calculated as Current Value minus Total Deposits.',
+            ),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      },
+      child: Column(
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AnimatedContainer(
+                duration: Duration(milliseconds: 300),
+                child: Icon(
+                  icon,
+                  color: textColor,
+                  size: 20,
+                ),
+              ),
+              SizedBox(width: 4),
+              AnimatedDefaultTextStyle(
+                duration: Duration(milliseconds: 300),
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: textColor,
+                ),
+                child: Text(isProfit ? '+$displayValue' : '-$displayValue'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 14,
+              color: textColor.withOpacity(0.9),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatValue(double value, NumberFormat numberFormat) {
+    final absValue = value.abs();
+    if (absValue >= 1000000) {
+      return '${numberFormat.format(value / 1000000)}M';
+    } else if (absValue >= 1000) {
+      return '${numberFormat.format(value / 1000)}k';
+    }
+    return numberFormat.format(value);
   }
 }

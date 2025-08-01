@@ -37,28 +37,28 @@ class _PendingAdminLoansScreenState extends State<PendingAdminLoansScreen> {
     required bool approved,
   }) async {
     try {
-      print('Starting loan processing...');
+      
       final db = await _dbHelper.database;
-      print('Database connection successful');
+      
       
       final userProfile = await db.query('profile', limit: 1);
-      print('User profile query result: $userProfile');
+      
       
       if (userProfile.isEmpty) {
-        print('Error: User profile not found in database');
+        
         throw Exception('User profile not found');
       }
       
       // Ensure token is properly cast to String
       final token = userProfile.first['token']?.toString();
-      print('Token retrieved: ${token != null ? 'Token exists' : 'Token is null'}');
+      
       
       if (token == null) {
-        print('Error: Invalid token format - token is null');
+        
         throw Exception('Invalid token format');
       }
 
-      print('Processing loan with data: {loanId: $loanId, groupId: $groupId, approved: $approved}');
+      
       
       final response = await ApiService.processLoanRequest(
         token: token,
@@ -67,27 +67,27 @@ class _PendingAdminLoansScreenState extends State<PendingAdminLoansScreen> {
         approved: approved,
       );
 
-      print('API Response received: $response');
+      
 
       if (response == null) {
-        print('Error: No response from server');
+        
         throw Exception('No response from server');
       }
 
       if (response['success'] == false) {
-        print('Error: Loan processing failed - ${response['message']}');
+        
         throw Exception(response['message'] ?? 'Loan processing failed');
       }
 
-      print('Loan processed successfully');
+      
       return {
         'success': true,
         'message': response['message'] ?? 'Loan processed successfully',
         'loan_status': response['loan_status'] ?? 'processed'
       };
     } catch (e, stackTrace) {
-      print('Error: $e');
-      print('Stack trace: $stackTrace');
+      
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -368,7 +368,7 @@ class _PendingAdminLoansScreenState extends State<PendingAdminLoansScreen> {
                   throw Exception(response['message'] ?? 'Failed to process loan');
                 }
               } catch (e) {
-                print('Error: ${e.toString()}');
+                
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(

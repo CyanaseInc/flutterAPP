@@ -1,5 +1,4 @@
 import 'package:cyanase/helpers/loader.dart';
-import 'package:cyanase/helpers/web_db.dart';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../../theme/theme.dart';
@@ -35,16 +34,12 @@ class _PortfolioState extends State<Portfolio> {
       final dbHelper = DatabaseHelper();
       final db = await dbHelper.database;
       final userProfile = await db.query('profile', limit: 1);
-      // await WebSharedStorage.init();
-      // var existingProfile = WebSharedStorage();
 
       if (userProfile.isNotEmpty) {
-        // if (existingProfile.getCommon('token') != '') {
         final token = userProfile.first['token'] as String;
-        // final token = existingProfile.getCommon('token');
         final response = await ApiService.depositNetworth(token);
         final data = response['data'] ?? {};
-
+  print('Portfolio data: $data');
         final investmentPerformance =
             data['investment_performance'] as List? ?? [];
         final historyData = data['history'] as List? ?? [];
@@ -66,7 +61,6 @@ class _PortfolioState extends State<Portfolio> {
 
               final xValue = ((date.year - referenceDate.year) * 12) +
                   (date.month - referenceDate.month);
-              // Use raw closing balance instead of scaling
               final yValue = closingBalance;
 
               return FlSpot(xValue.toDouble(), yValue);
@@ -83,7 +77,6 @@ class _PortfolioState extends State<Portfolio> {
         });
       }
     } catch (e) {
-      print('Error fetching portfolio data: $e');
       setState(() {
         isLoading = false;
       });
@@ -240,6 +233,15 @@ class _PortfolioState extends State<Portfolio> {
   }
 
   Widget _buildPerformanceSection() {
+    if (portfolios.isEmpty) {
+      return const Center(
+        child: Text(
+          'No portfolio data available',
+          style: TextStyle(fontSize: 16, color: Colors.grey),
+        ),
+      );
+    }
+
     double minX = double.infinity;
     double maxX = double.negativeInfinity;
     double minY = double.infinity;
@@ -270,20 +272,20 @@ class _PortfolioState extends State<Portfolio> {
       );
     }
 
-    final xRange = maxX - minX;
-    final yRange = maxY - minY;
-
-    if (xRange == 0) {
+    // Handle cases where all values are the same
+    if (minX == maxX) {
       minX -= 1;
       maxX += 1;
     }
-    if (yRange == 0) {
-      final yBuffer = (maxY.abs() * 0.1)
-          .clamp(1000.0, double.infinity); // Larger buffer for investments
-      minY -= yBuffer;
-      maxY += yBuffer;
+    if (minY == maxY) {
+      minY -= (maxY.abs() * 0.1).clamp(1000.0, double.infinity);
+      maxY += (maxY.abs() * 0.1).clamp(1000.0, double.infinity);
     }
 
+    final xRange = maxX - minX;
+    final yRange = maxY - minY;
+
+    // Add padding to ranges
     final xPadding = xRange * 0.1;
     final yPadding = yRange * 0.2;
     minX -= xPadding;
@@ -294,14 +296,18 @@ class _PortfolioState extends State<Portfolio> {
     // Ensure minY is non-negative for investment data
     if (minY < 0) minY = 0;
 
-    // Dynamic intervals with finer granularity for small changes
-    final xInterval = (maxX - minX) / 5;
-    final yInterval = yRange > 100000
-        ? yRange / 5
-        : yRange / 10; // More steps for smaller ranges
+    // Calculate intervals with safeguards
+    double xInterval = (maxX - minX) / 5;
+    double yInterval = yRange / 5;
 
-    print('Chart ranges: minX=$minX, maxX=$maxX, minY=$minY, maxY=$maxY');
-    print('Intervals: xInterval=$xInterval, yInterval=$yInterval');
+    // Ensure minimum intervals
+    xInterval = xInterval > 0 ? xInterval : 1.0;
+    yInterval = yInterval > 0 ? yInterval : (maxY > 0 ? maxY / 10 : 1.0);
+
+    // For very small ranges, use smaller intervals
+    if (yRange < 10) {
+      yInterval = yRange / 10;
+    }
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),

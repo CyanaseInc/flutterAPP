@@ -1,3 +1,4 @@
+import 'package:cyanase/helpers/loader.dart';
 import 'package:flutter/material.dart';
 import 'package:intl_phone_field/intl_phone_field.dart';
 import 'package:intl_phone_field/countries.dart';
@@ -47,7 +48,7 @@ class _PhoneCountrySlideState extends State<PhoneCountrySlide> {
         _updateCountryByISO(countryIso);
       }
     } catch (e) {
-      print("SIM detection error: $e");
+      
       _setDefaultCountry();
     }
   }
@@ -137,7 +138,7 @@ class _PhoneCountrySlideState extends State<PhoneCountrySlide> {
                   SizedBox(
                     width: MediaQuery.of(context).size.width * 0.8,
                     child: _isLoading
-                        ? const Center(child: CircularProgressIndicator())
+                        ? const Center(child: Loader())
                         : IntlPhoneField(
                             controller: widget.phoneNumberController,
                             initialCountryCode: _selectedCountryISO,

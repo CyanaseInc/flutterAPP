@@ -199,7 +199,7 @@ String? _lastMessageTimestamp;
           
           // Update UI if status is different
           if (dbStatus != null && dbStatus != uiStatus) {
-            print('🔵 [StatusChecker] Updating message $messageId status from $uiStatus to $dbStatus');
+            
             
             final index = _messages.indexWhere((msg) => 
               msg['id']?.toString() == messageId || msg['temp_id']?.toString() == messageId
@@ -221,14 +221,14 @@ String? _lastMessageTimestamp;
         });
       }
     } catch (e) {
-      print('🔴 [StatusChecker] Error checking message status: $e');
+      
     }
   }
 
   @override
 @override
 void dispose() {
-  print('🔵 [ChatScreen] Disposing chat screen');
+  
   _wsService.onMessageReceived = null;
   _scrollController.dispose();
   _controller.dispose();
@@ -248,7 +248,7 @@ void _setupMessageStream() {
     final messages = groupMessages[widget.groupId];
     if (messages == null || messages.isEmpty) return;
 
-    print('🔵 [ChatScreen] Received ${messages.length} messages from stream for group: ${widget.groupId}');
+    
     setState(() {
       _messages = messages.map((message) {
         final isMe = message['sender_id'].toString() == _currentUserId;
@@ -301,7 +301,7 @@ void _setupMessageStream() {
     // Update notification badge
     NotificationService().updateBadgeCountFromDatabase();
   }, onError: (e) {
-    print('🔴 [ChatScreen] Stream error: $e');
+    
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Error receiving messages: $e')),
     );
@@ -356,7 +356,7 @@ void _scrollToFirstUnreadOrBottom() {
           _memberNames = members.map((e) => e["name"] ?? "").toList();
         });
       } catch (e) {
-        print("Error loading group members: $e");
+        
       }
     } else {
       setState(() {
@@ -366,14 +366,14 @@ void _scrollToFirstUnreadOrBottom() {
   }
 
 Future<void> _loadMessages({bool isInitialLoad = false}) async {
-  print('🔵 [DEBUG] Loading messages...');
+  
   setState(() => _isLoading = true);
 
   try {
     final messages = await _dbHelper.getMessages(
       groupId: widget.groupId,
     );
-    print('🔵 [DEBUG] Retrieved ${messages.length} messages from database');
+    
    
     final db = await _dbHelper.database;
     final userProfile = await db.query('profile', limit: 1);
@@ -430,14 +430,14 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
 
     // Only scroll to bottom on first load
     if (isInitialLoad) {
-      print('🔵 [DEBUG] First load, scrolling to first unread or bottom');
+      
       _scrollToFirstUnreadOrBottom();
       _isInitialLoad = false;
     }
 
   } catch (e, stackTrace) {
-    print('🔴 [DEBUG] Error loading messages: $e');
-    print('🔴 [DEBUG] Stack trace: $stackTrace');
+    
+    
     
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -532,11 +532,11 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
   }
 
   void _scrollToMessage(String messageId) {
-    print('🔵 [ChatScreen] Scrolling to message: $messageId');
+    
     // Find the message in the flattened messages list
     final index = _messages.indexWhere((msg) => msg['id'].toString() == messageId);
     if (index != -1) {
-      print('🔵 [ChatScreen] Found message at index: $index');
+      
       // Calculate the scroll position based on the message index
       final scrollPosition = (_messages.length - index - 1) * 100.0;
 
@@ -579,7 +579,7 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
         }
       });
     } else {
-      print('🔵 [ChatScreen] Message not found: $messageId');
+      
     }
   }
 
@@ -595,7 +595,7 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
         'attachment_url': message['attachment_url'],
       };
     });
-    print('🔵 [ChatScreen] Reply message set: $_replyingToMessage, type: ${_replyingToMessage?['type']}');
+    
   }
 
   Future<void> _getCurrentUserId() async {
@@ -608,7 +608,7 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
         });
       }
     } catch (e) {
-      print('Error getting current user ID: $e');
+      
     }
   }
 
@@ -622,7 +622,7 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
         });
       }
     } catch (e) {
-      print('Error getting token: $e');
+      
     }
   }
 
@@ -740,56 +740,56 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
   }
 
   void _initializeWebSocket() {
-    print('🔵 [DEBUG] Initializing WebSocket connection');
+    
     
     // Set up message handler
     _wsService.onMessageReceived = (data) {
       if (!mounted) {
-        print('🔴 [DEBUG] Widget not mounted, ignoring message');
+        
         return;
       }
       
-      print('🔵 [DEBUG] Received WebSocket message: ${data['type']}');
-       print('🔵 [DEBUG] nnnnn ${data}');
+      
+       
        
       try {
         if (data['type'] == 'initial_messages') {
           _handleInitialMessages(data['messages']);
         } else if (data['type'] == 'message' || data['type'] == 'new_message') {
-          print('🔵 [DEBUG] Handling new message from WebSocket');
+          
           _handleNewMessage(data);
         } else if (data['type'] == 'update_message_status') {
           _handleMessageStatusUpdate(data);
         } else if (data['type'] == 'message_id_update') {
           _handleMessageIdUpdate(data);
         } else if (data['type'] == 'typing') {
-          print('🔵 [DEBUG] Handling typing status from WebSocket with data: $data');
+          
           _handleTypingStatus(data);
         }
       } catch (e, stackTrace) {
-        print('🔴 [DEBUG] Error handling WebSocket message: $e');
-        print('🔴 [DEBUG] Stack trace: $stackTrace');
+        
+        
       }
     };
     
     // Initialize WebSocket connection
     if (widget.groupId != null) {
-      print('🔵 [DEBUG] Connecting to group: ${widget.groupId}');
+      
       try {
         _wsService.initialize(widget.groupId.toString());
-        print('🔵 [DEBUG] WebSocket initialization completed');
+        
       } catch (e, stackTrace) {
-        print('🔴 [DEBUG] Error initializing WebSocket: $e');
-        print('🔴 [DEBUG] Stack trace: $stackTrace');
+        
+        
       }
     } else {
-      print('🔴 [DEBUG] No group ID available for WebSocket connection');
+      
     }
   }
 
   void _handleInitialMessages(List<dynamic> messages) {
     if (!mounted) return; // Don't process if widget is disposed
-    print('🔵 [ChatScreen] Handling initial messages: ${messages.length} messages');
+    
     setState(() {
       _messages = messages.map((message) {
         final isMe = message['sender_id'].toString() == _currentUserId;
@@ -817,7 +817,7 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
    
 
     if (groupId != widget.groupId.toString()) {
-      print('🔵 [DEBUG] Group ID mismatch, skipping update');
+      
       return;
     }
 
@@ -826,7 +826,7 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
       final index = _messages.indexWhere((msg) =>
           msg['temp_id']?.toString() == oldId || msg['id'].toString() == oldId);
 
-      print('🔵 [DEBUG] Found message at index: $index');
+      
       if (index != -1) {
     
 
@@ -840,7 +840,7 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
 
         _groupedMessages = MessageSort.groupMessagesByDate(_messages);
       } else {
-        print('🔵 [DEBUG] No matching message found for update');
+        
       }
     });
 
@@ -872,13 +872,13 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
     final status = data['status'];
     final groupId = data['group_id']?.toString();
 
-    print('🔵 [DEBUG] Message Status Update:');
-    print('🔵 [DEBUG] Message ID: $messageId');
-    print('🔵 [DEBUG] New Status: $status');
-    print('🔵 [DEBUG] Group ID: $groupId');
+    
+    
+    
+    
 
     if (groupId != null && groupId != widget.groupId.toString()) {
-      print('🔵 [DEBUG] Group ID mismatch, skipping update');
+      
       return;
     }
 
@@ -887,7 +887,7 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
       for (int i = 0; i < _messages.length; i++) {
         if (_messages[i]['id']?.toString() == messageId || 
             _messages[i]['temp_id']?.toString() == messageId) {
-          print('🔵 [DEBUG] Updating message status at index $i');
+          
           _messages[i]['status'] = status;
           break;
         }
@@ -900,7 +900,7 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
 
     // Update badge count if the message status indicates it was read
     if (status == 'read' && groupId != null && groupId == widget.groupId.toString()) {
-      print('🔵 [DEBUG] Updating badge count for read message');
+      
       NotificationService().updateBadgeCountFromDatabase();
     }
 
@@ -1007,7 +1007,7 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
 
       // Insert into database and update UI immediately
       await _dbHelper.insertMessage(dbMessage);
-      print('🔵 [DEBUG] Message inserted into database');
+      
      
       // Mark as "sent" in UI immediately for better UX
       setState(() {
@@ -1020,21 +1020,21 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
       });
      
       try {
-        print('🔵 [DEBUG] Sending message through WebSocket');
+        
         await _wsService.sendMessage(wsMessage);
-        print('🔵 [DEBUG] Message sent successfully through WebSocket');
+        
         
         // Update status to 'sent' in database after successful WebSocket send
         await _dbHelper.updateMessageStatus(tempId, 'sent');
-        print('🔵 [DEBUG] Updated message status to sent in database');
+        
       
         setState(() {
           _replyingToMessage = null;
         });
       
       } catch (e) {
-        print('🔴 [DEBUG] Error in WebSocket send: $e');
-        print('🔴 [DEBUG] Stack trace: ${StackTrace.current}');
+        
+        
         
         // Update status to 'failed' if WebSocket send fails
         await _dbHelper.updateMessageStatus(tempId, 'failed');
@@ -1042,7 +1042,7 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
         setState(() {
           final index = _messages.indexWhere((msg) => msg['temp_id'] == tempId);
           if (index != -1) {
-            print('🔵 [DEBUG] Updating message status to failed');
+            
             _messages[index]['status'] = 'failed';
             _messages = MessageSort.sortMessagesByDate(_messages);
             _groupedMessages = MessageSort.groupMessagesByDate(_messages);
@@ -1148,7 +1148,7 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
 
       // Update status to 'sent' in database after successful WebSocket send
       await _dbHelper.updateMessageStatus(tempId, 'sent');
-      print('🔵 [DEBUG] Updated image message status to sent in database');
+      
 
       setState(() {
         _replyingToMessage = null;
@@ -1156,7 +1156,7 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
       widget.onMessageSent?.call();
   
     } catch (e) {
-       print("Failed to send image: $e");
+       
       
       // Update status to 'failed' if WebSocket send fails
       await _dbHelper.updateMessageStatus(tempId, 'failed');
@@ -1265,7 +1265,7 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
 
       // Update status to 'sent' in database after successful WebSocket send
       await _dbHelper.updateMessageStatus(tempId, 'sent');
-      print('🔵 [DEBUG] Updated audio message status to sent in database');
+      
 
       setState(() {
         _replyingToMessage = null;
@@ -1365,7 +1365,7 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
   }
 
  void _handleTypingStatus(Map<String, dynamic> data) {
-  print('🔵 [ChatScreen] Handling typing status: $data');
+  
     final groupId = data['room_id']?.toString();
     final username = data['username']?.toString();
     final isTyping = data['isTyping'] as bool? ?? false;
@@ -1463,9 +1463,9 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
             blurhash: newMessage['blurhash'],
             
           );
-          print('🔵 [ChatScreen] Inserted media entry for message');
+          
         } else {
-          print('🔴 [ChatScreen] No attachment_url for media message');
+          
         }
       }
       if (newMessage['isMe'] == 0) {
@@ -1477,7 +1477,7 @@ Future<void> _loadMessages({bool isInitialLoad = false}) async {
       }
     }
   } catch (e) {
-    print('🔴 Error handling new message: $e');
+    
   }
 }
 void _markVisibleMessagesAsRead() {
@@ -1510,7 +1510,7 @@ void _markVisibleMessagesAsRead() {
   }
 }
 Future<void> _markMessageAsRead(String messageId) async {
-  print('🔵 [ChatScreen] Marking message as read: $messageId');
+  
   try {
     // Update database (stream will handle UI update)
     await _dbHelper.updateMessageStatus(messageId, 'read');
@@ -1527,14 +1527,14 @@ Future<void> _markMessageAsRead(String messageId) async {
 
     NotificationService().updateBadgeCountFromDatabase();
   } catch (e) {
-    print('🔴 [ChatScreen] Error marking message as read: $e');
+    
   }
 }
 
   void _scrollToUnreadMessages() {
-    print('🔵 [ChatScreen] Scrolling to unread messages...');
+    
     if (_unreadMessageIds.isEmpty) {
-      print('🔵 [ChatScreen] No unread messages to scroll to');
+      
       return;
     }
 
@@ -1543,7 +1543,7 @@ Future<void> _markMessageAsRead(String messageId) async {
     );
 
     if (unreadIndex != -1) {
-      print('🔵 [ChatScreen] Found unread message at index: $unreadIndex');
+      
       final scrollPosition = (_messages.length - unreadIndex - 1) * 100.0;
       
       _scrollController.animateTo(
@@ -1554,24 +1554,24 @@ Future<void> _markMessageAsRead(String messageId) async {
 
       // Mark messages as read after scrolling
       Future.delayed(const Duration(milliseconds: 500), () {
-        print('🔵 [ChatScreen] Marking messages as read after scroll');
+        
         for (var i = unreadIndex; i < _messages.length; i++) {
           final messageId = _messages[i]['id'].toString();
           if (_unreadMessageIds.contains(messageId)) {
-            print('🔵 [ChatScreen] Marking message as read: $messageId');
+            
             _markMessageAsRead(messageId);
           }
         }
       });
     } else {
-      print('🔵 [ChatScreen] Could not find unread message in messages list');
+      
     }
   }
 
   void _onMessageVisible(String messageId) {
-    print('🔵 [ChatScreen] Message became visible: $messageId');
+    
     if (_unreadMessageIds.contains(messageId)) {
-      print('🔵 [ChatScreen] Marking visible message as read: $messageId');
+      
       _markMessageAsRead(messageId);
     }
   }
@@ -1823,7 +1823,7 @@ Future<void> _markMessageAsRead(String messageId) async {
               replyToId: _replyingToMessage?['id']?.toString(),
               replyingToMessage: _replyingToMessage,
               onCancelReply: () {
-                print('🔵 [ChatScreen] Cancelling reply');
+                
                 setState(() => _replyingToMessage = null);
               },
               audioFunctions: _audioFunctions,
@@ -2096,7 +2096,7 @@ Future<void> _markMessageAsRead(String messageId) async {
       });
       NotificationService().updateBadgeCountFromDatabase();
     } catch (e) {
-      print('🔴 Error marking messages as read: $e');
+      
     }
   }
 
@@ -2109,7 +2109,7 @@ Future<void> _markMessageAsRead(String messageId) async {
 
   // Modify _initializeUnreadMessages to properly reset state
 Future<void> _initializeUnreadMessages() async {
-    print('🔵 Initializing unread messages...');
+    
     if (widget.groupId == null) return;
     try {
       final db = await _dbHelper.database;
@@ -2124,9 +2124,9 @@ Future<void> _initializeUnreadMessages() async {
         _hasUnreadMessages = _unreadMessageIds.isNotEmpty;
         _showUnreadBadge = _hasUnreadMessages;
       });
-      print('🔵 Found ${_unreadMessageIds.length} unread messages');
+      
     } catch (e) {
-      print('🔴 Error initializing unread messages: $e');
+      
     }
   }
 
@@ -2145,7 +2145,7 @@ void _updateUnreadMessages() {
       .toList();
   _hasUnreadMessages = _unreadMessageIds.isNotEmpty;
   _showUnreadBadge = _hasUnreadMessages;
-  print('🔵 [ChatScreen] Found ${_unreadMessageIds.length} unread messages');
+  
 }
 
   // Add this new method to calculate unread badge position
@@ -2250,7 +2250,7 @@ void _updateUnreadMessages() {
 
   // Add this new function to resend pending messages
   Future<void> _resendPendingMessages() async {
-    print('🔵 [ChatScreen] Checking for pending messages to resend...');
+    
     try {
       final db = await _dbHelper.database;
       final pendingMessages = await db.query(
@@ -2260,7 +2260,7 @@ void _updateUnreadMessages() {
       );
 
       if (pendingMessages.isEmpty) {
-        print('🔵 [ChatScreen] No pending messages found');
+        
         return;
       }
 
@@ -2284,7 +2284,7 @@ void _updateUnreadMessages() {
 
           // Send message through WebSocket
           await _wsService.sendMessage(wsMessage);
-          print('🔵 [ChatScreen] Resent message with temp_id: ${message['temp_id']}');
+          
 
           // Update UI
           setState(() {
@@ -2297,7 +2297,7 @@ void _updateUnreadMessages() {
             }
           });
         } catch (e) {
-          print('🔴 [ChatScreen] Error resending message: $e');
+          
           // Update message status to failed if resend fails
           await _dbHelper.updateMessageStatus(
             message['id'].toString(), 
@@ -2306,7 +2306,7 @@ void _updateUnreadMessages() {
         }
       }
     } catch (e) {
-      print('🔴 [ChatScreen] Error in _resendPendingMessages: $e');
+      
     }
   }
 

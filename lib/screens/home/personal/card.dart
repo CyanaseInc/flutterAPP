@@ -129,13 +129,13 @@ class _NetworthCardState extends State<NetworthCard> {
   }
 
   convert() async {
-    print('$currency $networthForeign');
+    
     var conversion = Conversion(currency, double.parse(networthForeign), 'usd');
     var result = await conversion.executeConversion();
     setState(() {
       networth = result;
     });
-    print(result);
+    
   }
 
   @override

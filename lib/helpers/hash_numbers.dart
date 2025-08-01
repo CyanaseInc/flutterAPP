@@ -69,7 +69,7 @@ Future<List<Map<String, String>>> fetchAndHashContacts() async {
             'normalizedPhone': normalizedNumber, // Normalized phone number
           });
         } catch (e) {
-          print('Error processing ${contact.displayName}: $e');
+          
         }
       }
     }

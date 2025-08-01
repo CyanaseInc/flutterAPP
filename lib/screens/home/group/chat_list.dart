@@ -90,7 +90,7 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
     _unreadCountStreamSubscription = _dbHelper.unreadCountStream.listen((groupUnreadCounts) {
       if (!_mounted) return;
       
-      print('🔵 [ChatList] Received unread count update: $groupUnreadCounts');
+      
       
       setState(() {
         // Update unread counts
@@ -127,7 +127,7 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
     _messageStreamSubscription = _dbHelper.messageStream.listen((groupMessages) {
       if (!_mounted) return;
       
-      print('🔵 [ChatList] Received message stream update: ${groupMessages.length} groups');
+      
       
       setState(() {
         for (final entry in groupMessages.entries) {
@@ -139,7 +139,7 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
             final chatIndex = _allChats.indexWhere((chat) => chat['id'].toString() == groupId);
             
             if (chatIndex != -1) {
-              print('🔵 [ChatList] Updating chat for group $groupId with status: ${lastMessage['status']}');
+              
               
               // Update chat with new message
               _allChats[chatIndex] = {
@@ -170,7 +170,7 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
     WebSocketService.instance.onMessageReceived = (data) {
       if (!_mounted) return;
       
-      print('🔵 [ChatList] Received WebSocket message: $data');
+      
       
       try {
         if (data['type'] == 'new_message') {
@@ -200,7 +200,7 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
             _handleMessageIdUpdate(groupId, oldId, newId, status);
           }
         } else if (data['type'] == 'typing') {
-          print('🔵 [ChatList] Handling typing status: $data');
+          
           final groupId = data['room_id']?.toString();
           final username = data['username']?.toString();
           final isTyping = data['isTyping'] as bool? ?? false;
@@ -220,8 +220,8 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
           }
         }
       } catch (e, stackTrace) {
-        print('🔴 [ChatList] Error processing WebSocket message: $e');
-        print('🔴 [ChatList] Stack trace: $stackTrace');
+        
+        
       }
     };
 
@@ -229,7 +229,7 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
     ChatWebSocketService.instance.onMessageReceived = (data) {
       if (!_mounted) return;
       
-      print('🔵 [ChatList] Received ChatWebSocket message: $data');
+      
       
       try {
         if (data['type'] == 'update_message_status') {
@@ -252,8 +252,8 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
           }
         }
       } catch (e, stackTrace) {
-        print('🔴 [ChatList] Error processing ChatWebSocket message: $e');
-        print('🔴 [ChatList] Stack trace: $stackTrace');
+        
+        
       }
     };
   }
@@ -296,7 +296,7 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
   Future<void> _handleMessageStatusUpdate(String groupId, String status, String? messageId) async {
     if (!_mounted) return;
 
-    print('🔵 [ChatList] Handling message status update: groupId=$groupId, status=$status, messageId=$messageId');
+    
 
     try {
       // Update the database first
@@ -346,10 +346,10 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
           widget.onUnreadCountChanged?.call(_totalUnreadCount);
         });
         
-        print('🔵 [ChatList] Updated chat status for group $groupId: $status');
+        
       }
     } catch (e) {
-      print('🔴 [ChatList] Error handling message status update: $e');
+      
     }
   }
 
@@ -568,7 +568,7 @@ Future<void> _handleNewMessage(String groupId, Map<String, dynamic> message) asy
             blurhash: messageData['blurhash'],
             
           );
-          print('🔵 [ChatScreen] Inserted media entry for message $messageId: and url $attachmentUrl');
+          
         } 
       debugPrint('🟢 [7] Message inserted successfully');
       // Verify insertion
@@ -621,11 +621,11 @@ Future<void> _handleNewMessage(String groupId, Map<String, dynamic> message) asy
     }
 
     _isConnecting = true;
-    print('🔵 Starting WebSocket initialization...');
+    
 
     // Close existing connection if any
     if (_channel != null) {
-      print('🔵 Closing existing WebSocket connection');
+      
       _channel?.sink.close();
       _channel = null;
     }
@@ -641,11 +641,11 @@ Future<void> _handleNewMessage(String groupId, Map<String, dynamic> message) asy
       _userId = userProfile.first['user_id'] as String? ?? '145';
 
       final wsUrl = 'ws://${ApiEndpoints.myIp}/ws/chat-list/?token=$token';
-      print('🔵 Connecting to WebSocket: $wsUrl');
+      
 
       try {
         _channel = WebSocketChannel.connect(Uri.parse(wsUrl));
-        print('🔵 WebSocket connected successfully');
+        
         _reconnectAttempts = 0;
 
         _channel?.stream.listen(
@@ -656,12 +656,12 @@ Future<void> _handleNewMessage(String groupId, Map<String, dynamic> message) asy
               if (response['type'] == 'chat_list') {
                 final chatList = List<Map<String, dynamic>>.from(response['chat_list'] ?? []);
                 if (chatList.isEmpty) {
-                  print('🔵 No chat list data received');
+                  
                   return;
                 }
                 await processGroupData({'success': true, 'data': chatList});
               } else if (response['type'] == 'new_message') {
-                print('🔵 Processing new_message $response');
+                
                 final message = response['message'];
                 if (message != null && message['room_id'] != null) {
                   final groupId = message['room_id'].toString();
@@ -681,16 +681,16 @@ Future<void> _handleNewMessage(String groupId, Map<String, dynamic> message) asy
                   _handleTypingStatus(groupId, response['username'], response['isTyping']);
                 }
               } else {
-                print('🔵 Unknown message type received: ${response['type']}');
+                
               }
             } catch (e, stackTrace) {
-              print('🔴 Error processing WebSocket message: $e');
-              print('🔴 Stack trace: $stackTrace');
+              
+              
             }
           },
           onError: (error, stackTrace) {
-            print('🔴 WebSocket error: $error');
-            print('🔴 Stack trace: $stackTrace');
+            
+            
             if (mounted) {
               // ScaffoldMessenger.of(context).showSnackBar(
               //   SnackBar(content: Text('Check your internet connection')),
@@ -699,12 +699,12 @@ Future<void> _handleNewMessage(String groupId, Map<String, dynamic> message) asy
             _attemptReconnect();
           },
           onDone: () {
-            print('🔵 WebSocket connection closed');
+            
             _attemptReconnect();
           },
         );
       } catch (e) {
-        print('🔴 Error establishing WebSocket connection: $e');
+        
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Failed to establish connection: $e')),
@@ -713,7 +713,7 @@ Future<void> _handleNewMessage(String groupId, Map<String, dynamic> message) asy
         _attemptReconnect();
       }
     } catch (e) {
-      print('🔴 Error in _initializeWebSocket: $e');
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to connect: $e')),
@@ -727,7 +727,7 @@ Future<void> _handleNewMessage(String groupId, Map<String, dynamic> message) asy
 
   void _attemptReconnect() {
     if (_reconnectAttempts >= maxReconnectAttempts) {
-      // print('🔴 Max reconnection attempts reached');
+      // 
       // // if (mounted) {
       // //   ScaffoldMessenger.of(context).showSnackBar(
       // //     const SnackBar(content: Text('Connection lost. Please restart the app.')),
@@ -737,7 +737,7 @@ Future<void> _handleNewMessage(String groupId, Map<String, dynamic> message) asy
     }
 
     _reconnectAttempts++;
-    print('🔵 Attempting to reconnect (attempt $_reconnectAttempts of $maxReconnectAttempts)...');
+    
 
     final delay = Duration(seconds: min(30, pow(2, _reconnectAttempts).toInt()));
     Future.delayed(delay, () {
@@ -982,7 +982,7 @@ Future<void> _handleNewMessage(String groupId, Map<String, dynamic> message) asy
           widget.onProfilePicChanged?.call(groupId, profilePic);
         }
       } catch (e) {
-        print('Error processing group ${groupData['groupId']}: $e');
+        
       }
     }
 
@@ -1044,7 +1044,7 @@ Future<void> _handleNewMessage(String groupId, Map<String, dynamic> message) asy
         groupId: groupId,
       );
     } catch (e) {
-      print('🔴 [ChatList] Error showing notification: $e');
+      
     }
   }
 
@@ -1122,7 +1122,7 @@ Future<void> _handleNewMessage(String groupId, Map<String, dynamic> message) asy
       for (var group in groups) {
         final isApproved = await _isUserApproved(group['id']);
       if (!isApproved) {
-        print('🔵 [ChatList] Skipping group ${group['id']} (user not approved)');
+        
         continue;
       }
 
@@ -1185,8 +1185,8 @@ Future<void> _handleNewMessage(String groupId, Map<String, dynamic> message) asy
       
       });
   } catch (e, stackTrace) {
-      print('🔴 [ChatList] Error loading chats: $e');
-    print('🔴 [ChatList] Stack trace: $stackTrace');
+      
+    
     }
     return _allChats;
   }
@@ -1256,7 +1256,7 @@ Future<void> _handleNewMessage(String groupId, Map<String, dynamic> message) asy
   void _handleMessageIdUpdate(String groupId, String oldId, String newId, String? status) {
     if (!_mounted) return;
     
-    print('🔵 [ChatList] Handling message ID update: $oldId -> $newId, status: $status');
+    
     
     setState(() {
       final chatIndex = _allChats.indexWhere((chat) => chat['id'].toString() == groupId);
@@ -1341,7 +1341,7 @@ Future<void> _handleNewMessage(String groupId, Map<String, dynamic> message) asy
         });
       }
     } catch (e) {
-      print('🔴 [ChatStatusChecker] Error checking chat message status: $e');
+      
     }
   }
 }

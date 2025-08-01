@@ -115,7 +115,7 @@ class _PayHelperState extends State<PayHelper> {
       if (!requestPayment['success']) {
         throw Exception(requestPayment['message'] ?? 'Payment request failed');
       }
-      print('request is goo we have $requestPayment');
+      
       // Wait for transaction status (adjust delay as needed)
       await Future.delayed(const Duration(seconds: 25));
       final authPayment = await ApiService.getTransaction(
@@ -124,8 +124,8 @@ class _PayHelperState extends State<PayHelper> {
       );
 
       final internalRef = authPayment['transaction']['internal_reference'];
-
-      if (authPayment['success']) {
+  
+      if (authPayment['success']=='success') {
         final data = {
           "group_id": widget.groupId,
           "msisdn": phoneNumber,
@@ -135,6 +135,7 @@ class _PayHelperState extends State<PayHelper> {
           "type": widget.paymentType,
         };
         final groupSubcription = await ApiService.groupSbscription(token, data);
+
 
         if (groupSubcription['success']) {
           if (mounted) {
@@ -154,10 +155,10 @@ class _PayHelperState extends State<PayHelper> {
       }
     } catch (e) {
       if (mounted) {
-        print('Error: ${e.toString()}');
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error: ${e.toString()}'),
+            content: Text('Failed to process payment, check your balance and try again'),
             duration: const Duration(seconds: 8),
           ),
         );

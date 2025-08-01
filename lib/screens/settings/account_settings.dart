@@ -161,7 +161,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
       _newPasswordController.clear();
       _confirmPasswordController.clear();
     } catch (e) {
-      print('Password change error: $e');
+      
       String errorMessage = 'Failed to change password. Please try again.';
 
       if (e.toString().contains('401')) {
@@ -217,7 +217,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
         });
       }
     } catch (e) {
-      print('Failed to fetch Next of Kin: $e');
+      
     }
   }
 
@@ -274,7 +274,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
         );
       }
     } catch (e) {
-      print('Next of Kin save error: $e');
+      
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content:

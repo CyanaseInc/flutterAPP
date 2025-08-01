@@ -39,15 +39,15 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
 
   Future<void> _initializeWebSocket() async {
     try {
-      print('Initializing WebSocket for group ${widget.groupId}');
+      
       await ChatWebSocketService.instance.initialize(widget.groupId.toString());
       if (ChatWebSocketService.instance.isConnected) {
-        print('WebSocket connected successfully');
+        
       } else {
-        print('WebSocket initialization failed');
+        
       }
     } catch (e) {
-      print('Error initializing WebSocket: $e');
+      
     }
   }
 
@@ -68,7 +68,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
         });
       }
     } catch (e) {
-      print('Error fetching pending requests: $e');
+      
       if (mounted) {
         setState(() => _isLoading = false);
       }
@@ -143,7 +143,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
       try {
         await ChatWebSocketService.instance.sendMessage(wsMessage);
       } catch (e) {
-        print('WebSocket send error: $e');
+        
         // Queue message if WebSocket fails
         await _dbHelper.insertMessage({
           'group_id': widget.groupId.toString(),
@@ -171,7 +171,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
         );
       }
     } catch (e) {
-      print('Error approving request: $e');
+      
       setState(() {
         _pendingRequests = originalRequests;
         _processingUserId = null;
@@ -254,7 +254,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
       try {
         await ChatWebSocketService .instance.sendMessage(wsMessage);
       } catch (e) {
-        print('WebSocket send error: $e');
+        
         // Queue message if WebSocket fails
         await _dbHelper.insertMessage({
           'group_id': widget.groupId.toString(),
@@ -355,7 +355,7 @@ class _PendingRequestsScreenState extends State<PendingRequestsScreen> {
 
   Widget _buildAvatar(String? profilePic, String name) {
 
-  print('my mour $profilePic');
+  
     final avatarUrl = profilePic != null && profilePic.isNotEmpty
         ? '${ApiEndpoints.server}/media/$profilePic'
         : null;

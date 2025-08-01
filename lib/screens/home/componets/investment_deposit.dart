@@ -70,7 +70,7 @@ class _DepositState extends State<Deposit> {
         _isLoading = false; // Set loading to false after data is fetched
       });
     } catch (e) {
-      print('Error fetching investment data: $e');
+      
       setState(() {
         _isLoading = false; // Stop loading even if there's an error
       });

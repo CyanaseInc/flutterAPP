@@ -99,7 +99,7 @@ class _GoalDetailsScreenState extends State<GoalDetailsScreen> {
       );
       Navigator.pop(context, editableGoalData);
     } catch (e) {
-      print('Error in _saveChanges: $e');
+      
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to save changes: $e')),
       );
@@ -145,7 +145,7 @@ class _GoalDetailsScreenState extends State<GoalDetailsScreen> {
         throw Exception(response?['message'] ?? 'Failed to delete goal');
       }
     } catch (e) {
-      print('Error in deleting goal: $e');
+      
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Check your connection')),
       );

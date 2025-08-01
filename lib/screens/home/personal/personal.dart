@@ -59,7 +59,7 @@ class _PersonalTabState extends State<PersonalTab> {
         Phonenumber = userPhone;
       });
     } catch (e) {
-      print('Error fetching phone number: $e');
+      
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Failed to load profile data')),
       );
@@ -79,7 +79,7 @@ class _PersonalTabState extends State<PersonalTab> {
         _showSubscriptionReminder();
       }
     } catch (e) {
-      print('Error checking subscription: $e');
+      
     }
   }
 
@@ -289,7 +289,7 @@ class _PersonalTabState extends State<PersonalTab> {
                 Loader(),
                 SizedBox(height: 16),
                 Text(
-                  'Processing Payment...',
+                  'Processing Payment ....',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
@@ -342,11 +342,13 @@ class _PersonalTabState extends State<PersonalTab> {
       final authPayment =
           await ApiService.getTransaction(token, requestPayment);
       // Close loading dialog
+      
       Navigator.pop(context);
 
       // Show result dialog
       _showPaymentResultDialog(
           context, authPayment['success'], authPayment['message']);
+
     } catch (e) {
       // Close loading dialog
       Navigator.pop(context);
@@ -497,91 +499,91 @@ class _PersonalTabState extends State<PersonalTab> {
         }
       }
     } catch (e) {
-      print('Error fetching deposit/networth: $e');
+      
     }
   }
 
   @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Align(
-              alignment: Alignment.topRight,
-              child: OutlinedButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => Portfolio(currency: currency),
-                    ),
-                  );
-                },
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: primaryTwo),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
+ @override
+@override
+Widget build(BuildContext context) {
+  return SingleChildScrollView(
+    physics: const ClampingScrollPhysics(),
+    child: Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Align(
+            alignment: Alignment.topRight,
+            child: OutlinedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => Portfolio(currency: currency),
                   ),
-                ),
-                child: const Text(
-                  'My Portfolio',
-                  style: TextStyle(
-                    color: primaryTwo,
-                  ),
+                );
+              },
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: primaryTwo),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
                 ),
               ),
-            ),
-            const SizedBox(height: 20),
-            TotalDepositsCard(
-              depositLocal: formatNumberWithCommas(_totalDepositUGX),
-              depositForeign: formatNumberWithCommas(_totalDepositUSD),
-              currency: currency,
-            ),
-            const SizedBox(height: 10),
-            DepositWithdrawButtons(),
-            const SizedBox(height: 10),
-            NetworthCard(
-              networthLocal: formatNumberWithCommas(_totalNetworthy),
-              currency: currency,
-              networthForeign: formatNumberWithCommas(_totalNetworthyUSD),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'Investment options',
-              style: TextStyle(
-                color: primaryTwo,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
+              child: const Text(
+                'My Portfolio',
+                style: TextStyle(
+                  color: primaryTwo,
+                ),
               ),
             ),
-            const SizedBox(height: 12),
-            FundManagerSlider(),
-            const SizedBox(height: 20),
-            const Text(
-              'My Goals',
-              style: TextStyle(
-                color: primaryTwo,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
+          ),
+          const SizedBox(height: 20),
+          TotalDepositsCard(
+            depositLocal: formatNumberWithCommas(_totalDepositUGX),
+            depositForeign: formatNumberWithCommas(_totalDepositUSD),
+            currency: currency,
+          ),
+          const SizedBox(height: 10),
+          DepositWithdrawButtons(),
+          const SizedBox(height: 10),
+          NetworthCard(
+            networthLocal: formatNumberWithCommas(_totalNetworthy),
+            currency: currency,
+            networthForeign: formatNumberWithCommas(_totalNetworthyUSD),
+          ),
+          const SizedBox(height: 20),
+          const Text(
+            'Investment options',
+            style: TextStyle(
+              color: primaryTwo,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
             ),
-            const SizedBox(height: 12),
-            SizedBox(
-              height: 500,
-              child: SampleGoals(
-                onGoalTap: () {
-                  widget.tabController.animateTo(2);
-                },
-              ),
+          ),
+          const SizedBox(height: 12),
+          FundManagerSlider(),
+          const SizedBox(height: 20),
+          const Text(
+            'My Goals',
+            style: TextStyle(
+              color: primaryTwo,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
             ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 12),
+          SampleGoals(
+            onGoalTap: () {
+              widget.tabController.animateTo(2);
+            },
+          ),
+        ],
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 // Helper function to format phone number

@@ -11,15 +11,15 @@ if (localPropertiesFile.exists()) {
         localProperties.load(reader)
     }
 }
+def flutterVersionCode = 7
+def flutterVersionName = "1.0.7"
 
-def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
-if (flutterVersionCode == null) {
-    flutterVersionCode = '1'
-}
 
-def flutterVersionName = localProperties.getProperty('flutter.versionName')
-if (flutterVersionName == null) {
-    flutterVersionName = '1.0'
+// Load keystore credentials from local.properties
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file("local.properties")
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
 }
 
 android {
@@ -39,15 +39,30 @@ android {
 
     defaultConfig {
         applicationId "com.cyanase.app"
-        minSdkVersion 24
-        targetSdkVersion 35
-        versionCode flutterVersionCode.toInteger()
-        versionName flutterVersionName
+    minSdkVersion 24
+    targetSdkVersion 35
+    versionCode flutterVersionCode
+    versionName flutterVersionName
+    }
+
+    signingConfigs {
+        release {
+            storeFile file(keystoreProperties['storeFile'])
+            storePassword keystoreProperties['storePassword']
+            keyAlias keystoreProperties['keyAlias']
+            keyPassword keystoreProperties['keyPassword']
+        }
     }
 
     buildTypes {
         release {
-            signingConfig signingConfigs.debug
+            signingConfig signingConfigs.release
+            minifyEnabled false
+            shrinkResources false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            signingConfig signingConfigs.release // optional: use same key for debug builds
         }
     }
 }
@@ -61,15 +76,15 @@ dependencies {
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'
 }
 
-// Add this new configuration for all subprojects (including plugins)
+// Apply consistent compileSdk to all subprojects (plugins)
 subprojects {
     afterEvaluate { project ->
         if (project.hasProperty("android")) {
             android {
+                compileSdkVersion 35
                 if (namespace == null) {
                     namespace = "com.${project.name.toLowerCase()}"
                 }
-                compileSdkVersion 35
             }
         }
     }

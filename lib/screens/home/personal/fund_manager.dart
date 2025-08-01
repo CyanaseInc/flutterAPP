@@ -72,7 +72,7 @@ class _FundManagerSliderState extends State<FundManagerSlider> {
         _isLoading = false;
       });
     } catch (e) {
-      print('Error fetching investment data: $e');
+      
       setState(() {
         _isLoading = false;
       });

@@ -69,13 +69,13 @@ class _GoalsTabState extends State<GoalsTab> {
         setState(() {
           isLoading = false;
         });
-        print('No goals found in response or invalid format');
+        
       }
     } catch (e) {
       setState(() {
         isLoading = false;
       });
-      print('Error fetching goals: $e');
+      
       if (Platform.isIOS) {
         showCupertinoDialog(
           context: context,

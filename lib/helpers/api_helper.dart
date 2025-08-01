@@ -62,7 +62,7 @@ class ApiService {
       }
     } catch (e) {
       // Catch any errors and log them for debugging
-      print('Error during sign up: $e');
+      
       throw Exception('Error during sign up: $e');
     }
   }
@@ -221,7 +221,7 @@ class ApiService {
       Map<String, dynamic> userData) async {
     final url = Uri.parse(ApiEndpoints
         .apiUrlPasswordReset); // Ensure this path matches your Django URL
-    print('userData $userData');
+    
     try {
       final response = await http.post(
         url,
@@ -230,7 +230,7 @@ class ApiService {
         },
         body: jsonEncode(userData), // userData should be directly encodable
       );
-      print('response.body ${response.body}');
+      
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
       } else {
@@ -524,7 +524,7 @@ class ApiService {
     if (response.statusCode == 200) {
       return jsonDecode(response.body);
     } else {
-      print('response.body ${response.body}');
+      
       throw Exception('Failed to payout interest: ${response.body}');
     }
   }
@@ -637,7 +637,7 @@ class ApiService {
 
       // Send the request
       var response = await request.send();
-      print('respons vvvvvve: $response.body');
+      
       // Check the response
       if (response.statusCode == 200) {
         final responseData = await response.stream.bytesToString();
@@ -983,7 +983,7 @@ class ApiService {
             'Group creation failed: ${response.statusCode} - ${responseData['message'] ?? response.body}');
       }
     } catch (e) {
-      print('Error in NewGroup: $e'); // Log error for debugging
+       // Log error for debugging
       rethrow; // Rethrow to allow caller to handle the exception
     }
   }
@@ -1081,7 +1081,7 @@ class ApiService {
         final responseData = jsonDecode(response.body) as Map<String, dynamic>;
         return responseData;
       } else {
-        print('Failed to update loan settings: ${response.body}');
+        
         throw Exception('Failed to update loan settings: ${response.body}');
       }
     } catch (e) {
@@ -1138,7 +1138,7 @@ class ApiService {
         throw Exception('Failed to update role: ${response.body}');
       }
     } catch (e) {
-      print('Error updating role: $e');
+      
       rethrow;
     }
   }
@@ -1165,7 +1165,7 @@ class ApiService {
         throw Exception('Failed to remove member: ${response.body}');
       }
     } catch (e) {
-      print('Error removing member: $e');
+      
       rethrow;
     }
   }
@@ -1240,7 +1240,7 @@ class ApiService {
             'Profile picture update failed: ${response.statusCode} - ${responseData['message'] ?? response.body}');
       }
     } catch (e) {
-      print('Error in updateGroupProfilePic: $e');
+      
       rethrow;
     }
   }
@@ -1573,8 +1573,8 @@ class ApiService {
         }),
     );
 
-      print('API Response Status: ${response.statusCode}');
-      print('API Response Body: ${response.body}');
+      
+      
 
     final responseData = jsonDecode(response.body);
 
@@ -1588,7 +1588,7 @@ class ApiService {
         throw Exception(responseData['message'] ?? 'Failed to process loan request');
       }
     } catch (e) {
-      print('API Error: $e');
+      
       throw Exception('Failed to process loan: $e');
     }
   }
@@ -1908,6 +1908,53 @@ class ApiService {
       }
     } catch (e) {
       throw Exception('Error updating notification settings: $e');
+    }
+  }
+
+  static Future<int> fetchNotificationCount(String token) async {
+    try {
+      final response = await http.get(
+        Uri.parse(ApiEndpoints.apiUrlGetNotificationSettings),
+        headers: {
+          'Authorization': 'Token $token',
+          'Content-Type': 'application/json',
+        },
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        // Assume the response contains a 'count' field or a list of notifications
+        if (data is Map && data.containsKey('count')) {
+          return data['count'] as int;
+        } else if (data is List) {
+          return data.length;
+        } else if (data is Map && data.containsKey('notifications')) {
+          return (data['notifications'] as List).length;
+        } else {
+          return 0;
+        }
+      } else {
+        throw Exception('Failed to fetch notifications: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Error fetching notifications: $e');
+    }
+  }
+static Future<Map<String, dynamic>> getAllTransactions(
+      String token) async {
+    final response = await http.get(
+      Uri.parse(ApiEndpoints.allTransactions), // Replace with your API endpoint
+      headers: {
+        'Authorization': 'Token $token',
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+      // Convert requestData to JSON
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to submit deposit: ${response.statusCode}');
+    } else {
+      return jsonDecode(response.body);
     }
   }
 

@@ -283,7 +283,7 @@ class LoginScreenState extends State<LoginScreen> {
         throw Exception('Invalid login response: Missing required fields');
       }
     } catch (e) {
-      print(e.toString().replaceAll('Exception: ', ''));
+      
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(e.toString().replaceAll('Exception: ', '')),
@@ -366,7 +366,7 @@ class LoginScreenState extends State<LoginScreen> {
                       ),
                     );
                   } catch (e) {
-                    print('Error resending code: $e');
+                    
                   }
                 },
                 child: const Text(

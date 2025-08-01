@@ -12,7 +12,7 @@ class LoansTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final summary = loansData['summary'] ?? {};
-    print(summary);
+    
     final loans = List<Map<String, dynamic>>.from(loansData['loans'] ?? []);
 
     return SingleChildScrollView(

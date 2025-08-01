@@ -41,14 +41,14 @@ class DatabaseHelper {
 
   // Path and database initialization
   Future<Database> _initDatabase() async {
-    print('Initializing database...');
+    
     // Request permissions for Android 10+
     await _requestPermissions();
 
     // Get the application documents directory instead of external storage
     final appDir = await getApplicationDocumentsDirectory();
     final dbPath = join(appDir.path, 'app_database.db');
-    print('Database path: $dbPath');
+    
 
     // Open the database with proper configuration
     return await openDatabase(
@@ -68,7 +68,7 @@ class DatabaseHelper {
     if (Platform.isAndroid) {
       final status = await Permission.storage.request();
       if (status.isDenied) {
-        print('Storage permission denied');
+        
       }
     }
   }
@@ -241,15 +241,15 @@ class DatabaseHelper {
         },
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
-      print('🔵 [DatabaseHelper] Inserted media for message $messageId');
+      
     } catch (e) {
-      print('🔴 [DatabaseHelper] Error inserting media: $e');
+      
     }
   }
 
   Future<Map<String, dynamic>?> getMedia(int messageId) async {
 
-    print('🔵 [DatabaseHelper] Fetching media for message $messageId');
+    
     final db = await database;
     final result = await db.query(
       'media',
@@ -284,7 +284,7 @@ class DatabaseHelper {
         where: 'message_id = ?',
         whereArgs: [messageId],
       );
-      print('🔵 [DatabaseHelper] Updated media for message $messageId');
+      
     }
   }
   // Insert methods
@@ -350,7 +350,7 @@ class DatabaseHelper {
         'profile_pic': participant['profile_pic'] ?? 'assets/images/avatar.png',
       };
 
-      print('🔵 [DatabaseHelper] Inserting participant with data: $participantData');
+      
 
       // Now insert the participant
       final result = await db.insert(
@@ -359,11 +359,11 @@ class DatabaseHelper {
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
 
-      print('🔵 [DatabaseHelper] Successfully inserted participant for group ${participant['group_id']}');
+      
       return result;
     } catch (e, stackTrace) {
-      print('🔴 [DatabaseHelper] Error inserting participant: $e');
-      print('🔴 [DatabaseHelper] Stack trace: $stackTrace');
+      
+      
       rethrow;
     }
   }
@@ -447,7 +447,7 @@ class DatabaseHelper {
   Future<void> insertMessage(Map<String, dynamic> message) async {
     final db = await database;
     try {
-      print('🔵 [DatabaseHelper] Inserting message with data: $message');
+      
       
       // Convert all fields to their proper types
       final messageData = {
@@ -476,12 +476,12 @@ class DatabaseHelper {
 
       // Validate required fields
       if (messageData['group_id'] == null) {
-        print('🔴 [DatabaseHelper] Invalid group_id: ${message['group_id']}');
+        
         return;
       }
 
       if (messageData['sender_id'] == null) {
-        print('🔴 [DatabaseHelper] Invalid sender_id: ${message['sender_id']}');
+        
         return;
       }
 
@@ -495,7 +495,7 @@ class DatabaseHelper {
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
 
-      print('🔵 [DatabaseHelper] Successfully inserted message, row ID: $result');
+      
       
       // Update group's last_activity
       await db.update(
@@ -515,7 +515,7 @@ class DatabaseHelper {
       final unreadCounts = await getGroupUnreadCounts();
       _unreadCountController.add(unreadCounts);
     } catch (e, stackTrace) {
-      print('🔴 [DatabaseHelper] Error inserting message: $e, StackTrace: $stackTrace');
+      
       rethrow;
     }
   }
@@ -579,7 +579,7 @@ class DatabaseHelper {
 
     return result;
     } catch (e) {
-      print('🔴 [DatabaseHelper] Error fetching messages: $e');
+      
       return [];
     }
   }
@@ -763,7 +763,7 @@ Future<String?> getgroupic(String userId) async {
         whereArgs: [messageId, messageId],
       );
       
-      print('🔵 [DatabaseHelper] Updated message $messageId status to $status');
+      
       
       // Fetch updated messages for the group and broadcast
       final messages = await getMessages(groupId: groupId);
@@ -784,15 +784,15 @@ Future<String?> getgroupic(String userId) async {
   }
 
   Future<void> verifyDatabaseIntegrity() async {
-    print('Verifying database integrity...');
+    
     final db = await database;
     final tables = ['profile', 'groups', 'participants', 'messages', 'media', 'contacts'];
     for (var table in tables) {
       try {
         final result = await db.query(table, limit: 1);
-        print('Table $table exists with ${result.length} rows');
+        
       } catch (e) {
-        print('Error checking table $table: $e');
+        
       }
     }
   }
@@ -826,7 +826,7 @@ Future<String?> getgroupic(String userId) async {
         whereArgs: [tempId],
       );
       
-      print('🔵 [DatabaseHelper] Updated message ID from $tempId to $serverId with status $status');
+      
       
       // Fetch updated messages for the group and broadcast
       final messages = await getMessages(groupId: groupId);
@@ -903,7 +903,7 @@ Future<String?> getgroupic(String userId) async {
       );
 
       if (groupExists.isEmpty) {
-        print('🔵 [DatabaseHelper] Creating group $groupId');
+        
         await db.insert('groups', {
           'id': groupId,
           'name': 'Group $groupId',
@@ -921,7 +921,7 @@ Future<String?> getgroupic(String userId) async {
         });
       }
     } catch (e) {
-      print('🔴 [DatabaseHelper] Error ensuring group exists: $e');
+      
       rethrow;
     }
   }
@@ -998,7 +998,7 @@ Future<String?> getgroupic(String userId) async {
       final messages = await getMessages(groupId: int.parse(groupId));
       _messageStreamController.add({int.parse(groupId): messages});
     } catch (e) {
-      print('🔴 Error marking messages as read: $e');
+      
     }
   }
 

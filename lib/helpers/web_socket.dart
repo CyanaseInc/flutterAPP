@@ -35,7 +35,7 @@ class ApiService {
   void connectWebSocket() {
     try {
       _webSocketChannel = IOWebSocketChannel.connect(Uri.parse(_webSocketUrl));
-      print('WebSocket connected');
+      
     } catch (e) {
       throw Exception('Failed to connect to WebSocket: $e');
     }
@@ -44,7 +44,7 @@ class ApiService {
   // Disconnect from the WebSocket server
   void disconnectWebSocket() {
     _webSocketChannel?.sink.close();
-    print('WebSocket disconnected');
+    
   }
 
   // Send a message over WebSocket
