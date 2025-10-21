@@ -4,6 +4,7 @@ import 'package:intl_phone_field/intl_phone_field.dart';
 import 'package:intl_phone_field/countries.dart';
 import 'package:sim_card_info/sim_card_info.dart';
 import '../../theme/theme.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class PhoneCountrySlide extends StatefulWidget {
   final TextEditingController phoneNumberController;
@@ -39,19 +40,31 @@ class _PhoneCountrySlideState extends State<PhoneCountrySlide> {
     _detectSimCountry();
   }
 
-  Future<void> _detectSimCountry() async {
-    try {
-      final simCardInfo = await SimCardInfo().getSimInfo();
-      if (simCardInfo != null && simCardInfo.isNotEmpty) {
-        final sim = simCardInfo.first;
-        final countryIso = sim.countryIso?.toUpperCase() ?? 'UG';
-        _updateCountryByISO(countryIso);
+  
+
+Future<void> _detectSimCountry() async {
+  try {
+    var status = await Permission.phone.status;
+    if (!status.isGranted) {
+      status = await Permission.phone.request();
+      if (!status.isGranted) {
+        _setDefaultCountry();
+        return;
       }
-    } catch (e) {
-      
+    }
+    final simCardInfo = await SimCardInfo().getSimInfo();
+    if (simCardInfo != null && simCardInfo.isNotEmpty) {
+      final sim = simCardInfo.first;
+      final countryIso = sim.countryIso?.toUpperCase() ?? 'UG';
+      _updateCountryByISO(countryIso);
+    } else {
       _setDefaultCountry();
     }
+  } catch (e) {
+    print('Error detecting SIM: $e');
+    _setDefaultCountry();
   }
+}
 
   void _setDefaultCountry() {
     _updateCountryByISO('UG');

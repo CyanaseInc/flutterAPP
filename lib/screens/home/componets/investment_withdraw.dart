@@ -155,10 +155,10 @@ class _WithdrawState extends State<Withdraw> {
               children: [
                 buildPortfolioStep(),
                 WithdrawHelper(
-                  withdrawType: 'portfolio',
-                  withdrawDetails:" Investment",
-                  
-                ),
+  withdrawType: 'portfolio',
+  withdrawDetails: "Investment",
+  investmentId: selectedPortfolio ?? "",
+),
                 _buildSuccessScreen(),
               ],
             ),
@@ -214,13 +214,17 @@ class _WithdrawState extends State<Withdraw> {
           child: ListView.builder(
             itemCount: portfoliosData.length,
             itemBuilder: (context, index) {
+              
               final portfolio = portfoliosData[index];
               final cardColor = cardColors[index % cardColors.length];
               return GestureDetector(
                 onTap: () {
+                   
                   setState(() {
-                    selectedPortfolio = portfolio['investment_option'];
+                    selectedPortfolio = portfolio['investment_id'].toString();
+
                   });
+                  
                   _pageController.nextPage(
                     duration: const Duration(milliseconds: 300),
                     curve: Curves.easeIn,

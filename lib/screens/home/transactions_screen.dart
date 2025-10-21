@@ -41,7 +41,6 @@ class _TransactionsScreenState extends State<TransactionsScreen> with SingleTick
       final token = userProfile.first['token'] as String;
 
       final response = await ApiService.getAllTransactions(token);
-
       List txs = response is List
           ? response
           : (response['transactions'] ?? response['data'] ?? []);
@@ -60,17 +59,81 @@ class _TransactionsScreenState extends State<TransactionsScreen> with SingleTick
     }
   }
 
-  IconData _typeIcon(String type) {
-    switch (type.toLowerCase()) {
-      case 'exchange to usd':
-        return Icons.flag;
-      case 'add by mobile':
-        return Icons.phone;
-      case 'add to card':
-        return Icons.credit_card;
+  Color _getIconColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'success':
+        return Colors.green[800]!;
+      case 'failed':
+        return Colors.red[800]!;
+      case 'pending':
+        return Colors.yellow[800]!;
       default:
-        return Icons.account_balance;
+        return Colors.grey[800]!;
     }
+  }
+
+  IconData _typeIcon(String type, String status) {
+    return Icons.account_balance; // Always use bank icon
+  }
+
+  Widget _statusBadge(String status, String? message) {
+    Color bgColor;
+    Color textColor;
+    IconData icon;
+    String displayText;
+
+    switch (status.toLowerCase()) {
+      case 'success':
+        bgColor = Colors.green[100]!;
+        textColor = Colors.green[800]!;
+        icon = Icons.check_circle_outline;
+        displayText = 'Success';
+        break;
+      case 'failed':
+        bgColor = Colors.red[100]!;
+        textColor = Colors.red[800]!;
+        icon = Icons.error_outline;
+        displayText = 'Failed';
+        break;
+      case 'pending':
+        bgColor = Colors.yellow[100]!;
+        textColor = Colors.yellow[800]!;
+        icon = Icons.pending_outlined;
+        displayText = 'Pending';
+        break;
+      default:
+        bgColor = Colors.grey[100]!;
+        textColor = Colors.grey[800]!;
+        icon = Icons.info_outline;
+        displayText = 'Unknown';
+    }
+
+    return Tooltip(
+      message: message ?? 'No additional details',
+      child: Container(
+        constraints: const BoxConstraints(minWidth: 80),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: textColor),
+            const SizedBox(width: 4),
+            Text(
+              displayText,
+              style: TextStyle(
+                color: textColor,
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -119,8 +182,15 @@ class _TransactionsScreenState extends State<TransactionsScreen> with SingleTick
                           const SizedBox(height: 16),
                           ElevatedButton(
                             onPressed: _fetchTransactions,
-                            style: ElevatedButton.styleFrom(backgroundColor: primaryTwo, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)), padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12)),
-                            child: const Text('Retry', style: TextStyle(color: white, fontWeight: FontWeight.bold, fontSize: 16)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: primaryTwo,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                            ),
+                            child: const Text(
+                              'Retry',
+                              style: TextStyle(color: white, fontWeight: FontWeight.bold, fontSize: 16),
+                            ),
                           ),
                         ],
                       ),
@@ -137,13 +207,20 @@ class _TransactionsScreenState extends State<TransactionsScreen> with SingleTick
                               Text(
                                 'Start a transaction to see your history here.',
                                 style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                                textAlign: TextAlign.center, // Moved textAlign here
+                                textAlign: TextAlign.center,
                               ),
                               const SizedBox(height: 16),
                               ElevatedButton(
                                 onPressed: () => Navigator.pop(context),
-                                style: ElevatedButton.styleFrom(backgroundColor: primaryTwo, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)), padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12)),
-                                child: const Text('Start Now', style: TextStyle(color: white, fontWeight: FontWeight.bold, fontSize: 16)),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: primaryTwo,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                                ),
+                                child: const Text(
+                                  'Start Now',
+                                  style: TextStyle(color: white, fontWeight: FontWeight.bold, fontSize: 16),
+                                ),
                               ),
                             ],
                           ),
@@ -152,7 +229,7 @@ class _TransactionsScreenState extends State<TransactionsScreen> with SingleTick
                           onRefresh: _fetchTransactions,
                           color: primaryTwo,
                           child: ListView.builder(
-                            padding: const EdgeInsets.all(16),
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                             itemCount: _transactions.length,
                             itemBuilder: (context, index) {
                               final tx = _transactions[index];
@@ -161,13 +238,15 @@ class _TransactionsScreenState extends State<TransactionsScreen> with SingleTick
                               final type = (tx['transaction_type']?.toString() ?? '').toLowerCase().replaceAll('_', ' ');
                               final date = tx['created'] != null ? DateTime.parse(tx['created']) : DateTime.now();
                               final time = DateFormat('HH:mm').format(date);
+                              final status = tx['status']?.toString().toLowerCase() ?? 'unknown';
+                              final message = tx['message']?.toString();
 
                               return Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   if (index == 0 || DateFormat('MMMM d, yyyy').format(DateTime.parse(_transactions[index]['created'])) != DateFormat('MMMM d, yyyy').format(DateTime.parse(_transactions[index - 1]['created'])))
                                     Padding(
-                                      padding: const EdgeInsets.only(bottom: 8),
+                                      padding: const EdgeInsets.only(bottom: 8, top: 8),
                                       child: Text(
                                         DateFormat('MMMM d, yyyy').format(date),
                                         style: TextStyle(fontWeight: FontWeight.bold, color: Colors.grey[600]),
@@ -181,14 +260,35 @@ class _TransactionsScreenState extends State<TransactionsScreen> with SingleTick
                                       borderRadius: BorderRadius.circular(8),
                                     ),
                                     child: ListTile(
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                                       leading: CircleAvatar(
-                                        backgroundColor: amount < 0 ? Colors.red[100] : Colors.green[100],
-                                        child: Icon(_typeIcon(type), color: amount < 0 ? Colors.red : Colors.green),
+                                        backgroundColor: amount < 0 ? Colors.red[100] : Colors.green[100], // Original amount-based background
+                                        // Alternative: backgroundColor: _getIconColor(status).withOpacity(0.2), // Status-based background
+                                        child: Icon(
+                                          _typeIcon(type, status),
+                                          color: _getIconColor(status), // Status-based icon color
+                                        ),
                                       ),
-                                      title: Text(type),
-                                      subtitle: Text(time),
+                                      title: Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Flexible(
+                                            child: Text(
+                                              type,
+                                              style: const TextStyle(fontWeight: FontWeight.bold),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          _statusBadge(status, message),
+                                        ],
+                                      ),
+                                      subtitle: Text(
+                                        '$time • $currency ${numberFormat.format(amount.abs())}',
+                                        style: TextStyle(color: Colors.grey[600]),
+                                      ),
                                       trailing: Text(
-                                        "${amount >= 0 ? '+' : ''}$currency ${numberFormat.format(amount.abs())}",
+                                        "${amount >= 0 ? '+' : '-'}${numberFormat.format(amount.abs())}",
                                         style: TextStyle(
                                           color: amount < 0 ? Colors.red : Colors.green,
                                           fontWeight: FontWeight.bold,

@@ -22,7 +22,7 @@ dependencies:
   # Phone, SIM, and Contacts
   intl_phone_field: ^3.0.1
   country_picker: ^2.0.18
-  sim_card_info: ^0.0.1
+  sim_card_info: ^1.0.2
   flutter_contacts: ^1.1.9+2
 
   # Notifications and Device Features
@@ -80,11 +80,19 @@ dependencies:
   flutter_local_notifications: ^19.2.1
   socket_io_client: ^3.1.2
   
+  #background
+  flutter_background_service: ^5.1.0
+  flutter_background_service_android: ^6.3.1
+  flutter_background_service_ios: ^5.0.3
+  firebase_core: ^4.0.0
+  firebase_messaging: ^16.0.0
+
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^2.0.0
+
 
 flutter:
   uses-material-design: true

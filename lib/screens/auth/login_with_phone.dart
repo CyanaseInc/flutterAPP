@@ -12,7 +12,7 @@ import 'package:cyanase/helpers/web_db.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:cyanase/helpers/link_handler.dart';
 import 'package:cyanase/screens/home/group/group_invite.dart';
-import 'dart:io' show Platform;
+import 'dart:io'; // Import entire dart:io for SocketException
 
 // Custom formatter to enforce '+' at the beginning
 class PhoneNumberFormatter extends TextInputFormatter {
@@ -307,132 +307,246 @@ class LoginScreenState extends State<LoginScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) {
-        return Padding(
-          padding: EdgeInsets.only(
-            left: 20,
-            right: 20,
-            bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+        bool modalLoading = false;
+        
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter modalSetState) {
+       
+  Future<void> submitOTP() async {
+  modalSetState(() {
+    print("Loading state set to true");
+    modalLoading = true;
+  });
+
+  try {
+    String otp = _controllers.map((controller) => controller.text).join('');
+    print('OTP entered: $otp');
+    print('Phone number for verification: $phoneNumber');
+    
+    Map<String, dynamic> userData = {
+      'username': phoneNumber,
+      'code': otp,
+    };
+    
+    print('Sending verification request with data: $userData');
+    
+    // Call API
+    final response = await ApiService.VerificationEmail(userData);
+
+    print('Full API response received: $response');
+    print('Response type: ${response.runtimeType}');
+    if (response is Map<String, dynamic>) {
+      print('Response keys: ${response.keys.toList()}');
+    }
+
+    // ✅ Success
+    if (response.containsKey('success') && response['success'] == true) {
+      print('Verification successful!');
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Verification successful!')),
+      );
+
+      // Clear OTP fields
+      for (var controller in _controllers) {
+        controller.clear();
+      }
+
+      // Close the bottom sheet
+      Navigator.of(context).pop();
+
+      // Show success message and navigate to home
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Account verified successfully! You can now login.'),
+            backgroundColor: Colors.green,
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox(height: 30),
-              const Text(
-                'Verify Your Account',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: primaryTwo,
-                ),
+        );
+      });
+    } 
+    // ❌ Wrong code / failed verification
+    else {
+      print('Verification failed');
+      String errorMessage = 'Invalid code. Please try again.';
+
+      if (response.containsKey('message')) {
+        errorMessage = response['message'];
+        print('Error message from API: $errorMessage');
+      }
+
+      if (response.containsKey('error')) {
+        errorMessage = response['error'];
+        print('Error from API: $errorMessage');
+      }
+
+      if (response.containsKey('details')) {
+        print('API details: ${response['details']}');
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(errorMessage),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  } on SocketException catch (e) {
+    print('Socket exception: $e');
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('No internet connection. Please check your network.'),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }  catch (e) {
+    print('Timeout exception: $e');
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Request timed out. Please check your internet connection.'),
+        backgroundColor: Colors.red,
+      ),
+    );
+  } on FormatException catch (e) {
+    print('Format exception: $e');
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Invalid response from server. Please try again.'),
+        backgroundColor: Colors.red,
+      ),
+    );
+  } catch (e, stackTrace) {
+    print('Unexpected exception type: ${e.runtimeType}');
+    print('Exception details: $e');
+    print('Stack trace: $stackTrace');
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Verification failed: ${e.toString()}'),
+        backgroundColor: Colors.red,
+      ),
+    );
+  } finally {
+    modalSetState(() {
+      print("Loading state set to false");
+      modalLoading = false;
+    });
+  }
+}
+
+
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 20,
               ),
-              const SizedBox(height: 20),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: List.generate(6, (index) {
-                  return SizedBox(
-                    width: 40,
-                    child: TextField(
-                      maxLength: 1,
-                      keyboardType: TextInputType.number,
-                      textAlign: TextAlign.center,
-                      decoration: const InputDecoration(
-                        counterText: '',
-                        border: OutlineInputBorder(),
-                      ),
-                      onChanged: (value) {
-                        if (value.isNotEmpty && index < 5) {
-                          FocusScope.of(context).nextFocus();
-                        }
-                        if (_controllers.every(
-                            (controller) => controller.text.isNotEmpty)) {
-                          _submitOTP(phoneNumber);
-                        }
-                      },
-                      controller: _controllers[index],
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(height: 30),
+                  const Text(
+                    'Verify Your Account',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: primaryTwo,
                     ),
-                  );
-                }),
-              ),
-              const SizedBox(height: 20),
-              TextButton(
-                onPressed: () async {
-                  try {
-                    await ApiService.post('resend_verification_code', {
-                      'phone_number': phoneNumber,
-                    });
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Verification code resent.'),
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: List.generate(6, (index) {
+                      return SizedBox(
+                        width: 40,
+                        child: TextField(
+                          maxLength: 1,
+                          keyboardType: TextInputType.number,
+                          textAlign: TextAlign.center,
+                          decoration: const InputDecoration(
+                            counterText: '',
+                            border: OutlineInputBorder(),
+                          ),
+                          onChanged: (value) {
+                            if (value.isNotEmpty && index < 5) {
+                              FocusScope.of(context).nextFocus();
+                            }
+                            if (_controllers.every(
+                                (controller) => controller.text.isNotEmpty)) {
+                              submitOTP();
+                            }
+                          },
+                          controller: _controllers[index],
+                        ),
+                      );
+                    }),
+                  ),
+                  const SizedBox(height: 20),
+                  TextButton(
+                    onPressed: modalLoading
+                        ? null
+                        : () async {
+                            try {
+                              modalSetState(() {
+                                modalLoading = true;
+                              });
+                              await ApiService.post('resend_verification_code', {
+                                'phone_number': phoneNumber,
+                              });
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Verification code resent.'),
+                                ),
+                              );
+                            } catch (e) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Error resending code: $e'),
+                                ),
+                              );
+                            } finally {
+                              modalSetState(() {
+                                modalLoading = false;
+                              });
+                            }
+                          },
+                    child: const Text(
+                      'Resend Verification Code',
+                      style: TextStyle(
+                        color: primaryTwo,
+                        fontWeight: FontWeight.bold,
                       ),
-                    );
-                  } catch (e) {
-                    
-                  }
-                },
-                child: const Text(
-                  'Resend Verification Code',
-                  style: TextStyle(
-                    color: primaryTwo,
-                    fontWeight: FontWeight.bold,
+                    ),
                   ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: _isLoading ? null : () => _submitOTP(phoneNumber),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: primaryTwo,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(15),
+                  const SizedBox(height: 20),
+                  ElevatedButton(
+                    onPressed: modalLoading ? null : submitOTP,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: primaryTwo,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(15),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 15),
+                      minimumSize: const Size(double.infinity, 60),
+                      elevation: modalLoading ? 0 : 2,
+                    ),
+                    child: modalLoading
+                        ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: Loader(),
+                          )
+                        : const Text(
+                            'Verify',
+                            style: TextStyle(color: primaryColor),
+                          ),
                   ),
-                  padding: const EdgeInsets.symmetric(vertical: 15),
-                  minimumSize: const Size(double.infinity, 60),
-                ),
-                child: _isLoading
-                    ? const Loader()
-                    : const Text('Verify',
-                        style: TextStyle(color: primaryColor)),
+                ],
               ),
-            ],
-          ),
+            );
+          },
         );
       },
     );
-  }
-
-  Future<void> _submitOTP(String phoneNumber) async {
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      String otp = _controllers.map((controller) => controller.text).join('');
-      Map<String, dynamic> userData = {
-        'username': phoneNumber,
-        'code': otp,
-      };
-      final response = await ApiService.VerificationEmail(userData);
-
-      if (response['success'] == true) {
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Verification successful!')),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Invalid code. Please try again.')),
-        );
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Failed to verify OTP. Please try again.')),
-      );
-    } finally {
-      setState(() {
-        _isLoading = false;
-      });
-    }
   }
 
   @override

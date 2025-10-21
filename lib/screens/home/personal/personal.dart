@@ -475,13 +475,17 @@ class _PersonalTabState extends State<PersonalTab> {
 
         final response = await ApiService.depositNetworth(token);
         final userTrack = await ApiService.userTrack(token);
-
+        final totalNet = response['data']['net_worth'];
+        
+  
         if (userTrack['success'] == true) {
           double totalDeposit = 0;
           double totalWithdraw = 0;
+          
           for (var track in userTrack['data']) {
             totalDeposit += track['deposit_amount'] + track['opening_balance'];
             totalWithdraw += track['closing_balance'];
+
           }
           var conversion = Conversion(currencyCode.toLowerCase(),
               totalWithdraw < 0 ? totalWithdraw * -1 : totalWithdraw, 'usd');
@@ -492,7 +496,7 @@ class _PersonalTabState extends State<PersonalTab> {
           setState(() {
             _totalDepositUGX = totalDeposit;
             _totalDepositUSD = double.parse(depositUSD);
-            _totalNetworthy = totalWithdraw;
+            _totalNetworthy = totalNet;
             _totalNetworthyUSD = double.parse(result);
             currency = currencyCode;
           });

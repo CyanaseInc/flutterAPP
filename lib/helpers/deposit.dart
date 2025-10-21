@@ -256,13 +256,13 @@ SWIFT Code: CYANUS33
           "tx_ref":_generateReference(),
            
           };
-
+         print("my data is $myData");
           if (authPayment['success'] == true) {
             final response = await _processDeposit(
               token: token,
               requestData: myData,
             );
-
+ 
             if (response['success'] == true) {
               _pageController.nextPage(
                 duration: const Duration(milliseconds: 300),

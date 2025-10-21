@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "781959453499",
+    "project_id": "cyanase-263b9",
+    "storage_bucket": "cyanase-263b9.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:781959453499:android:3c4270a4e949679692751e",
+        "android_client_info": {
+          "package_name": "com.cyanase.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": ""
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

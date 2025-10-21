@@ -11,6 +11,7 @@ import 'package:cyanase/helpers/subscription_helper.dart';
 class WithdrawHelper extends StatefulWidget {
   final String withdrawType;
   final String withdrawDetails;
+  final String? investmentId;
   final int? groupId;
   final int? goalId;
   final VoidCallback? onWithdrawProcessed;
@@ -20,6 +21,7 @@ class WithdrawHelper extends StatefulWidget {
     required this.withdrawDetails,
     this.groupId,
     this.goalId,
+    this.investmentId,
     this.onWithdrawProcessed,
     Key? key,
   }) : super(key: key);
@@ -462,6 +464,7 @@ class _WithdrawHelperState extends State<WithdrawHelper> {
       case 'goal':
         return await ApiService.goalWithdraw(token, requestData);
       case 'group_goal_withdraw':
+        
         return await ApiService.groupGoalWithdraw(token, requestData);
       case 'portfolio':
         return await ApiService.withdraw(token, requestData);
@@ -535,6 +538,7 @@ class _WithdrawHelperState extends State<WithdrawHelper> {
         'group_id': widget.groupId,
         'goal_id': widget.goalId,
         'beneficiary_name': name,
+        'investment_id': widget.investmentId,
       };
 
       final response = await _processWithdraw(

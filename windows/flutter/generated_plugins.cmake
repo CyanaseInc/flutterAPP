@@ -9,6 +9,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   connectivity_plus
   emoji_picker_flutter
   file_selector_windows
+  firebase_core
   permission_handler_windows
   share_plus
   sim_card_info
