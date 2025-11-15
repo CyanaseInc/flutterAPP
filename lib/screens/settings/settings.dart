@@ -1,7 +1,7 @@
 import 'package:cyanase/helpers/api_helper.dart';
 import 'package:cyanase/helpers/database_helper.dart';
 import 'package:cyanase/helpers/endpoints.dart';
-import 'package:cyanase/helpers/web_db.dart';
+
 // import 'package:cyanase/helpers/web_socket.dart';
 import 'package:flutter/material.dart' as material;
 import 'package:flutter/material.dart' show Key;
@@ -241,7 +241,10 @@ class _SettingsPageState extends material.State<SettingsPage> {
             material.Navigator.push(
               context,
               material.MaterialPageRoute(
-                  builder: (context) => InviteFriendPage()),
+                  builder: (context) => ReferralPage(
+  inviteCode: "CYANASE123", // Dynamic from your backend
+  totalEarnings: 1250000.00, // Dynamic from your backend
+)),
             );
           },
         ),

@@ -245,40 +245,59 @@ class _GroupSavingGoalsSectionState extends State<GroupSavingGoalsSection> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final displayedGoals =
-        widget.showAllGoals ? _groupGoals : _groupGoals.take(3).toList();
+@override
+Widget build(BuildContext context) {
+  final displayedGoals =
+      widget.showAllGoals ? _groupGoals : _groupGoals.take(3).toList();
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Colors.grey[100]!, Colors.grey[50]!],
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
+  return Container(
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        colors: [Colors.grey[100]!, Colors.grey[50]!],
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+      ),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildHeaderSection(),
+        
+        // Added description container right below the header
+        Container(
+          color: white,
+          padding: const EdgeInsets.all(16),
+          margin: const EdgeInsets.only(bottom: 8.0, top: 8.0),
+          child: Text(
+            'Create goal-based investment plans for you or your club and track progress together.',
+            style: TextStyle(
+              color: Colors.grey[600],
+              fontSize: 14,
+              height: 1.4,
+            ),
+            textAlign: TextAlign.center,
+          ),
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildHeaderSection(),
-          const SizedBox(height: 16),
-          _buildBalanceSummary(),
-          const SizedBox(height: 16),
-          _buildGoalsList(displayedGoals),
-          if (!widget.showAllGoals && _groupGoals.length > 3)
-            _buildSeeAllButton(),
-        ],
-      ),
-    );
-  }
+        
+        const SizedBox(height: 16),
+        _buildBalanceSummary(),
+        const SizedBox(height: 16),
+        _buildGoalsList(displayedGoals),
+        if (!widget.showAllGoals && _groupGoals.length > 3)
+          _buildSeeAllButton(),
+      ],
+    ),
+  );
+}
 
   Widget _buildHeaderSection() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          'Group Saving Goals',
+        
+      const   Text(
+          'Group  goals',
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.bold,
@@ -359,6 +378,7 @@ class _GroupSavingGoalsSectionState extends State<GroupSavingGoalsSection> {
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
+        
         children: [
           Column(
             children: [

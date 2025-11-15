@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cyanase/screens/settings/invite.dart'; 
 import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:cyanase/helpers/link_handler.dart';
 import '/screens/splash.dart';
@@ -124,26 +125,33 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildPage(String name, Object? arguments) {
-    switch (name) {
-      case '/':
-        return const SplashScreenWrapper();
-      case '/login':
-        return const LoginScreen();
-      case '/numeric_login':
-        return const NumericLoginScreen();
-      case '/home':
-        final args = arguments as Map<String, dynamic>?;
-        return HomeScreen(
-          passcode: args?['passcode'],
-          email: args?['email'],
-          name: args?['name'],
-          picture: args?['picture'],
-        );
-      default:
-        return const SplashScreenWrapper();
-    }
+Widget _buildPage(String name, Object? arguments) {
+  switch (name) {
+    case '/':
+      return const SplashScreenWrapper();
+    case '/login':
+      return const LoginScreen();
+    case '/numeric_login':
+      return const NumericLoginScreen();
+    case '/home':
+      final args = arguments as Map<String, dynamic>?;
+      return HomeScreen(
+        passcode: args?['passcode'],
+        email: args?['email'],
+        name: args?['name'],
+        picture: args?['picture'],
+      );
+    // ADD THIS CASE
+    case '/referral':
+      final args = arguments as Map<String, dynamic>?;
+      return ReferralPage(
+        inviteCode: args?['inviteCode'] ?? 'UNKNOWN',
+        totalEarnings: args?['totalEarnings'] ?? 0.0,
+      );
+    default:
+      return const SplashScreenWrapper();
   }
+}
 }
 
 class SplashScreenWrapper extends StatefulWidget {

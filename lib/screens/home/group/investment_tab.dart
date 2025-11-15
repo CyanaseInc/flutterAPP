@@ -528,7 +528,7 @@ class _InvestmentsTabState extends State<InvestmentsTab> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Group Investments',
+                              'Assets Under Management',
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
@@ -624,18 +624,12 @@ class _InvestmentsTabState extends State<InvestmentsTab> {
               ),
             ),
             const SizedBox(height: 8),
-            Text(
-              'All deposits coming in from members are automatically put on a unit trust / mutual fund investment plan. These are investments that you might make elsewhere',
-              style: TextStyle(
-                fontSize: 15,
-                color: Colors.grey[600],
-              ),
-            ),
+         
             const SizedBox(height: 8),
             investments.isEmpty
                 ? const Center(
                     child: Text(
-                      'No investments available',
+                      'No investments available, click the + button to add one.',
                       style: TextStyle(color: Colors.grey, fontSize: 16),
                     ),
                   )

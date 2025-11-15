@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     package="com.cyanase.app">
@@ -42,19 +43,33 @@
                 android:name="io.flutter.embedding.android.NormalTheme"
                 android:resource="@style/NormalTheme" />
 
+            <!-- Launcher -->
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- For deep linking -->
+            <!-- ============================================================= -->
+            <!-- UNIVERSAL / APP LINKS – Handles referral after install -->
+            <!-- ============================================================= -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <!-- Handles: https://cyanase.com/referral/r/ABC123 -->
+                <data android:scheme="https" android:host="cyanase.com" />
+            </intent-filter>
+
+            <!-- ============================================================= -->
+            <!-- CUSTOM SCHEME – Handles: cyanase://join?... or cyanase://referral?... -->
+            <!-- ============================================================= -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="cyanase" android:host="join" />
-                <data android:scheme="https" />
+                <data android:scheme="cyanase" />
             </intent-filter>
+
         </activity>
 
         <!-- Flutter local notifications -->

@@ -168,6 +168,8 @@ class _PortfolioState extends State<Portfolio> {
 
   Widget _buildPortfolioCard(
       Map<String, dynamic> portfolio, int index, double maxWidth) {
+
+       
     return Card(
       elevation: 8,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),

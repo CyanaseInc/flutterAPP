@@ -30,7 +30,7 @@ class GroupInfoPage extends StatefulWidget {
   _GroupInfoPageState createState() => _GroupInfoPageState();
 }
 
-class _GroupInfoPageState extends State<GroupInfoPage> {
+class _GroupInfoPageState extends State<GroupInfoPage> with SingleTickerProviderStateMixin {
   bool _isLoading = false;
   bool _requirePaymentToJoin = false;
   double _paymentAmount = 0.0;
@@ -44,12 +44,21 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
   bool isAdminMode = false;
   bool _allowWithdraw = false;
   String _currentProfilePic = '';
+  
+  late TabController _tabController;
 
   @override
   void initState() {
     super.initState();
     _currentProfilePic = widget.profilePic;
+    _tabController = TabController(length: 2, vsync: this);
     _loadGroupDetails();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   void _handleProfilePicChanged(String newProfilePic) {
@@ -159,8 +168,10 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
       backgroundColor: const Color(0xFFF0F2F5),
       body: _isLoading
           ? const Center(child: Loader())
-          : ListView(
+          : Column(
               children: [
+                // Keep the GroupHeader at the top (unchanged)
+                const SizedBox(height: 40),
                 GroupHeader(
                   groupName: _groupDetails['group_name'] ?? widget.groupName,
                   profilePic: _currentProfilePic,
@@ -176,108 +187,176 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
                   onProfilePicChanged: _handleProfilePicChanged,
                 ),
                 const SizedBox(height: 10),
-                GroupSavingGoalsSection(
-                    groupGoals: groupGoals,
-                    groupId: widget.groupId,
-                    totalBalance: _totalBalance,
-                    myContributions: _myContributions,
-                    currencySymbol: '$_currencySymbol',
-                    isAdmin: _isAdmin),
+                
+                // Tabs for the lower part of the screen
                 Container(
-                  color: white,
-                  margin: const EdgeInsets.only(top: 8.0),
-                  child: ListTile(
-                    title: const Text(
-                      'Group finance',
-                      style: TextStyle(
-                        color: Colors.black87,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => GroupFinancePage(
-                            groupId: widget.groupId,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
+                  color: Colors.white,
+                  child: TabBar(
+  controller: _tabController,
+  labelColor: primaryTwo,
+  unselectedLabelColor: Colors.grey,
+  indicatorColor: primaryTwo,
+  labelStyle: const TextStyle(
+    fontWeight: FontWeight.bold, // 🔥 Makes selected tab text bold
+    fontSize: 14,
+  ),
+  unselectedLabelStyle: const TextStyle(
+    fontWeight: FontWeight.w500, // Slightly less bold for unselected tabs
+    fontSize: 14,
+  ),
+  tabs: const [
+    Tab(text: 'Group goals'),
+    Tab(text: 'Manage group'),
+  ],
+),
+
                 ),
-                Container(
-                  color: white,
-                  margin: const EdgeInsets.only(top: 8.0),
-                  child: ListTile(
-                    title: const Text(
-                      'Invite to group',
-                      style: TextStyle(
-                        color: Colors.black87,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => InviteScreen(
-                            groupName:
-                                _groupDetails['group_name'] ?? widget.groupName,
-                            profilePic: widget.profilePic,
-                            inviteCode: _groupDetails['invite_info']
-                                    ?['invite_code'] ??
-                                '',
-                            groupId: widget.groupId.toString(),
-                          ),
-                        ),
-                      );
-                    },
+                
+                // Tab content area with proper spacing
+                Expanded(
+                  child: TabBarView(
+                    controller: _tabController,
+                    children: [
+                      // Goals Tab - Only saving goals
+                      _buildGoalsTab(),
+                      
+                      // Manage Tab - All management features
+                      _buildManageTab(),
+                    ],
                   ),
-                ),
-                if (_isAdmin)
-                  GroupSettings(
-                    groupId: widget.groupId,
-                    isAdminMode: isAdminMode,
-                    initialRequireSubscription:
-                        _groupDetails['requireSubscription'] ?? false,
-                    initialSubscriptionAmount:
-                        (_groupDetails['subscription_amount'] as num?)
-                                ?.toDouble() ??
-                            0.0,
-                    initialRequirePayment: _requirePaymentToJoin,
-                    initialPaymentAmount: _paymentAmount,
-                    initialLoanSettings: _groupDetails['loan_settings'] ?? {},
-                    initialIsWithdraw: _allowWithdraw,
-                    onPaymentSettingChanged:
-                        (bool newRequirePayment, double newAmount) async {
-                      setState(() {
-                        _requirePaymentToJoin = newRequirePayment;
-                        _paymentAmount = newAmount;
-                      });
-                    },
-                    onWithdrawSettingChanged:
-                        _updateWithdrawSetting,
-                  ),
-                GroupMembers(
-                  groupId: widget.groupId,
-                  isGroup: true,
-                  name: _groupDetails['group_name'] ?? widget.groupName,
-                  members:
-                      (_groupDetails['members']?['participant_list'] as List?)
-                              ?.cast<Map<String, dynamic>>() ??
-                          [],
-                ),
-                DangerZone(
-                  groupId: widget.groupId,
-                  groupName: _groupDetails['group_name'] ?? widget.groupName,
                 ),
               ],
             ),
+    );
+  }
+
+  Widget _buildGoalsTab() {
+    return ListView(
+      children: [
+        // Add the descriptive text at the top of Goals tab
+       
+        GroupSavingGoalsSection(
+          groupGoals: groupGoals,
+          groupId: widget.groupId,
+          totalBalance: _totalBalance,
+          myContributions: _myContributions,
+          currencySymbol: '$_currencySymbol',
+          isAdmin: _isAdmin,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildManageTab() {
+    return ListView(
+      children: [
+        Container(
+          color: white,
+          margin: const EdgeInsets.only(top: 8.0),
+          child: ListTile(
+            title: const Text(
+              'Finance Management',
+              style: TextStyle(
+                color: Colors.black87,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            subtitle: const Text(
+              'Manage group Investments and Loans',
+              style: TextStyle(
+                color: Colors.grey,
+                fontSize: 12,
+              ),
+            ),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => GroupFinancePage(
+                    groupId: widget.groupId,
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        Container(
+          color: white,
+          margin: const EdgeInsets.only(top: 8.0),
+          child: ListTile(
+            title: const Text(
+              'Invite to group',
+              style: TextStyle(
+                color: Colors.black87,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            subtitle: const Text(
+              'Share invite link with friends',
+              style: TextStyle(
+                color: Colors.grey,
+                fontSize: 12,
+              ),
+            ),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => InviteScreen(
+                    groupName:
+                        _groupDetails['group_name'] ?? widget.groupName,
+                    profilePic: widget.profilePic,
+                    inviteCode: _groupDetails['invite_info']
+                            ?['invite_code'] ??
+                        '',
+                    groupId: widget.groupId.toString(),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+        if (_isAdmin)
+          GroupSettings(
+            groupId: widget.groupId,
+            isAdminMode: isAdminMode,
+            initialRequireSubscription:
+                _groupDetails['requireSubscription'] ?? false,
+            initialSubscriptionAmount:
+                (_groupDetails['subscription_amount'] as num?)
+                        ?.toDouble() ??
+                    0.0,
+            initialRequirePayment: _requirePaymentToJoin,
+            initialPaymentAmount: _paymentAmount,
+            initialLoanSettings: _groupDetails['loan_settings'] ?? {},
+            initialIsWithdraw: _allowWithdraw,
+            onPaymentSettingChanged:
+                (bool newRequirePayment, double newAmount) async {
+              setState(() {
+                _requirePaymentToJoin = newRequirePayment;
+                _paymentAmount = newAmount;
+              });
+            },
+            onWithdrawSettingChanged: _updateWithdrawSetting,
+          ),
+        GroupMembers(
+          groupId: widget.groupId,
+          isGroup: true,
+          name: _groupDetails['group_name'] ?? widget.groupName,
+          members:
+              (_groupDetails['members']?['participant_list'] as List?)
+                      ?.cast<Map<String, dynamic>>() ??
+                  [],
+        ),
+        DangerZone(
+          groupId: widget.groupId,
+          groupName: _groupDetails['group_name'] ?? widget.groupName,
+        ),
+      ],
     );
   }
 }

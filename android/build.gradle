@@ -1,37 +1,47 @@
 // Top-level build file where you can add configuration options common to all sub-projects/modules.
 
 buildscript {
-    ext.kotlin_version = '1.8.22' // Define Kotlin version
-    repositories {
-        google()  // Google's Maven repository
-        mavenCentral()  // Maven Central repository
+    ext {
+        kotlin_version = '1.8.22'
     }
-    dependencies {
-        classpath 'com.android.tools.build:gradle:8.2.1'  // Android Gradle Plugin (AGP)
-        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
-        classpath 'com.google.gms:google-services:4.3.15'
- // Kotlin Gradle Plugin
 
-        // NOTE: Do not place your application dependencies here; they belong
-        // in the individual module build.gradle files.
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+
+    dependencies {
+        // Android build tools
+        classpath 'com.android.tools.build:gradle:8.2.1'
+
+        // Kotlin Gradle plugin
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+
+        // Google services plugin (needed for Firebase)
+        classpath 'com.google.gms:google-services:4.4.2'
+
+        // Firebase tools (optional but prevents some dependency resolution issues)
+        classpath 'com.google.firebase:firebase-crashlytics-gradle:2.9.9'
+        classpath 'com.google.firebase:perf-plugin:1.4.2'
     }
 }
 
 allprojects {
     repositories {
-        google()  // Google's Maven repository
-        mavenCentral()  // Maven Central repository
+        google()
+        mavenCentral()
+        gradlePluginPortal()
     }
 }
 
-// Custom task to clean the build directory
-tasks.register("clean", Delete) {
-    delete rootProject.buildDir
-}
-
-// Configure subprojects
 rootProject.buildDir = "../build"
+
 subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"
     project.evaluationDependsOn(":app")
+}
+
+tasks.register("clean", Delete) {
+    delete rootProject.buildDir
 }

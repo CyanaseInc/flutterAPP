@@ -63,9 +63,9 @@ class _GroupFinancePageState extends State<GroupFinancePage> {
         token: token,
         groupId: widget.groupId,
       );
-
       if (response['success'] == true) {
         final data = response['data'] ?? {};
+        
         final groupStats = data['group_stats'] ?? {};
 
         final contributions = groupStats['contributions'] ?? {};

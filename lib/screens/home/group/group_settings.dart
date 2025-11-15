@@ -78,6 +78,13 @@ class _GroupSettingsState extends State<GroupSettings> {
             fontWeight: FontWeight.bold,
           ),
         ),
+        subtitle: const Text(
+          'Manage group permissions and payment settings',
+          style: TextStyle(
+            color: Colors.grey,
+            fontSize: 12,
+          ),
+        ),
         children: [
           SendMessagesSetting(
             groupId: widget.groupId,

@@ -2,7 +2,7 @@ plugins {
     id "com.android.application"
     id "kotlin-android"
     id "dev.flutter.flutter-gradle-plugin"
-    id 'com.google.gms.google-services'
+    id "com.google.gms.google-services"  // ✅ Firebase services plugin
 }
 
 def localProperties = new Properties()
@@ -12,11 +12,12 @@ if (localPropertiesFile.exists()) {
         localProperties.load(reader)
     }
 }
+
+// 🔢 Versioning
 def flutterVersionCode = 12
 def flutterVersionName = "1.0.12"
 
-
-// Load keystore credentials from local.properties
+// 🔐 Keystore setup
 def keystoreProperties = new Properties()
 def keystorePropertiesFile = rootProject.file("local.properties")
 if (keystorePropertiesFile.exists()) {
@@ -40,10 +41,11 @@ android {
 
     defaultConfig {
         applicationId "com.cyanase.app"
-    minSdkVersion 24
-    targetSdkVersion 35
-    versionCode flutterVersionCode
-    versionName flutterVersionName
+        minSdkVersion 24
+        targetSdkVersion 35
+        versionCode flutterVersionCode
+        versionName flutterVersionName
+        multiDexEnabled true
     }
 
     signingConfigs {
@@ -73,11 +75,23 @@ flutter {
 }
 
 dependencies {
-    implementation "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
+    // Kotlin runtime
+    implementation "org.jetbrains.kotlin:kotlin-stdlib:1.9.24"
+
+    // Required for newer Java APIs
     coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'
+
+    // ✅ Firebase platform BoM — must come BEFORE individual Firebase SDKs
+    implementation platform('com.google.firebase:firebase-bom:33.4.0')
+
+    // ✅ Use Firebase SDKs *without version numbers* after the BoM
+    implementation 'com.google.firebase:firebase-analytics'
+    implementation 'com.google.firebase:firebase-messaging'
+    implementation "com.android.installreferrer:installreferrer:2.2"
 }
 
-// Apply consistent compileSdk to all subprojects (plugins)
+
+// ✅ Force consistent compileSdk across plugins
 subprojects {
     afterEvaluate { project ->
         if (project.hasProperty("android")) {
@@ -90,4 +104,3 @@ subprojects {
         }
     }
 }
-apply plugin: 'com.google.gms.google-services'  // Apply Google Services plugin
