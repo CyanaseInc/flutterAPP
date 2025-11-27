@@ -11,6 +11,7 @@ import 'package:cyanase/theme/theme.dart';
 import 'package:cyanase/helpers/database_helper.dart';
 import 'package:cyanase/helpers/api_helper.dart';
 import 'package:cyanase/helpers/get_currency.dart';
+import 'package:url_launcher/url_launcher.dart'; // Add this import
 
 class GroupInfoPage extends StatefulWidget {
   final String groupName;
@@ -162,6 +163,211 @@ class _GroupInfoPageState extends State<GroupInfoPage> with SingleTickerProvider
     });
   }
 
+  // Function to show the Finance Management Modal
+ // Function to show the Finance Management Modal
+void _showFinanceManagementModal() {
+  showDialog(
+    context: context,
+    builder: (BuildContext context) {
+      return Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20.0),
+        ),
+        elevation: 0,
+        backgroundColor: Colors.transparent,
+        child: Container(
+          width: MediaQuery.of(context).size.width * 0.85,
+          padding: const EdgeInsets.all(0),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20.0),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.2),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header with solid primaryTwo color
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: primaryTwo,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(20),
+                    topRight: Radius.circular(20),
+                  ),
+                ),
+                child: Column(
+                  children: [
+                    Icon(
+                      Icons.analytics_outlined,
+                      size: 50,
+                      color: Colors.white,
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Advanced Finance Dashboard',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+              
+              // Content
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  children: [
+                    Text(
+  'Get the complete Admin experience on desktop',
+  style: TextStyle(
+    color: Colors.grey[700],
+    fontSize: 14,
+    height: 1.5,
+  ),
+  textAlign: TextAlign.center,
+),
+                    const SizedBox(height: 15),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.blue[50],
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.blue[100]!),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.public,
+                            color: Colors.blue[700],
+                            size: 16,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'invest.cyanase.app',
+                            style: TextStyle(
+                              color: Colors.blue[700],
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    
+                    // Features list
+                    _buildFeatureRow(Icons.auto_graph, 'Investment Tracking'),
+                    _buildFeatureRow(Icons.account_balance, 'Loan Management'),
+                    _buildFeatureRow(Icons.analytics, 'Advanced Analytics'),
+                    _buildFeatureRow(Icons.report, 'Detailed Reports'),
+                    
+                    const SizedBox(height: 25),
+                    
+                    // Buttons
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () {
+                              Navigator.of(context).pop(); // Close modal first
+                              // Then navigate to traditional finance page
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => GroupFinancePage(
+                                    groupId: widget.groupId,
+                                  ),
+                                ),
+                              );
+                            },
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.grey[700],
+                              side: BorderSide(color: Colors.grey[300]!),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                            child: const Text('Start in App'),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () async {
+                              const url = 'https://invest.cyanase.app';
+                              if (await canLaunchUrl(Uri.parse(url))) {
+                                await launchUrl(Uri.parse(url));
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Could not launch $url'),
+                                  ),
+                                );
+                              }
+                              Navigator.of(context).pop();
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: primaryTwo,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                            ),
+                            child: const Text('Open Url'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
+  Widget _buildFeatureRow(IconData icon, String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            color: primaryTwo,
+            size: 20,
+          ),
+          const SizedBox(width: 12),
+          Text(
+            text,
+            style: TextStyle(
+              color: Colors.grey[700],
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -170,7 +376,6 @@ class _GroupInfoPageState extends State<GroupInfoPage> with SingleTickerProvider
           ? const Center(child: Loader())
           : Column(
               children: [
-                // Keep the GroupHeader at the top (unchanged)
                 const SizedBox(height: 40),
                 GroupHeader(
                   groupName: _groupDetails['group_name'] ?? widget.groupName,
@@ -188,39 +393,33 @@ class _GroupInfoPageState extends State<GroupInfoPage> with SingleTickerProvider
                 ),
                 const SizedBox(height: 10),
                 
-                // Tabs for the lower part of the screen
                 Container(
                   color: Colors.white,
                   child: TabBar(
-  controller: _tabController,
-  labelColor: primaryTwo,
-  unselectedLabelColor: Colors.grey,
-  indicatorColor: primaryTwo,
-  labelStyle: const TextStyle(
-    fontWeight: FontWeight.bold, // 🔥 Makes selected tab text bold
-    fontSize: 14,
-  ),
-  unselectedLabelStyle: const TextStyle(
-    fontWeight: FontWeight.w500, // Slightly less bold for unselected tabs
-    fontSize: 14,
-  ),
-  tabs: const [
-    Tab(text: 'Group goals'),
-    Tab(text: 'Manage group'),
-  ],
-),
-
+                    controller: _tabController,
+                    labelColor: primaryTwo,
+                    unselectedLabelColor: Colors.grey,
+                    indicatorColor: primaryTwo,
+                    labelStyle: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                    unselectedLabelStyle: const TextStyle(
+                      fontWeight: FontWeight.w500,
+                      fontSize: 14,
+                    ),
+                    tabs: const [
+                      Tab(text: 'Group goals'),
+                      Tab(text: 'Manage group'),
+                    ],
+                  ),
                 ),
                 
-                // Tab content area with proper spacing
                 Expanded(
                   child: TabBarView(
                     controller: _tabController,
                     children: [
-                      // Goals Tab - Only saving goals
                       _buildGoalsTab(),
-                      
-                      // Manage Tab - All management features
                       _buildManageTab(),
                     ],
                   ),
@@ -233,8 +432,6 @@ class _GroupInfoPageState extends State<GroupInfoPage> with SingleTickerProvider
   Widget _buildGoalsTab() {
     return ListView(
       children: [
-        // Add the descriptive text at the top of Goals tab
-       
         GroupSavingGoalsSection(
           groupGoals: groupGoals,
           groupId: widget.groupId,
@@ -270,16 +467,7 @@ class _GroupInfoPageState extends State<GroupInfoPage> with SingleTickerProvider
               ),
             ),
             trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => GroupFinancePage(
-                    groupId: widget.groupId,
-                  ),
-                ),
-              );
-            },
+            onTap: _showFinanceManagementModal, // Updated to show modal
           ),
         ),
         Container(

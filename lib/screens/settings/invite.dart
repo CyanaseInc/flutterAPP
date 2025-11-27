@@ -2,15 +2,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:provider/provider.dart';
 import 'package:cyanase/theme/theme.dart';
+import 'package:cyanase/providers/provider.dart';
 
 class ReferralPage extends StatefulWidget {
-  final String inviteCode;
   final double totalEarnings;
 
   const ReferralPage({
     Key? key,
-    required this.inviteCode,
     required this.totalEarnings,
   }) : super(key: key);
 
@@ -21,11 +21,17 @@ class ReferralPage extends StatefulWidget {
 class _ReferralPageState extends State<ReferralPage> {
   bool _isWithdrawing = false;
 
-  // NEW: Correct referral URL
-  String get _referralUrl => 'https://cyanase.com/referral/${widget.inviteCode}';
+  // FIXED: Use a method instead of getter
+  String _getReferralUrl(String inviteCode) {
+    return 'https://cyanase.com/referral/$inviteCode';
+  }
 
   @override
   Widget build(BuildContext context) {
+    final currencyProvider = Provider.of<CurrencyProvider>(context);
+    final inviteCode = currencyProvider.inviteCode;
+    final referralUrl = _getReferralUrl(inviteCode); // FIXED: Call the method
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
@@ -52,11 +58,11 @@ class _ReferralPageState extends State<ReferralPage> {
             const SizedBox(height: 28),
             _buildHeroCard(),
             const SizedBox(height: 28),
-            _buildInviteCard(),
+            _buildInviteCard(inviteCode),
             const SizedBox(height: 28),
-            _buildShareCard(),
+            _buildShareCard(inviteCode, referralUrl), // FIXED: Pass the string
             const SizedBox(height: 28),
-            _buildHowItWorksCard(),
+            _buildHowItWorksCard(referralUrl), // FIXED: Pass the string
           ],
         ),
       ),
@@ -147,7 +153,7 @@ class _ReferralPageState extends State<ReferralPage> {
   // ———————————————————————
   // 3. INVITE CODE CARD
   // ———————————————————————
-  Widget _buildInviteCard() {
+  Widget _buildInviteCard(String inviteCode) {
     return _premiumCard(
       topColor: primaryTwo,
       child: Column(
@@ -165,7 +171,7 @@ class _ReferralPageState extends State<ReferralPage> {
               borderRadius: BorderRadius.circular(18),
             ),
             child: SelectableText(
-              widget.inviteCode,
+              inviteCode.isEmpty ? 'No code available' : inviteCode,
               style: const TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
@@ -179,7 +185,7 @@ class _ReferralPageState extends State<ReferralPage> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              onPressed: () => _copyToClipboard(),
+              onPressed: inviteCode.isEmpty ? null : () => _copyToClipboard(inviteCode),
               icon: const Icon(Icons.copy, size: 18),
               label: const Text('Copy Code'),
               style: ElevatedButton.styleFrom(
@@ -196,9 +202,9 @@ class _ReferralPageState extends State<ReferralPage> {
   }
 
   // ———————————————————————
-  // 4. SHARE CARD
+  // 4. SHARE CARD - MODIFIED TO ACCEPT PARAMETERS
   // ———————————————————————
-  Widget _buildShareCard() {
+  Widget _buildShareCard(String inviteCode, String referralUrl) {
     return _premiumCard(
       topColor: secondaryColor,
       hasBottomBorder: true,
@@ -212,9 +218,9 @@ class _ReferralPageState extends State<ReferralPage> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              _socialIcon(Icons.facebook, const Color(0xFF1877F2), () => _shareVia('facebook')),
-              _socialIcon(Icons.email, const Color(0xFFEA4335), () => _shareVia('email')),
-              _socialIcon(Icons.share, Colors.grey[700]!, _share),
+              _socialIcon(Icons.facebook, const Color(0xFF1877F2), () => _shareVia('facebook', inviteCode, referralUrl)),
+              _socialIcon(Icons.email, const Color(0xFFEA4335), () => _shareVia('email', inviteCode, referralUrl)),
+              _socialIcon(Icons.share, Colors.grey[700]!, () => _share(inviteCode, referralUrl)),
             ],
           ),
         ],
@@ -250,9 +256,9 @@ class _ReferralPageState extends State<ReferralPage> {
   }
 
   // ———————————————————————
-  // 5. HOW IT WORKS
+  // 5. HOW IT WORKS - MODIFIED TO ACCEPT PARAMETER
   // ———————————————————————
-  Widget _buildHowItWorksCard() {
+  Widget _buildHowItWorksCard(String referralUrl) {
     return _premiumCard(
       topColor: primaryTwo,
       child: Column(
@@ -278,7 +284,7 @@ class _ReferralPageState extends State<ReferralPage> {
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
-              onPressed: _shareInviteLink, // ← Now uses correct URL
+              onPressed: () => _shareInviteLink(referralUrl),
               icon: const Icon(Icons.send_rounded, size: 20),
               label: const Text('Share Invite Link'),
               style: OutlinedButton.styleFrom(
@@ -423,21 +429,25 @@ class _ReferralPageState extends State<ReferralPage> {
   }
 
   // ———————————————————————
-  // UTILS – SHARE (UPDATED)
+  // UTILS – SHARE - MODIFIED TO ACCEPT PARAMETERS
   // ———————————————————————
-  Future<void> _copyToClipboard() async {
-    await Clipboard.setData(ClipboardData(text: widget.inviteCode));
+  Future<void> _copyToClipboard(String inviteCode) async {
+    await Clipboard.setData(ClipboardData(text: inviteCode));
     _snack('Code copied!');
   }
 
-  void _shareVia(String platform) {
-    final msg = 'Join Cyanase with my code **${widget.inviteCode}** and we both earn \$50!\n\n$_referralUrl';
+  void _shareVia(String platform, String inviteCode, String referralUrl) {
+    final msg = 'Join Cyanase with my code **$inviteCode** and we both earn \$50!\n\n$referralUrl';
     Share.share(msg);
   }
 
-  void _share() => _shareVia('more');
+  void _share(String inviteCode, String referralUrl) => _shareVia('more', inviteCode, referralUrl);
 
-  void _shareInviteLink() => _shareVia('more'); // ← Uses correct URL
+  void _shareInviteLink(String referralUrl) {
+    final currencyProvider = Provider.of<CurrencyProvider>(context, listen: false);
+    final inviteCode = currencyProvider.inviteCode;
+    _shareVia('more', inviteCode, referralUrl);
+  }
 
   void _snack(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(

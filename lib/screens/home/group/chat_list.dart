@@ -13,7 +13,6 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:lottie/lottie.dart';
 import 'chatlist_header.dart';
 import 'dart:convert';
-import 'dart:io' show WebSocket;
 import 'dart:math';
 
 

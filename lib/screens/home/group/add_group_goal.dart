@@ -5,6 +5,8 @@ import 'package:cyanase/helpers/api_helper.dart';
 import './group_saving_goal.dart';
 import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+import 'package:cyanase/providers/provider.dart';
 
 class AddGroupGoalScreen extends StatefulWidget {
   final int groupId;
@@ -185,6 +187,7 @@ class _AddGroupGoalScreenState extends State<AddGroupGoalScreen> {
   }
 
   Widget _buildStep2() {
+    final currencyProvider = Provider.of<CurrencyProvider>(context);
     return _buildCard(
       title: "Goal Details",
       subtitle: "Name your group goal and set a target",
@@ -204,7 +207,7 @@ class _AddGroupGoalScreenState extends State<AddGroupGoalScreen> {
             keyboardType: TextInputType.number,
             decoration: _inputDecoration(
               hintText: "Target Amount (e.g., 10,000,000)",
-              prefixText: "UGX ",
+              prefixText: "${currencyProvider.currencySymbol}",
             ),
           ),
           const SizedBox(height: 16),
@@ -330,6 +333,7 @@ class _AddGroupGoalScreenState extends State<AddGroupGoalScreen> {
 
   Widget _buildStep4() {
     final targetAmount = double.tryParse(_amountController.text) ?? 0.0;
+    final currencyProvider = Provider.of<CurrencyProvider>(context); 
     final durationMonths = int.tryParse(_durationController.text) ?? 1;
     final monthlySavings = targetAmount / durationMonths;
     final interestRate = 0.05;
@@ -343,7 +347,7 @@ class _AddGroupGoalScreenState extends State<AddGroupGoalScreen> {
         children: [
           _buildReviewRow("Goal Type", _selectedGoalType ?? "Custom"),
           _buildReviewRow("Goal Name", _goalNameController.text),
-          _buildReviewRow("Target Amount", "UGX ${_amountController.text}"),
+          _buildReviewRow("Target Amount", "${currencyProvider.currencySymbol} ${_amountController.text}"),
           _buildReviewRow("Duration", "$durationMonths months"),
           if (_startDate != null && _endDate != null)
             _buildReviewRow(
@@ -376,7 +380,7 @@ class _AddGroupGoalScreenState extends State<AddGroupGoalScreen> {
             ),
           const SizedBox(height: 8),
           Text(
-            "The group needs to save ~UGX ${monthlySavings.toStringAsFixed(2)} per month.",
+            "The group needs to save ~${currencyProvider.currencySymbol} ${monthlySavings.toStringAsFixed(2)} per month.",
             style: TextStyle(
               fontSize: 16,
               color: Colors.green[700],
@@ -384,7 +388,7 @@ class _AddGroupGoalScreenState extends State<AddGroupGoalScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            "With a ${interestRate * 100}% interest rate, the group could reach ~UGX ${projectedSavings.toStringAsFixed(2)}.",
+            "With a ${interestRate * 100}% interest rate, the group could reach ~${currencyProvider.currencySymbol} ${projectedSavings.toStringAsFixed(2)}.",
             style: const TextStyle(
               fontSize: 16,
               color: Colors.blueAccent,

@@ -10,6 +10,8 @@ import 'package:cyanase/helpers/loader.dart';
 import 'package:cyanase/helpers/api_helper.dart';
 import 'package:cyanase/helpers/link_handler.dart';
 import 'package:cyanase/screens/home/group/group_invite.dart';
+import 'package:provider/provider.dart';
+import 'package:cyanase/providers/provider.dart';
 
 class NumericLoginScreen extends StatefulWidget {
   const NumericLoginScreen({Key? key}) : super(key: key);
@@ -42,224 +44,225 @@ class _NumericLoginScreenState extends State<NumericLoginScreen> {
     }
   }
 
-  Future<void> _verifyPasscode(String passcode) async {
-    final dbHelper = DatabaseHelper(); // Get the DatabaseHelper instance
+ Future<void> _verifyPasscode(String passcode) async {
+  final dbHelper = DatabaseHelper(); // Get the DatabaseHelper instance
 
-    if (Platform.isIOS) {
-      showCupertinoDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => const CupertinoAlertDialog(
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CupertinoActivityIndicator(),
-              SizedBox(height: 20),
-            ],
-          ),
+  if (Platform.isIOS) {
+    showCupertinoDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const CupertinoAlertDialog(
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CupertinoActivityIndicator(),
+            SizedBox(height: 20),
+          ],
         ),
-      );
-    } else {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Loader(),
-              const SizedBox(height: 20),
-            ],
-          ),
+      ),
+    );
+  } else {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Loader(),
+            const SizedBox(height: 20),
+          ],
         ),
-      );
-    }
+      ),
+    );
+  }
 
-    try {
-      // Initialize the database
-      final db = await dbHelper.database;
+  try {
+    // Initialize the database
+    final db = await dbHelper.database;
 
-      // Retrieve the user's email from the profile table
-      final userProfile = await db.query('profile', limit: 1);
-      final email = userProfile.first['email'] as String;
-      final name = userProfile.first['name'] as String;
+    // Retrieve the user's email from the profile table
+    final userProfile = await db.query('profile', limit: 1);
+    final email = userProfile.first['email'] as String;
+    final name = userProfile.first['name'] as String;
 
-      // Perform login API request using the retrieved email and passcode
-      final loginResponse = await ApiService.passcodeLogin({
-        'username': email,
-        'password': passcode,
-      });
+    // Perform login API request using the retrieved email and passcode
+    final loginResponse = await ApiService.passcodeLogin({
+      'username': email,
+      'password': passcode,
+    });
 
-      // Dismiss the loading indicator
-      Navigator.pop(context);
+    // Dismiss the loading indicator
+    Navigator.pop(context);
 
-      // Check if the response indicates failure
-      if (loginResponse.containsKey('success') && !loginResponse['success']) {
-        if (Platform.isIOS) {
-          showCupertinoDialog(
-            context: context,
-            builder: (context) => CupertinoAlertDialog(
-              title: const Text('Error'),
-              content: Text(loginResponse['message'] ?? 'Login failed'),
-              actions: [
-                CupertinoDialogAction(
-                  child: const Text('OK'),
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ],
-            ),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(loginResponse['message'] ?? 'Login failed'),
-              backgroundColor: Colors.red, // Red SnackBar for errors
-            ),
-          );
-        }
-        return;
-      }
-
-      // Check if the response contains the expected fields for a successful login
-      if (loginResponse.containsKey('token') &&
-          loginResponse.containsKey('user_id') &&
-          loginResponse.containsKey('user')) {
-        final token = loginResponse['token'];
-        final userId = loginResponse['user_id'];
-        final user = loginResponse['user'];
-
-        // Extract user details
-        final email = user['email'];
-        final firstName = user['first_name'] as String? ?? '';
-        final lastName = user['last_name'] as String? ?? '';
-        final userName = '$firstName $lastName'.trim();
-
-        // Extract profile details
-        final profile = user['profile'];
-        final picture = profile['profile_picture'];
-
-        final userCountry = profile['country'];
-        final phoneNumber = profile['phoneno'];
-        final isVerified = profile['is_verified'] ?? false;
-        final mypasscode = profile['passcode'] as String?;
-        // Cast to String? for safety
-
-        
-        final autoSave = profile['auto_save'] ?? false;
-        final goalsAlert = profile['goals_alert'] ?? false;
-        setState(() {
-          // Always set email
-          _passcode = (mypasscode != null &&
-              mypasscode.isNotEmpty); // True if not empty
-        });
-        if (isVerified) {
-          // Store only the required profile details in the database
-          final dbHelper = DatabaseHelper();
-          final db = await dbHelper.database;
-
-          // Check if the profile already exists
-          final existingProfile = await db.query('profile');
-
-          if (existingProfile.isNotEmpty) {
-            // Update the existing profile
-            await db.update(
-              'profile',
-              {
-                'email': email,
-                'country': userCountry,
-                'phone_number': phoneNumber,
-                'token': token,
-                'name': userName,
-                'profile_pic': picture,
-                'created_at': DateTime.now().toIso8601String(),
-                'auto_save': autoSave,
-                'goals_alert': goalsAlert,
-              },
-            );
-          } else {
-            // Insert a new profile
-            await db.insert(
-              'profile',
-              {
-                'id': userId,
-                'email': email,
-                'country': userCountry,
-                'token': token,
-                'phone_number': phoneNumber,
-                'name': userName,
-                'profile_pic': picture,
-                'created_at': DateTime.now().toIso8601String(),
-                'auto_save': autoSave,
-                'goals_alert': goalsAlert,
-              },
-            );
-          }
-          Navigator.pop(context);
-          // Navigate to HomeScreen after successful login
-          // Handle pending deep link after login
-          if (PendingDeepLink.uri != null &&
-              PendingDeepLink.uri!.scheme == 'cyanase' &&
-              PendingDeepLink.uri!.host == 'join') {
-            final groupId = PendingDeepLink.uri!.queryParameters['group_id'];
-            if (groupId != null && groupId.isNotEmpty) {
-              PendingDeepLink.uri = null;
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => GroupInviteScreen(
-                    groupId: int.parse(groupId),
-                  ),
-                ),
-              );
-              return;
-            }
-          }
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => HomeScreen(passcode: _passcode, name: name, picture: picture),
-            ),
-          );
-        } else {
-          // Show bottom sheet to verify account
-          // You can add your logic here for unverified accounts
-        }
-      } else {
-        Navigator.pop(context); // Show a red SnackBar for invalid response
-        if (Platform.isIOS) {
-          showCupertinoDialog(
-            context: context,
-            builder: (context) => CupertinoAlertDialog(
-              title: const Text('Error'),
-              content: const Text('Invalid login response: Missing required fields'),
-              actions: [
-                CupertinoDialogAction(
-                  child: const Text('OK'),
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ],
-            ),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Invalid login response: Missing required fields'),
-              backgroundColor: Colors.red, // Red SnackBar for errors
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      // Dismiss the loading indicator
-      Navigator.pop(context);
-      
-      // Show a red SnackBar for errors
+    // Check if the response indicates failure
+    if (loginResponse.containsKey('success') && !loginResponse['success']) {
       if (Platform.isIOS) {
         showCupertinoDialog(
           context: context,
           builder: (context) => CupertinoAlertDialog(
             title: const Text('Error'),
-            content: const Text('Check your network connection'),
+            content: Text(loginResponse['message'] ?? 'Login failed'),
+            actions: [
+              CupertinoDialogAction(
+                child: const Text('OK'),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ],
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(loginResponse['message'] ?? 'Login failed'),
+            backgroundColor: Colors.red, // Red SnackBar for errors
+          ),
+        );
+      }
+      return;
+    }
+
+    // Check if the response contains the expected fields for a successful login
+    if (loginResponse.containsKey('token') &&
+        loginResponse.containsKey('user_id') &&
+        loginResponse.containsKey('user')) {
+      final token = loginResponse['token'];
+      final userId = loginResponse['user_id'];
+      final user = loginResponse['user'];
+
+      // Extract user details
+      final email = user['email'];
+      final firstName = user['first_name'] as String? ?? '';
+      final lastName = user['last_name'] as String? ?? '';
+      final userName = '$firstName $lastName'.trim();
+
+      // Extract profile details
+      final profile = user['profile'];
+      final picture = profile['profile_picture'];
+
+      final userCountry = profile['country'];
+      final phoneNumber = profile['phoneno'];
+        final inviteCode =  profile['invite_code'];
+      final isVerified = profile['is_verified'] ?? false;
+      final mypasscode = profile['passcode'] as String?;
+      
+      // EXTRACT CURRENCY FROM RESPONSE
+      final currencyCode = loginResponse['currency'] as String? ?? 'UGX';
+      final currencySymbol = loginResponse['currency_symbol'] as String? ?? 'UGX';
+    
+      
+      // Also check profile for currency (fallback)
+      final profileCurrencyCode = profile['currency'] as String?;
+      final profileCurrencySymbol = profile['currency_symbol'] as String?;
+      
+      // Use profile currency if available, otherwise use response currency
+      final finalCurrencyCode = profileCurrencyCode ?? currencyCode;
+      final finalCurrencySymbol = profileCurrencySymbol ?? currencySymbol;
+
+      final autoSave = profile['auto_save'] ?? false;
+      final goalsAlert = profile['goals_alert'] ?? false;
+      
+      setState(() {
+        // Always set email
+        _passcode = (mypasscode != null &&
+            mypasscode.isNotEmpty); // True if not empty
+      });
+      
+      if (isVerified) {
+        // Store only the required profile details in the database
+        final dbHelper = DatabaseHelper();
+        final db = await dbHelper.database;
+
+        // Check if the profile already exists
+        final existingProfile = await db.query('profile');
+
+        if (existingProfile.isNotEmpty) {
+          // Update the existing profile
+          await db.update(
+            'profile',
+            {
+              'email': email,
+              'country': userCountry,
+              'phone_number': phoneNumber,
+              'token': token,
+              'name': userName,
+              'profile_pic': picture,
+              'created_at': DateTime.now().toIso8601String(),
+              'auto_save': autoSave,
+              'goals_alert': goalsAlert,
+             
+            },
+          );
+        } else {
+          // Insert a new profile
+          await db.insert(
+            'profile',
+            {
+              'id': userId,
+              'email': email,
+              'country': userCountry,
+              'token': token,
+              'phone_number': phoneNumber,
+              'name': userName,
+              'profile_pic': picture,
+              'created_at': DateTime.now().toIso8601String(),
+              'auto_save': autoSave,
+              'goals_alert': goalsAlert,
+         
+            },
+          );
+        }
+
+        // SET CURRENCY IN PROVIDER
+       final currencyProvider = Provider.of<CurrencyProvider>(context, listen: false);
+currencyProvider.setCurrency(finalCurrencyCode, finalCurrencySymbol);
+currencyProvider.setInviteCode(inviteCode); // Add this line
+
+        Navigator.pop(context);
+        
+        // Handle pending deep link after login
+        if (PendingDeepLink.uri != null &&
+            PendingDeepLink.uri!.scheme == 'cyanase' &&
+            PendingDeepLink.uri!.host == 'join') {
+          final groupId = PendingDeepLink.uri!.queryParameters['group_id'];
+          if (groupId != null && groupId.isNotEmpty) {
+            PendingDeepLink.uri = null;
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (context) => GroupInviteScreen(
+                  groupId: int.parse(groupId),
+                ),
+              ),
+            );
+            return;
+          }
+        }
+        
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => HomeScreen(
+              passcode: _passcode, 
+              name: userName, // Use userName instead of name for consistency
+              picture: picture,
+              email: email, // Add email if your HomeScreen needs it
+            ),
+          ),
+        );
+      } else {
+        // Show bottom sheet to verify account
+        Navigator.pop(context);
+        _showVerificationBottomSheet(phoneNumber);
+      }
+    } else {
+      Navigator.pop(context); // Show a red SnackBar for invalid response
+      if (Platform.isIOS) {
+        showCupertinoDialog(
+          context: context,
+          builder: (context) => CupertinoAlertDialog(
+            title: const Text('Error'),
+            content: const Text('Invalid login response: Missing required fields'),
             actions: [
               CupertinoDialogAction(
                 child: const Text('OK'),
@@ -271,13 +274,72 @@ class _NumericLoginScreenState extends State<NumericLoginScreen> {
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Check your network connection'),
+            content: Text('Invalid login response: Missing required fields'),
             backgroundColor: Colors.red, // Red SnackBar for errors
           ),
         );
       }
     }
+  } catch (e) {
+    // Dismiss the loading indicator
+    Navigator.pop(context);
+    
+    // Show a red SnackBar for errors
+    if (Platform.isIOS) {
+      showCupertinoDialog(
+        context: context,
+        builder: (context) => CupertinoAlertDialog(
+          title: const Text('Error'),
+          content: Text('Check your network connection: $e'),
+          actions: [
+            CupertinoDialogAction(
+              child: const Text('OK'),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ],
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Check your network connection: ${e.toString()}'),
+          backgroundColor: Colors.red, // Red SnackBar for errors
+        ),
+      );
+    }
   }
+}
+
+// ADD THIS METHOD IF IT DOESN'T EXIST
+void _showVerificationBottomSheet(String phoneNumber) {
+  showModalBottomSheet(
+    context: context,
+    builder: (context) {
+      return Container(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Account Verification Required',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 10),
+            const Text('Please verify your account to continue.'),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                // Add your verification logic here
+              },
+              child: const Text('Verify Account'),
+            ),
+          ],
+        ),
+      );
+    },
+  );
+}
 
   @override
   Widget build(BuildContext context) {

@@ -1,12 +1,11 @@
 import 'dart:async';
 
 import 'package:cyanase/helpers/loader.dart';
-import 'package:cyanase/screens/home/personal/conversion.dart';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:shimmer_animation/shimmer_animation.dart';
 import '../../../theme/theme.dart';
-
 import './portifolio.dart';
 import './card.dart';
 import './deposit_withdraw_buttons.dart';

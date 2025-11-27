@@ -1,14 +1,17 @@
+// lib/main.dart
 import 'package:flutter/material.dart';
-import 'package:cyanase/screens/settings/invite.dart'; 
+import 'package:provider/provider.dart';
+import 'package:cyanase/screens/settings/invite.dart';
 import 'package:awesome_notifications/awesome_notifications.dart';
 import 'package:cyanase/helpers/link_handler.dart';
-import '/screens/splash.dart';
-import 'screens/auth/login_with_passcode.dart';
-import 'screens/auth/login_with_phone.dart';
-import 'theme/theme.dart';
+import 'package:cyanase/screens/splash.dart';
+import 'package:cyanase/screens/auth/login_with_passcode.dart';
+import 'package:cyanase/screens/auth/login_with_phone.dart';
+import 'package:cyanase/theme/theme.dart';
 import 'package:cyanase/helpers/database_helper.dart';
-import 'screens/home/home.dart';
+import 'package:cyanase/screens/home/home.dart';
 import 'package:cyanase/helpers/notification_service.dart';
+import 'package:cyanase/providers/provider.dart';
 
 class NotificationHandler {
   @pragma('vm:entry-point')
@@ -73,18 +76,13 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
   @override
   void dispose() {
-    
     _deepLinkHandler.dispose();
-
-    // Remove lifecycle observer
     WidgetsBinding.instance.removeObserver(this);
-
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    
     if (state == AppLifecycleState.resumed) {
       // App is coming to the foreground, update badge count from database
       NotificationService().updateBadgeCountFromDatabase();
@@ -93,65 +91,66 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-  
-    return MaterialApp(
-      title: 'Cyanase',
-      theme: appTheme,
-      navigatorKey: navigatorKey,
-      debugShowCheckedModeBanner: false,
-      home: const SplashScreenWrapper(),
-      builder: (context, child) {
-        return MediaQuery(
-          data: MediaQuery.of(context).copyWith(textScaleFactor: 1.0),
-          child: child!,
-        );
-      },
-      // Enable route caching
-      onGenerateRoute: (settings) {
-        return PageRouteBuilder(
-          settings: settings,
-          pageBuilder: (context, animation, secondaryAnimation) {
-            return _buildPage(settings.name!, settings.arguments);
-          },
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            return FadeTransition(
-              opacity: animation,
-              child: child,
-            );
-          },
-          transitionDuration: const Duration(milliseconds: 200),
-        );
-      },
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => CurrencyProvider()),
+      ],
+      child: MaterialApp(
+        title: 'Cyanase',
+        theme: appTheme,
+        navigatorKey: navigatorKey,
+        debugShowCheckedModeBanner: false,
+        home: const SplashScreenWrapper(),
+        builder: (context, child) {
+          return MediaQuery(
+            data: MediaQuery.of(context).copyWith(textScaleFactor: 1.0),
+            child: child!,
+          );
+        },
+        onGenerateRoute: (settings) {
+          return PageRouteBuilder(
+            settings: settings,
+            pageBuilder: (context, animation, secondaryAnimation) {
+              return _buildPage(settings.name!, settings.arguments);
+            },
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              return FadeTransition(
+                opacity: animation,
+                child: child,
+              );
+            },
+            transitionDuration: const Duration(milliseconds: 200),
+          );
+        },
+      ),
     );
   }
 
-Widget _buildPage(String name, Object? arguments) {
-  switch (name) {
-    case '/':
-      return const SplashScreenWrapper();
-    case '/login':
-      return const LoginScreen();
-    case '/numeric_login':
-      return const NumericLoginScreen();
-    case '/home':
-      final args = arguments as Map<String, dynamic>?;
-      return HomeScreen(
-        passcode: args?['passcode'],
-        email: args?['email'],
-        name: args?['name'],
-        picture: args?['picture'],
-      );
-    // ADD THIS CASE
-    case '/referral':
-      final args = arguments as Map<String, dynamic>?;
-      return ReferralPage(
-        inviteCode: args?['inviteCode'] ?? 'UNKNOWN',
-        totalEarnings: args?['totalEarnings'] ?? 0.0,
-      );
-    default:
-      return const SplashScreenWrapper();
+  Widget _buildPage(String name, Object? arguments) {
+    switch (name) {
+      case '/':
+        return const SplashScreenWrapper();
+      case '/login':
+        return const LoginScreen();
+      case '/numeric_login':
+        return const NumericLoginScreen();
+      case '/home':
+        final args = arguments as Map<String, dynamic>?;
+        return HomeScreen(
+          passcode: args?['passcode'],
+          email: args?['email'],
+          name: args?['name'],
+          picture: args?['picture'],
+        );
+      case '/referral':
+        final args = arguments as Map<String, dynamic>?;
+        return ReferralPage(
+          totalEarnings: args?['totalEarnings'] ?? 0.0,
+        );
+      default:
+        return const SplashScreenWrapper();
+    }
   }
-}
 }
 
 class SplashScreenWrapper extends StatefulWidget {
@@ -178,6 +177,7 @@ class _SplashScreenWrapperState extends State<SplashScreenWrapper> {
         'profile',
         where: 'email IS NOT NULL AND phone_number IS NOT NULL',
       );
+      
       if (mounted) {
         if (result.isNotEmpty) {
           Navigator.pushReplacement(

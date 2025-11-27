@@ -4,7 +4,9 @@ import 'package:syncfusion_flutter_gauges/gauges.dart';
 import 'package:cyanase/theme/theme.dart';
 import 'package:intl/intl.dart';
 import 'dart:io';
-                   
+import 'package:provider/provider.dart';
+import 'package:cyanase/providers/provider.dart';
+
 class GoalHeader extends StatefulWidget {
   final double saved;
   final double goal;
@@ -57,6 +59,8 @@ class _GoalHeaderState extends State<GoalHeader>
 
   @override
   Widget build(BuildContext context) {
+    final currencyProvider = Provider.of<CurrencyProvider>(context);
+    
     return Padding(
       padding: const EdgeInsets.all(8.0), // Reduced padding
       child: Column(
@@ -109,11 +113,10 @@ class _GoalHeaderState extends State<GoalHeader>
               ],
             ),
           ),
-          // Savings Progress Textaddcommas toallnumberhere
-
+          // Savings Progress Text with dynamic currency
           Center(
             child: Text(
-              'Saved out of UGX ${NumberFormat('#,##0.00').format(widget.goal)}',
+              'Saved out of ${currencyProvider.currencySymbol} ${NumberFormat('#,##0.00').format(widget.goal)}',
               style: TextStyle(
                 fontSize: 18, // Reduced font size
                 color: Colors.grey[600],

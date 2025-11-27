@@ -5,18 +5,20 @@ import 'package:cyanase/helpers/api_helper.dart';
 import 'package:cyanase/helpers/database_helper.dart';
 import 'package:cyanase/helpers/deposit.dart';
 import 'package:cyanase/helpers/withdraw_helper.dart';
+import 'package:provider/provider.dart';
+import 'package:cyanase/providers/provider.dart';
 
 class InvestmentsTab extends StatefulWidget {
   final int groupId;
   final bool isAdmin;
   final Map<String, dynamic> investmentsData;
 
-  const InvestmentsTab(
-      {Key? key,
-      required this.groupId,
-      required this.investmentsData,
-      required this.isAdmin})
-      : super(key: key);
+  const InvestmentsTab({
+    Key? key,
+    required this.groupId,
+    required this.investmentsData,
+    required this.isAdmin,
+  }) : super(key: key);
 
   @override
   _InvestmentsTabState createState() => _InvestmentsTabState();
@@ -47,6 +49,7 @@ class _InvestmentsTabState extends State<InvestmentsTab> {
     double amount,
     double interest,
     BuildContext dialogContext,
+    CurrencyProvider currencyProvider,
   ) async {
     try {
       final dbHelper = DatabaseHelper();
@@ -77,19 +80,19 @@ class _InvestmentsTabState extends State<InvestmentsTab> {
           investments.insert(0, {
             'id': response['investment_id'],
             'name': name,
-            'amount': 'UGX ${amount.toInt()}',
-            'interest': 'UGX ${interest.toInt()}',
+            'amount': '${currencyProvider.currencySymbol} ${amount.toInt()}',
+            'interest': '${currencyProvider.currencySymbol} ${interest.toInt()}',
             'date': DateTime.now().toIso8601String().split('T')[0],
           });
 
           // Update group investments total
           final currentGroupInvestment = double.parse(
             widget.investmentsData['summary']?['group_investments']?['amount']
-                .replaceAll('UGX ', '')
+                .replaceAll('${currencyProvider.currencySymbol} ', '')
                 .replaceAll(',', ''),
           );
           widget.investmentsData['summary']?['group_investments']?['amount'] =
-              'UGX ${(currentGroupInvestment + amount).toInt()}';
+              '${currencyProvider.currencySymbol} ${(currentGroupInvestment + amount).toInt()}';
         });
         Navigator.pop(dialogContext);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -110,19 +113,21 @@ class _InvestmentsTabState extends State<InvestmentsTab> {
     String password,
     BuildContext dialogContext,
     Function(bool) setLoading,
+    CurrencyProvider currencyProvider,
   ) async {
     try {
       final totalGroupInterestStr = widget.investmentsData['summary']
               ?['total_group_interest']?['amount'] ??
-          'UGX 0';
-      final totalGroupInterest = double.parse(
-          totalGroupInterestStr.replaceAll('UGX ', '').replaceAll(',', ''));
+          '${currencyProvider.currencySymbol} 0';
+      final totalGroupInterest = double.parse(totalGroupInterestStr
+          .replaceAll('${currencyProvider.currencySymbol} ', '')
+          .replaceAll(',', ''));
 
       if (amount > totalGroupInterest) {
         ScaffoldMessenger.of(dialogContext).showSnackBar(
           SnackBar(
             content: Text(
-                'Payout amount (UGX ${amount.toInt()}) exceeds total group interest (UGX ${totalGroupInterest.toInt()})'),
+                'Payout amount (${currencyProvider.currencySymbol} ${amount.toInt()}) exceeds total group interest (${currencyProvider.currencySymbol} ${totalGroupInterest.toInt()})'),
           ),
         );
         setLoading(false);
@@ -144,8 +149,8 @@ class _InvestmentsTabState extends State<InvestmentsTab> {
       if (response['success'] == true) {
         setState(() {
           final newTotal = totalGroupInterest - amount;
-          widget.investmentsData['summary']?['total_group_interest']
-              ?['amount'] = 'UGX $newTotal';
+          widget.investmentsData['summary']?['total_group_interest']?['amount'] =
+              '${currencyProvider.currencySymbol} $newTotal';
         });
         ScaffoldMessenger.of(dialogContext).showSnackBar(
           const SnackBar(
@@ -168,7 +173,7 @@ class _InvestmentsTabState extends State<InvestmentsTab> {
     }
   }
 
-  void _showPayoutInterestForm(BuildContext context) {
+  void _showPayoutInterestForm(BuildContext context, CurrencyProvider currencyProvider) {
     final _formKey = GlobalKey<FormState>();
     String? amount;
     String? password;
@@ -176,9 +181,10 @@ class _InvestmentsTabState extends State<InvestmentsTab> {
 
     final totalGroupInterestStr = widget.investmentsData['summary']
             ?['total_group_interest']?['amount'] ??
-        'UGX 0';
-    final totalGroupInterest = double.parse(
-        totalGroupInterestStr.replaceAll('UGX ', '').replaceAll(',', ''));
+        '${currencyProvider.currencySymbol} 0';
+    final totalGroupInterest = double.parse(totalGroupInterestStr
+        .replaceAll('${currencyProvider.currencySymbol} ', '')
+        .replaceAll(',', ''));
 
     showDialog(
       context: context,
@@ -186,7 +192,7 @@ class _InvestmentsTabState extends State<InvestmentsTab> {
       builder: (dialogContext) => StatefulBuilder(
         builder: (dialogContext, dialogSetState) => AlertDialog(
           title: const Text(
-            ' on th  Group Interest',
+            'Payout Group Interest',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           content: Form(
@@ -196,13 +202,14 @@ class _InvestmentsTabState extends State<InvestmentsTab> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const Text(
-                      'Interest will be auto-paid to all members based on their group deposit. ',
-                      style: TextStyle(fontSize: 15, color: Colors.grey)),
+                    'Interest will be auto-paid to all members based on their group deposit.',
+                    style: TextStyle(fontSize: 15, color: Colors.grey),
+                  ),
                   const SizedBox(height: 10),
                   TextFormField(
-                    decoration: const InputDecoration(
-                      labelText: 'Payout Amount (UGX)',
-                      border: OutlineInputBorder(),
+                    decoration: InputDecoration(
+                      labelText: 'Payout Amount (${currencyProvider.currencySymbol})',
+                      border: const OutlineInputBorder(),
                     ),
                     keyboardType: TextInputType.number,
                     enabled: !isLoading,
@@ -215,7 +222,7 @@ class _InvestmentsTabState extends State<InvestmentsTab> {
                         return 'Please enter a valid number';
                       }
                       if (amountValue > totalGroupInterest) {
-                        return 'Amount exceeds total group interest (UGX ${totalGroupInterest.toInt()})';
+                        return 'Amount exceeds total group interest (${currencyProvider.currencySymbol} ${totalGroupInterest.toInt()})';
                       }
                       if (amountValue <= 0) {
                         return 'Amount must be greater than zero';
@@ -263,8 +270,8 @@ class _InvestmentsTabState extends State<InvestmentsTab> {
                           double.parse(amount!),
                           password!,
                           dialogContext,
-                          (loading) =>
-                              dialogSetState(() => isLoading = loading),
+                          (loading) => dialogSetState(() => isLoading = loading),
+                          currencyProvider,
                         );
                       }
                     },
@@ -280,7 +287,11 @@ class _InvestmentsTabState extends State<InvestmentsTab> {
   }
 
   Future<void> onDeleteInvestment(
-      int investmentId, double amount, String password) async {
+    int investmentId,
+    double amount,
+    String password,
+    CurrencyProvider currencyProvider,
+  ) async {
     try {
       final dbHelper = DatabaseHelper();
       final db = await dbHelper.database;
@@ -297,17 +308,15 @@ class _InvestmentsTabState extends State<InvestmentsTab> {
         setState(() {
           // Remove the investment
           investments.removeWhere((inv) => inv['id'] == investmentId);
-          // Remove the investment
-          investments.removeWhere((inv) => inv['id'] == investmentId);
 
           // Update the group investments total
           final currentGroupInvestment = double.parse(
             widget.investmentsData['summary']?['group_investments']?['amount']
-                .replaceAll('UGX ', '')
+                .replaceAll('${currencyProvider.currencySymbol} ', '')
                 .replaceAll(',', ''),
           );
           widget.investmentsData['summary']?['group_investments']?['amount'] =
-              'UGX ${(currentGroupInvestment - amount).toInt()}';
+              '${currencyProvider.currencySymbol} ${(currentGroupInvestment - amount).toInt()}';
         });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Investment deleted successfully')),
@@ -316,7 +325,6 @@ class _InvestmentsTabState extends State<InvestmentsTab> {
         throw Exception(response['error'] ?? 'Failed to delete investment');
       }
     } catch (e) {
-      
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to delete investment: $e')),
       );
@@ -353,6 +361,7 @@ class _InvestmentsTabState extends State<InvestmentsTab> {
   @override
   Widget build(BuildContext context) {
     final summary = widget.investmentsData['summary'] ?? {};
+    final currencyProvider = Provider.of<CurrencyProvider>(context);
 
     return Scaffold(
       body: SingleChildScrollView(
@@ -363,7 +372,7 @@ class _InvestmentsTabState extends State<InvestmentsTab> {
             ModernSummaryCard(
               title: 'My Contributions',
               subtitle: 'Your total contributions to the group',
-              amount: summary['my_contributions']?['amount'] ?? 'UGX 0',
+              amount: summary['my_contributions']?['amount'] ?? '${currencyProvider.currencySymbol} 0',
               usdEquivalent:
                   summary['my_contributions']?['usd_equivalent'] ?? '\$0.00',
               icon: Icons.account_balance_wallet,
@@ -372,8 +381,7 @@ class _InvestmentsTabState extends State<InvestmentsTab> {
             const SizedBox(height: 16),
             // New Total Member Subscription Card
             Card(
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
               elevation: 6,
               shadowColor: Colors.black.withOpacity(0.2),
               child: Container(
@@ -391,8 +399,7 @@ class _InvestmentsTabState extends State<InvestmentsTab> {
                           CircleAvatar(
                             radius: 24,
                             backgroundColor: primaryTwo.withOpacity(0.1),
-                            child:
-                                Icon(Icons.people, color: primaryTwo, size: 28),
+                            child: Icon(Icons.people, color: primaryTwo, size: 28),
                           ),
                           const SizedBox(width: 16),
                           Expanded(
@@ -417,9 +424,7 @@ class _InvestmentsTabState extends State<InvestmentsTab> {
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
-                                  summary['total_member_subscription']
-                                          ?['amount'] ??
-                                      'UGX 0',
+                                  summary['total_member_subscription']?['amount'] ?? '${currencyProvider.currencySymbol} 0',
                                   style: TextStyle(
                                     fontSize: 24,
                                     fontWeight: FontWeight.bold,
@@ -427,9 +432,7 @@ class _InvestmentsTabState extends State<InvestmentsTab> {
                                   ),
                                 ),
                                 Text(
-                                  summary['total_member_subscription']
-                                          ?['usd_equivalent'] ??
-                                      '\$0.00',
+                                  summary['total_member_subscription']?['usd_equivalent'] ?? '\$0.00',
                                   style: TextStyle(
                                     fontSize: 14,
                                     color: Colors.grey[600],
@@ -449,8 +452,7 @@ class _InvestmentsTabState extends State<InvestmentsTab> {
                             if (!widget.isAdmin) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
-                                  content: Text(
-                                      'Only admin members can withdraw from subscriptions'),
+                                  content: Text('Only admin members can withdraw from subscriptions'),
                                   backgroundColor: Colors.red,
                                 ),
                               );
@@ -459,26 +461,22 @@ class _InvestmentsTabState extends State<InvestmentsTab> {
                             }
                           },
                           style: ElevatedButton.styleFrom(
-                            backgroundColor:
-                                !widget.isAdmin ? Colors.grey : Colors.amber,
+                            backgroundColor: !widget.isAdmin ? Colors.grey : Colors.amber,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                             elevation: 4,
                           ),
-                          icon: Icon(Icons.money_off,
-                              color: !widget.isAdmin
-                                  ? Colors.grey[600]
-                                  : Colors.black,
-                              size: 18),
+                          icon: Icon(
+                            Icons.money_off,
+                            color: !widget.isAdmin ? Colors.grey[600] : Colors.black,
+                            size: 18,
+                          ),
                           label: Text(
                             'Withdraw',
                             style: TextStyle(
-                              color: !widget.isAdmin
-                                  ? Colors.grey[600]
-                                  : Colors.black,
+                              color: !widget.isAdmin ? Colors.grey[600] : Colors.black,
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
                             ),
@@ -494,16 +492,14 @@ class _InvestmentsTabState extends State<InvestmentsTab> {
             ModernSummaryCard(
               title: 'Interest Earned',
               subtitle: 'Your earned interest',
-              amount: summary['interest_earned']?['amount'] ?? 'UGX 0',
-              usdEquivalent:
-                  summary['interest_earned']?['usd_equivalent'] ?? '\$0.00',
+              amount: summary['interest_earned']?['amount'] ?? '${currencyProvider.currencySymbol} 0',
+              usdEquivalent: summary['interest_earned']?['usd_equivalent'] ?? '\$0.00',
               icon: Icons.trending_up,
               color: primaryColor,
             ),
             const SizedBox(height: 16),
             Card(
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
               elevation: 6,
               shadowColor: Colors.black.withOpacity(0.2),
               child: Container(
@@ -519,8 +515,7 @@ class _InvestmentsTabState extends State<InvestmentsTab> {
                       CircleAvatar(
                         radius: 24,
                         backgroundColor: primaryTwo.withOpacity(0.1),
-                        child:
-                            Icon(Icons.bar_chart, color: primaryTwo, size: 28),
+                        child: Icon(Icons.bar_chart, color: primaryTwo, size: 28),
                       ),
                       const SizedBox(width: 16),
                       Expanded(
@@ -545,8 +540,7 @@ class _InvestmentsTabState extends State<InvestmentsTab> {
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              summary['group_investments']?['amount'] ??
-                                  'UGX 0',
+                              summary['group_investments']?['amount'] ?? '${currencyProvider.currencySymbol} 0',
                               style: TextStyle(
                                 fontSize: 24,
                                 fontWeight: FontWeight.bold,
@@ -554,8 +548,7 @@ class _InvestmentsTabState extends State<InvestmentsTab> {
                               ),
                             ),
                             Text(
-                              summary['group_investments']?['usd_equivalent'] ??
-                                  '\$0.00',
+                              summary['group_investments']?['usd_equivalent'] ?? '\$0.00',
                               style: TextStyle(
                                 fontSize: 14,
                                 color: Colors.grey[600],
@@ -574,10 +567,8 @@ class _InvestmentsTabState extends State<InvestmentsTab> {
             ModernSummaryCard(
               title: 'Total Group Interest',
               subtitle: 'Total interest earned by the group',
-              amount: summary['total_group_interest']?['amount'] ?? 'UGX 0',
-              usdEquivalent: summary['total_group_interest']
-                      ?['usd_equivalent'] ??
-                  '\$0.00',
+              amount: summary['total_group_interest']?['amount'] ?? '${currencyProvider.currencySymbol} 0',
+              usdEquivalent: summary['total_group_interest']?['usd_equivalent'] ?? '\$0.00',
               icon: Icons.group,
               color: primaryTwo,
               actionButton: ElevatedButton.icon(
@@ -585,25 +576,25 @@ class _InvestmentsTabState extends State<InvestmentsTab> {
                     ? () {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content:
-                                Text('Only admin members can payout interest'),
+                            content: Text('Only admin members can payout interest'),
                             backgroundColor: Colors.red,
                           ),
                         );
                       }
-                    : () => _showPayoutInterestForm(context),
+                    : () => _showPayoutInterestForm(context, currencyProvider),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: !widget.isAdmin ? Colors.grey : Colors.amber,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   elevation: 4,
                 ),
-                icon: Icon(Icons.payment,
-                    color: !widget.isAdmin ? Colors.grey[600] : Colors.black,
-                    size: 18),
+                icon: Icon(
+                  Icons.payment,
+                  color: !widget.isAdmin ? Colors.grey[600] : Colors.black,
+                  size: 18,
+                ),
                 label: Text(
                   'Pay Out',
                   style: TextStyle(
@@ -624,8 +615,6 @@ class _InvestmentsTabState extends State<InvestmentsTab> {
               ),
             ),
             const SizedBox(height: 8),
-         
-            const SizedBox(height: 8),
             investments.isEmpty
                 ? const Center(
                     child: Text(
@@ -637,35 +626,31 @@ class _InvestmentsTabState extends State<InvestmentsTab> {
                     children: investments
                         .map((investment) => ModernInvestmentCard(
                               investment: investment,
+                              currencyProvider: currencyProvider,
                               onAddInterest: (newInterest, password) {
                                 final interestAmount = double.parse(
                                   newInterest
-                                      .replaceAll('UGX ', '')
+                                      .replaceAll('${currencyProvider.currencySymbol} ', '')
                                       .replaceAll(',', ''),
                                 );
                                 setState(() {
-                                  final index = investments.indexWhere(
-                                      (inv) => inv['id'] == investment['id']);
+                                  final index = investments.indexWhere((inv) => inv['id'] == investment['id']);
                                   if (index != -1) {
                                     final currentInterest = double.parse(
                                       investments[index]['interest']
-                                          .replaceAll('UGX ', '')
+                                          .replaceAll('${currencyProvider.currencySymbol} ', '')
                                           .replaceAll(',', ''),
                                     );
                                     investments[index]['interest'] =
-                                        'UGX ${(currentInterest + interestAmount).toInt()}';
+                                        '${currencyProvider.currencySymbol} ${(currentInterest + interestAmount).toInt()}';
                                   }
                                 });
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                      content:
-                                          Text('Interest added successfully')),
+                                  const SnackBar(content: Text('Interest added successfully')),
                                 );
                               },
-                              onDeleteInvestment:
-                                  (investmentId, amount, password) {
-                                onDeleteInvestment(
-                                    investmentId, amount, password);
+                              onDeleteInvestment: (investmentId, amount, password) {
+                                onDeleteInvestment(investmentId, amount, password, currencyProvider);
                               },
                             ))
                         .toList(),
@@ -674,31 +659,27 @@ class _InvestmentsTabState extends State<InvestmentsTab> {
         ),
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _showAddInvestmentForm(context),
+        onPressed: () => _showAddInvestmentForm(context, currencyProvider),
         backgroundColor: primaryTwo,
         child: Icon(Icons.add, color: white),
       ),
     );
   }
 
-  void _showAddInvestmentForm(BuildContext context) {
+  void _showAddInvestmentForm(BuildContext context, CurrencyProvider currencyProvider) {
     final _formKey = GlobalKey<FormState>();
     String? name;
     String? amount;
     String? interest;
-
-    // Removed unused and incorrectly declared variable
-    bool isLoading = false; // Add this loading state variable
+    bool isLoading = false;
 
     showDialog(
       context: context,
-      barrierDismissible: false, // Prevent dismissing while loading
+      barrierDismissible: false,
       builder: (context) => StatefulBuilder(
-        // Use StatefulBuilder to update the dialog state
         builder: (context, setState) {
           return AlertDialog(
-            title: const Text('Add New Investment',
-                style: TextStyle(fontSize: 18)),
+            title: const Text('Add New Investment', style: TextStyle(fontSize: 18)),
             content: Form(
               key: _formKey,
               child: SingleChildScrollView(
@@ -722,16 +703,16 @@ class _InvestmentsTabState extends State<InvestmentsTab> {
                         return null;
                       },
                       onSaved: (value) => name = value,
-                      enabled: !isLoading, // Disable when loading
+                      enabled: !isLoading,
                     ),
                     const SizedBox(height: 16),
                     TextFormField(
-                      decoration: const InputDecoration(
-                        labelText: 'Amount (UGX)',
-                        enabledBorder: UnderlineInputBorder(
+                      decoration: InputDecoration(
+                        labelText: 'Amount (${currencyProvider.currencySymbol})',
+                        enabledBorder: const UnderlineInputBorder(
                           borderSide: BorderSide(color: Colors.grey),
                         ),
-                        focusedBorder: UnderlineInputBorder(
+                        focusedBorder: const UnderlineInputBorder(
                           borderSide: BorderSide(color: primaryTwo),
                         ),
                       ),
@@ -746,7 +727,7 @@ class _InvestmentsTabState extends State<InvestmentsTab> {
                         return null;
                       },
                       onSaved: (value) => amount = value,
-                      enabled: !isLoading, // Disable when loading
+                      enabled: !isLoading,
                     ),
                     const SizedBox(height: 16),
                     TextFormField(
@@ -770,7 +751,7 @@ class _InvestmentsTabState extends State<InvestmentsTab> {
                         return null;
                       },
                       onSaved: (value) => interest = value,
-                      enabled: !isLoading, // Disable when loading
+                      enabled: !isLoading,
                     ),
                   ],
                 ),
@@ -787,7 +768,7 @@ class _InvestmentsTabState extends State<InvestmentsTab> {
                     : () async {
                         if (_formKey.currentState!.validate()) {
                           _formKey.currentState!.save();
-                          setState(() => isLoading = true); // Show loading
+                          setState(() => isLoading = true);
 
                           try {
                             await _addInvestment(
@@ -795,25 +776,19 @@ class _InvestmentsTabState extends State<InvestmentsTab> {
                               double.parse(amount!),
                               double.parse(interest!),
                               context,
+                              currencyProvider,
                             );
                           } catch (e) {
-                            setState(() =>
-                                isLoading = false); // Hide loading on error
+                            setState(() => isLoading = false);
                             ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                  content:
-                                      Text('Failed to add investment: $e')),
+                              SnackBar(content: Text('Failed to add investment: $e')),
                             );
                           }
                         }
                       },
                 style: ElevatedButton.styleFrom(backgroundColor: primaryTwo),
                 child: isLoading
-                    ? SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: Loader(), // Show loader when loading
-                      )
+                    ? const SizedBox(width: 20, height: 20, child: Loader())
                     : Text('Add', style: TextStyle(color: white)),
               ),
             ],
@@ -926,11 +901,13 @@ class ModernSummaryCard extends StatelessWidget {
 
 class ModernInvestmentCard extends StatelessWidget {
   final Map<String, dynamic> investment;
+  final CurrencyProvider currencyProvider;
   final Function(String, String) onAddInterest;
   final Function(int, double, String) onDeleteInvestment;
 
   const ModernInvestmentCard({
     required this.investment,
+    required this.currencyProvider,
     required this.onAddInterest,
     required this.onDeleteInvestment,
   });
@@ -952,7 +929,7 @@ class ModernInvestmentCard extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'Add Interest ',
+                    'Add Interest',
                     style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -973,7 +950,7 @@ class ModernInvestmentCard extends StatelessWidget {
                   selectedOption: "Interest",
                   selectedFundManager: "Group Investment",
                   selectedOptionId: investment['id'],
-                  detailText: "Add interest ",
+                  detailText: "Add interest",
                 ),
               ),
             ],
@@ -1064,11 +1041,9 @@ class ModernInvestmentCard extends StatelessWidget {
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                         ),
-                        icon: const Icon(Icons.delete,
-                            color: Colors.black, size: 18),
+                        icon: const Icon(Icons.delete, color: Colors.black, size: 18),
                         label: const Text(
                           'Delete',
                           style: TextStyle(color: Colors.black, fontSize: 14),
@@ -1076,16 +1051,13 @@ class ModernInvestmentCard extends StatelessWidget {
                       ),
                       const SizedBox(width: 8),
                       ElevatedButton.icon(
-                        onPressed: () => _showAddInterestForm(
-                          context,
-                        ),
+                        onPressed: () => _showAddInterestForm(context),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: primaryTwo,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                         ),
                         icon: const Icon(Icons.add, color: white, size: 18),
                         label: const Text(
@@ -1108,8 +1080,6 @@ class ModernInvestmentCard extends StatelessWidget {
     final _formKey = GlobalKey<FormState>();
     String? confirmationAmount;
     String? password;
-
-    // Declare isLoading here so it's preserved across state updates
     bool isLoading = false;
 
     showModalBottomSheet(
@@ -1153,10 +1123,10 @@ class ModernInvestmentCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 20),
                       TextFormField(
-                        decoration: const InputDecoration(
-                          labelText: 'Confirm Investment Amount (UGX)',
-                          border: UnderlineInputBorder(),
-                          prefixIcon: Icon(Icons.money),
+                        decoration: InputDecoration(
+                          labelText: 'Confirm Investment Amount (${currencyProvider.currencySymbol})',
+                          border: const UnderlineInputBorder(),
+                          prefixIcon: const Icon(Icons.money),
                         ),
                         keyboardType: TextInputType.number,
                         validator: (value) {
@@ -1164,15 +1134,14 @@ class ModernInvestmentCard extends StatelessWidget {
                             return 'Please confirm the investment amount';
                           }
                           final parsedValue = double.tryParse(value);
-                          if (parsedValue == null)
-                            return 'Enter a valid number';
+                          if (parsedValue == null) return 'Enter a valid number';
                           final investmentAmount = double.parse(
                             investment['amount']
-                                .replaceAll('UGX ', '')
+                                .replaceAll('${currencyProvider.currencySymbol} ', '')
                                 .replaceAll(',', ''),
                           );
                           if (parsedValue != investmentAmount) {
-                            return 'Amount does not match investment (UGX $investmentAmount)';
+                            return 'Amount does not match investment (${currencyProvider.currencySymbol} $investmentAmount)';
                           }
                           return null;
                         },
@@ -1203,8 +1172,7 @@ class ModernInvestmentCard extends StatelessWidget {
                           Expanded(
                             child: TextButton(
                               onPressed: () => Navigator.pop(context),
-                              child: const Text('Cancel',
-                                  style: TextStyle(color: Colors.grey)),
+                              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -1219,7 +1187,7 @@ class ModernInvestmentCard extends StatelessWidget {
                                         try {
                                           final amount = double.parse(
                                             investment['amount']
-                                                .replaceAll('UGX ', '')
+                                                .replaceAll('${currencyProvider.currencySymbol} ', '')
                                                 .replaceAll(',', ''),
                                           );
                                           await onDeleteInvestment(
@@ -1227,13 +1195,11 @@ class ModernInvestmentCard extends StatelessWidget {
                                             amount,
                                             password!,
                                           );
-                                          Navigator.pop(
-                                              context); // Optional: close after delete
+                                          Navigator.pop(context);
                                         } catch (e) {
                                           // Handle error or show dialog
                                         } finally {
-                                          setModalState(
-                                              () => isLoading = false);
+                                          setModalState(() => isLoading = false);
                                         }
                                       }
                                     },
@@ -1242,8 +1208,7 @@ class ModernInvestmentCard extends StatelessWidget {
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(8),
                                 ),
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 16, vertical: 12),
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                               ),
                               child: isLoading
                                   ? const SizedBox(

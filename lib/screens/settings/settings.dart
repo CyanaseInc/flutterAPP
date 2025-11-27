@@ -242,7 +242,7 @@ class _SettingsPageState extends material.State<SettingsPage> {
               context,
               material.MaterialPageRoute(
                   builder: (context) => ReferralPage(
-  inviteCode: "CYANASE123", // Dynamic from your backend
+  
   totalEarnings: 1250000.00, // Dynamic from your backend
 )),
             );

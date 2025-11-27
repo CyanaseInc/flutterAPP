@@ -8,7 +8,8 @@ import '../home/home.dart';
 import 'package:cyanase/helpers/database_helper.dart';
 import 'package:cyanase/helpers/loader.dart';
 import 'package:cyanase/helpers/api_helper.dart';
-import 'package:cyanase/helpers/web_db.dart';
+import 'package:provider/provider.dart';
+import 'package:cyanase/providers/provider.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:cyanase/helpers/link_handler.dart';
 import 'package:cyanase/screens/home/group/group_invite.dart';
@@ -91,213 +92,236 @@ class LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  Future<void> _handleLogin(String username, String password) async {
+
+ Future<void> _handleLogin(String username, String password) async {
+  setState(() {
+    _isLoading = true;
+  });
+
+  // Ensure username starts with '+'
+  if (!username.startsWith('+')) {
+    username = '+$username';
+  }
+
+  if (username.isEmpty || password.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('All fields are required')),
+    );
     setState(() {
-      _isLoading = true;
+      _isLoading = false;
+    });
+    return;
+  }
+
+  try {
+    final loginResponse = await ApiService.login({
+      'username': username,
+      'password': password,
     });
 
-    // Ensure username starts with '+'
-    if (!username.startsWith('+')) {
-      username = '+$username';
-    }
-
-    if (username.isEmpty || password.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('All fields are required')),
-      );
-      setState(() {
-        _isLoading = false;
-      });
-      return;
-    }
-
-    try {
-      final loginResponse = await ApiService.login({
-        'username': username,
-        'password': password,
-      });
-
-      if (loginResponse.containsKey('success') && !loginResponse['success']) {
-        String errorMessage = loginResponse['message'] ?? 'Login failed';
-        // Convert technical messages to user-friendly ones
-        if (errorMessage.contains('Invalid credentials')) {
-          errorMessage = 'Incorrect phone number or password. Please try again.';
-        } else if (errorMessage.contains('not found')) {
-          errorMessage = 'No account found with this phone number. Please sign up first.';
-        } else if (errorMessage.contains('network')) {
-          errorMessage = 'Unable to connect to the internet. Please check your connection.';
-        }
-        throw Exception(errorMessage);
+    if (loginResponse.containsKey('success') && !loginResponse['success']) {
+      String errorMessage = loginResponse['message'] ?? 'Login failed';
+      // Convert technical messages to user-friendly ones
+      if (errorMessage.contains('Invalid credentials')) {
+        errorMessage = 'Incorrect phone number or password. Please try again.';
+      } else if (errorMessage.contains('not found')) {
+        errorMessage = 'No account found with this phone number. Please sign up first.';
+      } else if (errorMessage.contains('network')) {
+        errorMessage = 'Unable to connect to the internet. Please check your connection.';
       }
+      throw Exception(errorMessage);
+    }
 
-      if (loginResponse.containsKey('token') &&
-          loginResponse.containsKey('user_id') &&
-          loginResponse.containsKey('user')) {
-        final token = loginResponse['token'] as String;
-        final userId = loginResponse['user_id'] as int;
-        final user = loginResponse['user'] as Map<String, dynamic>;
-        final email = user['email'] as String;
+    if (loginResponse.containsKey('token') &&
+        loginResponse.containsKey('user_id') &&
+        loginResponse.containsKey('user')) {
+      final token = loginResponse['token'] as String;
+      final userId = loginResponse['user_id'] as int;
+      final user = loginResponse['user'] as Map<String, dynamic>;
+      final email = user['email'] as String;
 
-        final profile = user['profile'] as Map<String, dynamic>;
-        final picture = profile['profile_picture'] as String;
-        final firstName = user["first_name"] as String;
-        final lastName = user['last_name'] as String;
-        final userCountry = profile['country'] as String;
-        final phoneNumber = profile['phoneno'] as String;
-        final isVerified = profile['is_verified'] as bool? ?? false;
-        final mypasscode = profile['passcode'] as String?;
-        final userName = '$firstName $lastName'.trim();
-        final autoSave = profile['auto_save'] as bool? ?? false;
-        final goalAlert = profile['goals_alert'] as bool? ?? false;
-        setState(() {
-          _email = email;
-          _passcode = (mypasscode != null &&
-              mypasscode.isNotEmpty &&
-              mypasscode.startsWith('pbkdf2_sha256'));
-        });
+      final profile = user['profile'] as Map<String, dynamic>;
+      final picture = profile['profile_picture'] as String;
+      final firstName = user["first_name"] as String;
+      final lastName = user['last_name'] as String;
+      final userCountry = profile['country'] as String;
+      final phoneNumber = profile['phoneno'] as String;
+      final isVerified = profile['is_verified'] as bool? ?? false;
+      final mypasscode = profile['passcode'] as String?;
+      final inviteCode = profile['inviteCode'];
+      final userName = '$firstName $lastName'.trim();
+      final autoSave = profile['auto_save'] as bool? ?? false;
+      final goalAlert = profile['goals_alert'] as bool? ?? false;
+      
+      // EXTRACT CURRENCY FROM RESPONSE
+      final currencyCode = loginResponse['currency'] as String? ?? 'UGX';
+      final currencySymbol = loginResponse['currency_symbol'] as String? ?? 'UGX';
+      
+      // Also check profile for currency (fallback)
+      final profileCurrencyCode = profile['currency'] as String?;
+      final profileCurrencySymbol = profile['currency_symbol'] as String?;
+      
+      // Use profile currency if available, otherwise use response currency
+      final finalCurrencyCode = profileCurrencyCode ?? currencyCode;
+      final finalCurrencySymbol = profileCurrencySymbol ?? currencySymbol;
 
-        if (isVerified) {
-          final dbHelper = DatabaseHelper();
-          final db = await dbHelper.database;
+      setState(() {
+        _email = email;
+        _passcode = (mypasscode != null &&
+            mypasscode.isNotEmpty &&
+            mypasscode.startsWith('pbkdf2_sha256'));
+      });
+
+      if (isVerified) {
+        final dbHelper = DatabaseHelper();
+        final db = await dbHelper.database;
+        
+        // Use a transaction for all database operations
+        await db.transaction((txn) async {
+          final readExistingProfile = await txn.query('profile');
           
-          // Use a transaction for all database operations
-          await db.transaction((txn) async {
-            final readExistingProfile = await txn.query('profile');
-            
-            if (readExistingProfile.isNotEmpty) {
-              await txn.update(
-                'profile',
-                {
-                  'email': email,
-                  'country': userCountry,
-                  'phone_number': phoneNumber,
-                  'token': token,
-                  'name': userName,
-                  'profile_pic': picture,
-                  'created_at': DateTime.now().toIso8601String(),
-                  'auto_save': autoSave,
-                  'goals_alert': goalAlert,
-                },
-              );
-            }
-
-            //Check if profile exists
-            final existingProfile = await txn.query(
+          if (readExistingProfile.isNotEmpty) {
+            await txn.update(
               'profile',
-              where: 'id = ?',
-              whereArgs: [userId],
+              {
+                'email': email,
+                'country': userCountry,
+                'phone_number': phoneNumber,
+                'token': token,
+                'name': userName,
+                'profile_pic': picture,
+                'created_at': DateTime.now().toIso8601String(),
+                'auto_save': autoSave,
+                'goals_alert': goalAlert,
+                
+              },
             );
+          }
 
-            if (existingProfile.isNotEmpty) {
-              // Update existing profile
-              final int updatedRows = await txn.update(
-                'profile',
-                {
-                  'email': email,
-                  'country': userCountry,
-                  'phone_number': phoneNumber,
-                  'token': token,
-                  'name': userName,
-                  'profile_pic': picture,
-                  'created_at': DateTime.now().toIso8601String(),
-                  'auto_save': autoSave,
-                  'goals_alert': goalAlert,
-                },
-                where: 'id = ?',
-                whereArgs: [userId],
-              );
-
-              if (updatedRows == 0) {
-                throw Exception('Failed to update profile in database');
-              }
-            } else {
-              // Insert new profile
-              final int insertedId = await txn.insert(
-                'profile',
-                {
-                  'id': userId,
-                  'email': email,
-                  'country': userCountry,
-                  'token': token,
-                  'phone_number': phoneNumber,
-                  'name': userName,
-                  'profile_pic': picture,
-                  'created_at': DateTime.now().toIso8601String(),
-                  'auto_save': autoSave,
-                  'goals_alert': goalAlert,
-                },
-              );
-
-              if (insertedId == 0) {
-                throw Exception('Failed to insert profile into database');
-              }
-            }
-          });
-
-          // Verify the operation was successful by querying the database
-          final verifiedProfile = await db.query(
+          // Check if profile exists
+          final existingProfile = await txn.query(
             'profile',
             where: 'id = ?',
             whereArgs: [userId],
           );
 
-          if (verifiedProfile.isEmpty) {
-            throw Exception(
-                'Profile verification failed - no profile found after operation');
-          }
+          if (existingProfile.isNotEmpty) {
+            // Update existing profile
+            final int updatedRows = await txn.update(
+              'profile',
+              {
+                'email': email,
+                'country': userCountry,
+                'phone_number': phoneNumber,
+                'token': token,
+                'name': userName,
+                'profile_pic': picture,
+                'created_at': DateTime.now().toIso8601String(),
+                'auto_save': autoSave,
+                'goals_alert': goalAlert,
+               
+              },
+              where: 'id = ?',
+              whereArgs: [userId],
+            );
 
-          // Handle pending deep link after login
-          if (PendingDeepLink.uri != null &&
-              PendingDeepLink.uri!.scheme == 'cyanase' &&
-              PendingDeepLink.uri!.host == 'join') {
-            final groupId = PendingDeepLink.uri!.queryParameters['group_id'];
-            if (groupId != null && groupId.isNotEmpty) {
-              PendingDeepLink.uri = null;
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => GroupInviteScreen(
-                    groupId: int.parse(groupId),
-                  ),
-                ),
-              );
-              return;
+            if (updatedRows == 0) {
+              throw Exception('Failed to update profile in database');
+            }
+          } else {
+            // Insert new profile
+            final int insertedId = await txn.insert(
+              'profile',
+              {
+                'id': userId,
+                'email': email,
+                'country': userCountry,
+                'token': token,
+                'phone_number': phoneNumber,
+                'name': userName,
+                'profile_pic': picture,
+                'created_at': DateTime.now().toIso8601String(),
+                'auto_save': autoSave,
+                'goals_alert': goalAlert,
+               
+              },
+            );
+
+            if (insertedId == 0) {
+              throw Exception('Failed to insert profile into database');
             }
           }
+        });
 
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => HomeScreen(
-                passcode: _passcode,
-                email: _email,
-                name: userName,
-                picture: picture,
-              ),
-            ),
-          );
-        } else {
-          _showVerificationBottomSheet(phoneNumber);
+        // Verify the operation was successful by querying the database
+        final verifiedProfile = await db.query(
+          'profile',
+          where: 'id = ?',
+          whereArgs: [userId],
+        );
+
+        if (verifiedProfile.isEmpty) {
+          throw Exception(
+              'Profile verification failed - no profile found after operation');
         }
+
+        // SET CURRENCY IN PROVIDER
+       final currencyProvider = Provider.of<CurrencyProvider>(context, listen: false);
+currencyProvider.setCurrency(finalCurrencyCode, finalCurrencySymbol);
+currencyProvider.setInviteCode(inviteCode); // Add this line
+
+        // Handle pending deep link after login
+        if (PendingDeepLink.uri != null &&
+            PendingDeepLink.uri!.scheme == 'cyanase' &&
+            PendingDeepLink.uri!.host == 'join') {
+          final groupId = PendingDeepLink.uri!.queryParameters['group_id'];
+          if (groupId != null && groupId.isNotEmpty) {
+            PendingDeepLink.uri = null;
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (context) => GroupInviteScreen(
+                  groupId: int.parse(groupId),
+                ),
+              ),
+            );
+            return;
+          }
+        }
+
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => HomeScreen(
+              passcode: _passcode,
+              email: _email,
+              name: userName,
+              picture: picture,
+            ),
+          ),
+        );
       } else {
-        throw Exception('Invalid login response: Missing required fields');
+        _showVerificationBottomSheet(phoneNumber);
       }
-    } catch (e) {
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.toString().replaceAll('Exception: ', '')),
-          backgroundColor: Colors.red[700],
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.all(10),
-        ),
-      );
-    } finally {
-      setState(() {
-        _isLoading = false;
-      });
+    } else {
+      throw Exception('Invalid login response: Missing required fields');
     }
+  } catch (e) {
+    debugPrint('Login error: $e');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(e.toString().replaceAll('Exception: ', '')),
+        backgroundColor: Colors.red[700],
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(10),
+      ),
+    );
+  } finally {
+    setState(() {
+      _isLoading = false;
+    });
   }
+}
 
   void _showVerificationBottomSheet(String phoneNumber) {
     showModalBottomSheet(
@@ -320,8 +344,7 @@ class LoginScreenState extends State<LoginScreen> {
 
   try {
     String otp = _controllers.map((controller) => controller.text).join('');
-    print('OTP entered: $otp');
-    print('Phone number for verification: $phoneNumber');
+
     
     Map<String, dynamic> userData = {
       'username': phoneNumber,
@@ -333,8 +356,8 @@ class LoginScreenState extends State<LoginScreen> {
     // Call API
     final response = await ApiService.VerificationEmail(userData);
 
-    print('Full API response received: $response');
-    print('Response type: ${response.runtimeType}');
+ 
+
     if (response is Map<String, dynamic>) {
       print('Response keys: ${response.keys.toList()}');
     }
