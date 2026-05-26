@@ -4,6 +4,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../../theme/theme.dart';
 import './personal/personal.dart';
 import './group/group.dart';
+import './group/chat_list.dart';
 import './goal/goal.dart';
 import './group/new_group.dart';
 import '../settings/settings.dart';
@@ -22,6 +23,8 @@ import './transactions_screen.dart';
 import 'package:cyanase/helpers/api_helper.dart';
 import 'package:url_launcher/url_launcher.dart'; // Added
 import 'package:flutter/gestures.dart';
+import 'package:cyanase/screens/home/personal/personal_investment_policy_screen.dart';
+import 'package:cyanase/helpers/hash_numbers.dart' show debugPrintContactSyncFailure;
 
 class HomeScreen extends StatefulWidget {
   final bool? passcode;
@@ -53,6 +56,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Timer? _unreadCheckTimer;
   int _notificationCount = 0;
   bool _isLoadingNotifications = false;
+  bool _investmentPolicyIncomplete = false;
+  final GlobalKey<ChatListState> _chatListKey = GlobalKey<ChatListState>();
 
   @override
   void initState() {
@@ -68,6 +73,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       _setupNotificationHandler();
       _getProfilePicture();
       _fetchNotificationCount();
+      _fetchInvestmentPolicyStatus();
     });
   }
 
@@ -349,14 +355,15 @@ Future<bool?> _showContactAccessDisclosure() async {
 
   Future<List<Map<String, dynamic>>> getRegisteredContacts(
       List<Map<String, dynamic>> contacts) async {
-    final String apiUrl = "https://fund.cyanase.app/app/get_my_contacts.php";
+    final String apiUrl = ApiEndpoints.fundAppGetMyContacts;
 
     List<String> phoneNumbers =
         contacts.map((contact) => contact['phone'] as String).toList();
+    final requestBody = jsonEncode({"phoneNumbers": phoneNumbers});
     final response = await http.post(
       Uri.parse(apiUrl),
       headers: {"Content-Type": "application/json"},
-      body: jsonEncode({"phoneNumbers": phoneNumbers}),
+      body: requestBody,
     );
 
     if (response.statusCode == 200) {
@@ -381,8 +388,15 @@ Future<bool?> _showContactAccessDisclosure() async {
       await dbHelper.insertContacts(registeredContacts);
       return registeredContacts;
     } else {
+      debugPrintContactSyncFailure(
+        source: 'home.dart getRegisteredContacts',
+        url: apiUrl,
+        response: response,
+        requestPhoneCount: phoneNumbers.length,
+        requestBodyPreview: requestBody,
+      );
       throw Exception(
-          "Failed to fetch registered contacts: ${response.statusCode}");
+          "Failed to fetch registered contacts: ${response.statusCode} (see console log above)");
     }
   }
 
@@ -430,10 +444,143 @@ Future<bool?> _showContactAccessDisclosure() async {
     });
   }
 
-  void _updateProfilePicture(String? newPicture) {
+  String _greeting() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
+    return 'Good evening';
+  }
+
+  String _firstName() {
+    final name = widget.name?.trim();
+    if (name == null || name.isEmpty) return 'there';
+    return name.split(RegExp(r'\s+')).first;
+  }
+
+  String _tabSubtitle() {
+    switch (_tabController.index) {
+      case 0:
+        return 'Grow your wealth with confidence';
+      case 1:
+        return 'Save and chat with your circles';
+      case 2:
+        return 'Track what you are building';
+      default:
+        return '';
+    }
+  }
+
+  PreferredSizeWidget _buildHomeAppBar() {
+    return PreferredSize(
+      preferredSize: Size.fromHeight(_isSearching ? 56 : 100),
+      child: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [primaryTwo, Color(0xFF161A38)],
+          ),
+        ),
+        child: SafeArea(
+          bottom: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(8, 4, 8, 14),
+            child: _isSearching
+                ? Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.arrow_back, color: white),
+                        onPressed: () => setState(() => _isSearching = false),
+                      ),
+                      Expanded(
+                        child: TextField(
+                          controller: _searchController,
+                          style: const TextStyle(color: white),
+                          decoration: InputDecoration(
+                            hintText: 'Search groups...',
+                            hintStyle: TextStyle(color: white.withOpacity(0.5)),
+                            border: InputBorder.none,
+                          ),
+                        ),
+                      ),
+                    ],
+                  )
+                : Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      _profile(onDark: true),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              '${_greeting()}, ${_firstName()}',
+                              style: TextStyle(
+                                color: white.withOpacity(0.75),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _currentTabTitle,
+                              style: const TextStyle(
+                                color: white,
+                                fontSize: 22,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: -0.3,
+                              ),
+                            ),
+                            Text(
+                              _tabSubtitle(),
+                              style: TextStyle(
+                                color: white.withOpacity(0.65),
+                                fontSize: 12,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                      ..._buildAppBarActions(onDark: true),
+                    ],
+                  ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _applyProfilePictureUpdate(String? newPicture) async {
+    if (newPicture == null || newPicture.trim().isEmpty) return;
+
+    var path = newPicture.trim();
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      final uri = Uri.parse(path);
+      path = uri.path.startsWith('/') ? uri.path.substring(1) : uri.path;
+    }
+    if (path.startsWith('/')) path = path.substring(1);
+
+    final cacheBust = DateTime.now().millisecondsSinceEpoch;
+    final storedPath = '$path?v=$cacheBust';
+
+    await DatabaseHelper().updateLocalProfilePicture(storedPath);
+
+    if (!mounted) return;
     setState(() {
-      _currentPicture = newPicture;
+      _currentPicture = storedPath;
     });
+
+    _chatListKey.currentState?.reloadAfterProfilePictureChange();
+  }
+
+  void _updateProfilePicture(String? newPicture) {
+    _applyProfilePictureUpdate(newPicture);
   }
 
   void _showPasscodeCreationModal() {
@@ -604,41 +751,58 @@ Future<bool?> _showContactAccessDisclosure() async {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: white,
-        leading: _profile(),
-        title: _isSearching
-            ? TextField(
-                controller: _searchController,
-                decoration: InputDecoration(
-                  hintText: 'Search groups...',
-                  border: InputBorder.none,
-                  hintStyle: TextStyle(color: Colors.grey[400]),
-                ),
-                style: const TextStyle(color: Colors.black),
-                onChanged: (value) {},
-              )
-            : Text(
-                _currentTabTitle,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: primaryTwo,
-                  fontSize: 25,
-                ),
-              ),
-        automaticallyImplyLeading: false,
-        actions: _buildAppBarActions(),
-      ),
+      backgroundColor: white,
+      appBar: _buildHomeAppBar(),
       body: Stack(
         children: [
           Column(
             children: [
+              if (_investmentPolicyIncomplete)
+                Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    border: Border.all(color: Colors.blue.shade200),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.edit_note_outlined, color: Colors.blue.shade800),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Your investment profile is incomplete. Complete it before you invest.',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.blue.shade900,
+                          ),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.push<void>(
+                            context,
+                            MaterialPageRoute<void>(
+                              builder: (_) =>
+                                  const PersonalInvestmentPolicyScreen(),
+                            ),
+                          ).then((_) => _fetchInvestmentPolicyStatus());
+                        },
+                        child: const Text('Complete'),
+                      ),
+                    ],
+                  ),
+                ),
               Expanded(
                 child: TabBarView(
                   controller: _tabController,
                   children: [
                     PersonalTab(tabController: _tabController),
                     GroupsTab(
+                      chatListKey: _chatListKey,
                       onUnreadCountChanged: updateUnreadCount,
                     ),
                     const GoalsTab(),
@@ -733,111 +897,236 @@ Future<bool?> _showContactAccessDisclosure() async {
             ),
         ],
       ),
-      bottomNavigationBar: Container(
-        color: primaryTwo,
-        width: double.infinity,
-        height: 70,
-        child: TabBar(
-          controller: _tabController,
-          indicator: const BoxDecoration(),
-          labelColor: primaryLight,
-          unselectedLabelColor: Colors.white,
-          labelStyle: const TextStyle(
-            fontWeight: FontWeight.normal,
-            fontSize: 12,
-            decoration: TextDecoration.none,
-          ),
-          unselectedLabelStyle: const TextStyle(
-            fontWeight: FontWeight.normal,
-            fontSize: 12,
-            decoration: TextDecoration.none,
-          ),
-          tabs: [
-            Tab(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const SizedBox(height: 4),
-                  SvgPicture.asset(
-                    'assets/icons/person.svg',
-                    color: _tabController.index == 0 ? primaryLight : Colors.white,
-                    width: 24,
-                    height: 24,
-                  ),
-                  const SizedBox(height: 2),
-                  const Text('Invest'),
-                ],
+      bottomNavigationBar: SafeArea(
+        minimum: const EdgeInsets.only(bottom: 8),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+          child: Material(
+            elevation: 12,
+            shadowColor: primaryTwo.withOpacity(0.28),
+            color: surfaceMuted,
+            surfaceTintColor: Colors.transparent,
+            borderRadius: BorderRadius.circular(28),
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(28),
+                border: Border.all(
+                  color: surfaceMutedBorder.withOpacity(0.65),
+                  width: 1,
+                ),
               ),
-            ),
-            Tab(
-              child: Stack(
-                children: [
-                  Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const SizedBox(height: 4),
-                      SvgPicture.asset(
-                        'assets/icons/groups.svg',
-                        color: _tabController.index == 1 ? primaryLight : Colors.white,
-                        width: 24,
-                        height: 24,
-                      ),
-                      const SizedBox(height: 2),
-                      const Text('Groups'),
-                    ],
-                  ),
-                  if (_totalUnreadCount > 0)
-                    Positioned(
-                      right: 0,
-                      top: 0,
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: Colors.red,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: primaryTwo, width: 2),
-                        ),
-                        constraints: const BoxConstraints(
-                          minWidth: 16,
-                          minHeight: 16,
-                        ),
-                        child: Text(
-                          _totalUnreadCount.toString(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(28),
+                child: SizedBox(
+                  height: 58,
+                  child: Theme(
+                    data: Theme.of(context).copyWith(
+                      splashColor: primaryTwo.withOpacity(0.06),
+                      highlightColor: Colors.transparent,
                     ),
-                ],
-              ),
-            ),
-            Tab(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const SizedBox(height: 4),
-                  SvgPicture.asset(
-                    'assets/icons/goal-icon.svg',
-                    color: _tabController.index == 2 ? primaryLight : Colors.white,
-                    width: 24,
-                    height: 24,
+                    child: TabBar(
+                      controller: _tabController,
+                      dividerColor: Colors.transparent,
+                      indicatorSize: TabBarIndicatorSize.tab,
+                      indicatorPadding:
+                          const EdgeInsets.fromLTRB(14, 0, 14, 6),
+                      indicator: UnderlineTabIndicator(
+                        borderRadius: BorderRadius.circular(3),
+                        borderSide: const BorderSide(
+                          width: 3,
+                          color: primaryColor,
+                        ),
+                        insets: EdgeInsets.zero,
+                      ),
+                      labelColor: primaryTwo,
+                      unselectedLabelColor: Colors.grey.shade700,
+                      labelStyle: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 11,
+                        letterSpacing: 0.15,
+                        decoration: TextDecoration.none,
+                      ),
+                      unselectedLabelStyle: TextStyle(
+                        fontWeight: FontWeight.w500,
+                        fontSize: 11,
+                        letterSpacing: 0.15,
+                        color: Colors.grey.shade700,
+                        decoration: TextDecoration.none,
+                      ),
+                      tabs: [
+                        Tab(
+                          height: 48,
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _navIcon(
+                                index: 0,
+                                activeIcon: Icons.savings_rounded,
+                                inactiveIcon: Icons.savings_outlined,
+                              ),
+                              const SizedBox(height: 2),
+                              const Text('Invest'),
+                            ],
+                          ),
+                        ),
+                        Tab(
+                          height: 48,
+                          child: Stack(
+                            clipBehavior: Clip.none,
+                            alignment: Alignment.center,
+                            children: [
+                              Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  _navIcon(
+                                    index: 1,
+                                    activeIcon: Icons.groups_rounded,
+                                    inactiveIcon: Icons.groups_outlined,
+                                  ),
+                                  const SizedBox(height: 2),
+                                  const Text('Groups'),
+                                ],
+                              ),
+                              if (_totalUnreadCount > 0)
+                                Positioned(
+                                  right: -2,
+                                  top: -4,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 5,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.red.shade600,
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(
+                                        color: surfaceMuted,
+                                        width: 1.5,
+                                      ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.red.withOpacity(0.35),
+                                          blurRadius: 4,
+                                          offset: const Offset(0, 1),
+                                        ),
+                                      ],
+                                    ),
+                                    constraints: const BoxConstraints(
+                                      minWidth: 18,
+                                      minHeight: 18,
+                                    ),
+                                    child: Text(
+                                      _totalUnreadCount > 99
+                                          ? '99+'
+                                          : _totalUnreadCount.toString(),
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                        Tab(
+                          height: 48,
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              _navIcon(
+                                index: 2,
+                                activeIcon: Icons.flag_rounded,
+                                inactiveIcon: Icons.flag_outlined,
+                              ),
+                              const SizedBox(height: 2),
+                              const Text('Goals'),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 2),
-                  const Text('Goals'),
-                ],
+                ),
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _profile() {
+  Widget _navIcon({
+    required int index,
+    required IconData activeIcon,
+    required IconData inactiveIcon,
+  }) {
+    final active = _tabController.index == index;
+    return Icon(
+      active ? activeIcon : inactiveIcon,
+      size: 25,
+      color: active ? primaryTwo : Colors.grey.shade600,
+    );
+  }
+
+  /// Same as [chat_list] / settings: `server` + path from login (`media/profile/...`).
+  String _profilePicUrl(String path) {
+    var p = path.trim().replaceAll(RegExp(r'\s+'), '');
+    if (p.isEmpty) return ApiEndpoints.profilePhoto;
+
+    var query = '';
+    if (p.contains('?')) {
+      final i = p.indexOf('?');
+      query = p.substring(i);
+      p = p.substring(0, i);
+    }
+    final String url;
+    if (p.startsWith('http://') || p.startsWith('https://')) {
+      url = p;
+    } else if (p.startsWith('/')) {
+      url = '${ApiEndpoints.server}$p';
+    } else {
+      url = '${ApiEndpoints.server}/$p';
+    }
+    return '$url$query';
+  }
+
+  Widget _profileAvatarImage({required bool onDark}) {
+    final path = _currentPicture;
+    final useNetwork = path != null && path.trim().isNotEmpty;
+    if (!useNetwork) {
+      return CircleAvatar(
+        radius: 18,
+        backgroundColor: onDark ? primaryTwoLight : surfaceMuted,
+        backgroundImage: const AssetImage('assets/images/avatar.png'),
+      );
+    }
+    return CircleAvatar(
+      radius: 18,
+      backgroundColor: onDark ? primaryTwoLight : surfaceMuted,
+      child: ClipOval(
+        child: Image.network(
+          _profilePicUrl(path),
+          width: 36,
+          height: 36,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => Image.asset(
+            'assets/images/avatar.png',
+            width: 36,
+            height: 36,
+            fit: BoxFit.cover,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _profile({bool onDark = false}) {
     return IconButton(
       onPressed: () async {
         await Navigator.push(
@@ -848,24 +1137,30 @@ Future<bool?> _showContactAccessDisclosure() async {
             ),
           ),
         );
+        await _getProfilePicture();
       },
-      padding: const EdgeInsets.all(8.0),
-      icon: CircleAvatar(
-        radius: 20,
-        backgroundColor: Colors.transparent,
-        backgroundImage: _currentPicture != null && _currentPicture!.isNotEmpty
-            ? NetworkImage(ApiEndpoints.server + '/' + _currentPicture!) as ImageProvider
-            : const AssetImage("assets/images/avatar.png"),
+      padding: const EdgeInsets.all(6),
+      icon: Container(
+        padding: const EdgeInsets.all(2),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: onDark ? primaryColor : primaryTwo.withOpacity(0.3),
+            width: 2,
+          ),
+        ),
+        child: _profileAvatarImage(onDark: onDark),
       ),
     );
   }
 
-  List<Widget> _buildAppBarActions() {
+  List<Widget> _buildAppBarActions({bool onDark = false}) {
+    final iconColor = onDark ? white : primaryTwo;
     return [
       Stack(
         children: [
           IconButton(
-            icon: const Icon(Icons.notifications_none, color: primaryTwo),
+            icon: Icon(Icons.notifications_none_rounded, color: iconColor),
             onPressed: () {
               Navigator.push(
                 context,
@@ -916,10 +1211,8 @@ Future<bool?> _showContactAccessDisclosure() async {
         ],
       ),
       IconButton(
-        icon: const Icon(Icons.more_vert, color: primaryTwo),
-        onPressed: () {
-          _showMenu(context);
-        },
+        icon: Icon(Icons.more_vert_rounded, color: iconColor),
+        onPressed: () => _showMenu(context),
       ),
     ];
   }
@@ -956,9 +1249,11 @@ Future<bool?> _showContactAccessDisclosure() async {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => SettingsPage(),
+            builder: (context) => SettingsPage(
+              onProfileUpdate: _updateProfilePicture,
+            ),
           ),
-        );
+        ).then((_) => _getProfilePicture());
       } else if (value == 'new_group_investment') {
         Navigator.push(
           context,
@@ -1044,6 +1339,25 @@ Future<bool?> _showContactAccessDisclosure() async {
           _isLoadingNotifications = false;
         });
       }
+    }
+  }
+
+  Future<void> _fetchInvestmentPolicyStatus() async {
+    try {
+      final dbHelper = DatabaseHelper();
+      final db = await dbHelper.database;
+      final userProfile = await db.query('profile', limit: 1);
+      if (userProfile.isEmpty) return;
+      final token = (userProfile.first['token'] as String?)?.trim() ?? '';
+      if (token.isEmpty) return;
+      final result = await ApiService.getInvestmentPolicyStatus(token);
+      if (mounted) {
+        setState(() {
+          _investmentPolicyIncomplete = result['complete'] != true;
+        });
+      }
+    } catch (_) {
+      // silent fail — invest gate will retry when user taps Invest
     }
   }
 }

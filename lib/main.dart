@@ -145,7 +145,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       case '/referral':
         final args = arguments as Map<String, dynamic>?;
         return ReferralPage(
-          totalEarnings: args?['totalEarnings'] ?? 0.0,
+         
         );
       default:
         return const SplashScreenWrapper();

@@ -7,10 +7,12 @@ import 'package:cyanase/theme/theme.dart';
 
 class GroupsTab extends StatefulWidget {
   final Function(int)? onUnreadCountChanged;
-  
+  final GlobalKey<ChatListState>? chatListKey;
+
   const GroupsTab({
     super.key,
     this.onUnreadCountChanged,
+    this.chatListKey,
   });
 
   @override
@@ -19,8 +21,6 @@ class GroupsTab extends StatefulWidget {
 
 class _GroupsTabState extends State<GroupsTab> {
   dynamic userToken = '';
-  // Key to refresh the ChatList
-  final GlobalKey<ChatListState> _chatListKey = GlobalKey<ChatListState>();
 
   void _handleUnreadCountChanged(int count) {
     if (mounted) {
@@ -50,7 +50,7 @@ class _GroupsTabState extends State<GroupsTab> {
     return Scaffold(
       backgroundColor: white, // Set the background color to white
       body: ChatList(
-        key: _chatListKey, // Pass the key to ChatList
+        key: widget.chatListKey,
         onUnreadCountChanged: _handleUnreadCountChanged,
       ),
       // body: ChatScreen(),

@@ -470,197 +470,289 @@ class GoalCard extends StatelessWidget {
       locale: 'en_NG',
     );
 
+    final savedAmount =
+        (goalData['net_contribution'] as num?)?.toDouble() ?? 0.0;
+    final pct = (progress * 100).clamp(0, 100).round();
+
+    Widget goalThumb() {
+      const radius = BorderRadius.all(Radius.circular(14));
+      if (goalPicture != null) {
+        return ClipRRect(
+          borderRadius: radius,
+          child: Image.network(
+            goalPicture,
+            width: 64,
+            height: 64,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => Image.asset(
+              'assets/images/goal.png',
+              width: 64,
+              height: 64,
+              fit: BoxFit.cover,
+            ),
+          ),
+        );
+      }
+      return ClipRRect(
+        borderRadius: radius,
+        child: Image.asset(
+          'assets/images/goal.png',
+          width: 64,
+          height: 64,
+          fit: BoxFit.cover,
+        ),
+      );
+    }
+
     return MouseRegion(
       cursor: SystemMouseCursors.click,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        child: GestureDetector(
-          onTap: onTap,
-          child: Card(
-            margin: const EdgeInsets.only(bottom: 20.0),
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Container(
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 14),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(20),
+            splashColor: primaryTwo.withOpacity(0.06),
+            highlightColor: primaryTwo.withOpacity(0.03),
+            child: Ink(
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
+                color: surfaceMuted,
+                borderRadius: BorderRadius.circular(20),
                 border: Border.all(
-                  color: primaryTwo.withOpacity(0.1),
+                  color: surfaceMutedBorder.withOpacity(0.55),
                   width: 1,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
+                    color: primaryTwo.withOpacity(0.08),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8),
                   ),
                 ],
               ),
-              child: Padding(
-                padding: const EdgeInsets.all(20.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          width: 70,
-                          height: 70,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(14),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.1),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                            image: DecorationImage(
-                              image: goalPicture != null
-                                  ? NetworkImage(goalPicture)
-                                  : const AssetImage('assets/images/goal.png')
-                                      as ImageProvider,
-                              fit: BoxFit.cover,
-                              onError: (exception, stackTrace) =>
-                                  const AssetImage('assets/images/goal.png'),
-                            ),
-                          ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Container(
+                        width: 4,
+                        decoration: const BoxDecoration(
+                          color: primaryColor,
                         ),
-                        const SizedBox(width: 16),
-                        Expanded(
+                      ),
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Expanded(
-                                    child: Text(
-                                      goalData['goal_name'] as String? ??
-                                          'Unnamed Goal',
-                                      style: const TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.w600,
-                                        letterSpacing: -0.5,
-                                      ),
-                                      overflow: TextOverflow.ellipsis,
+                                  DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(14),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.06),
+                                          blurRadius: 12,
+                                          offset: const Offset(0, 4),
+                                        ),
+                                      ],
                                     ),
+                                    child: goalThumb(),
                                   ),
-                                  Icon(
-                                    Platform.isIOS
-                                        ? CupertinoIcons.chevron_right
-                                        : Icons.arrow_forward_ios,
-                                    size: 14,
-                                    color: primaryTwo.withOpacity(0.7),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                goalData['goal_name']
+                                                        as String? ??
+                                                    'Unnamed Goal',
+                                                style: const TextStyle(
+                                                  fontSize: 17,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: primaryTwo,
+                                                  letterSpacing: -0.3,
+                                                  height: 1.2,
+                                                ),
+                                                maxLines: 2,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                            Icon(
+                                              Platform.isIOS
+                                                  ? CupertinoIcons.chevron_right
+                                                  : Icons.chevron_right_rounded,
+                                              size: 22,
+                                              color: primaryTwo.withOpacity(0.45),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          numberFormat.format(savedAmount),
+                                          style: const TextStyle(
+                                            fontSize: 22,
+                                            fontWeight: FontWeight.w800,
+                                            color: primaryTwo,
+                                            letterSpacing: -0.6,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'Target ${numberFormat.format(goalAmount)}',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w500,
+                                            color: Colors.grey.shade600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 8),
-                              Text(
-                                numberFormat.format((goalData['net_contribution'] as num?)?.toDouble() ?? 0.0),
-                                style: TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w700,
-                                  color: primaryTwo,
-                                  letterSpacing: -0.5,
-                                ),
+                              const SizedBox(height: 14),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(999),
+                                      child: LinearProgressIndicator(
+                                        value: progress,
+                                        minHeight: 6,
+                                        backgroundColor:
+                                            primaryTwo.withOpacity(0.08),
+                                        valueColor:
+                                            const AlwaysStoppedAnimation<
+                                                Color>(primaryTwo),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Text(
+                                    '$pct%',
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: primaryTwo,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 14),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Platform.isIOS
+                                        ? CupertinoButton(
+                                            padding: EdgeInsets.zero,
+                                            onPressed: () =>
+                                                _showDepositBottomSheet(
+                                                    context),
+                                            child: Container(
+                                              width: double.infinity,
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                vertical: 12,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: primaryTwo,
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                              ),
+                                              child: const Row(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment.center,
+                                                children: [
+                                                  Icon(
+                                                    CupertinoIcons
+                                                        .plus_circle_fill,
+                                                    size: 18,
+                                                    color: primaryColor,
+                                                  ),
+                                                  SizedBox(width: 6),
+                                                  Text(
+                                                    'Add money',
+                                                    style: TextStyle(
+                                                      color: white,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      fontSize: 15,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          )
+                                        : FilledButton.icon(
+                                            onPressed: () =>
+                                                _showDepositBottomSheet(
+                                                    context),
+                                            icon: const Icon(
+                                              Icons.add_rounded,
+                                              size: 20,
+                                            ),
+                                            label: const Text('Add money'),
+                                            style: FilledButton.styleFrom(
+                                              backgroundColor: primaryTwo,
+                                              foregroundColor: white,
+                                              padding: const EdgeInsets.symmetric(
+                                                vertical: 12,
+                                              ),
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                              ),
+                                            ),
+                                          ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Material(
+                                    color: primaryTwo.withOpacity(0.06),
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: InkWell(
+                                      onTap: () async {
+                                        await _setReminder(context);
+                                      },
+                                      borderRadius: BorderRadius.circular(12),
+                                      child: SizedBox(
+                                        width: 48,
+                                        height: 48,
+                                        child: Icon(
+                                          reminderSet
+                                              ? (Platform.isIOS
+                                                  ? CupertinoIcons.bell_fill
+                                                  : Icons.notifications_active_rounded)
+                                              : (Platform.isIOS
+                                                  ? CupertinoIcons.bell
+                                                  : Icons.notifications_outlined),
+                                          color: reminderSet
+                                              ? primaryTwo
+                                              : Colors.grey.shade600,
+                                          size: 22,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: LinearProgressIndicator(
-                        value: progress,
-                        minHeight: 8,
-                        backgroundColor: Colors.grey[200],
-                        valueColor: AlwaysStoppedAnimation<Color>(primaryTwo),
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            Platform.isIOS
-                                ? CupertinoButton.filled(
-                                    onPressed: () =>
-                                        _showDepositBottomSheet(context),
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 13, vertical: 9),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(CupertinoIcons.money_dollar_circle,
-                                            size: 18),
-                                        const SizedBox(width: 4),
-                                        const Text('Deposit'),
-                                      ],
-                                    ),
-                                  )
-                                : ElevatedButton.icon(
-                                    onPressed: () =>
-                                        _showDepositBottomSheet(context),
-                                    icon: const Icon(
-                                        Icons.account_balance_wallet,
-                                        size: 18),
-                                    label: const Text('Deposit'),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: primaryTwo,
-                                      foregroundColor: white,
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 13, vertical: 9),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                    ),
-                                  ),
-                            const SizedBox(width: 8),
-                            Platform.isIOS
-                                ? CupertinoButton(
-                                    onPressed: () async {
-                                      await _setReminder(context);
-                                    },
-                                    padding: const EdgeInsets.all(5),
-                                    color: Colors.grey[100],
-                                    child: Icon(
-                                      reminderSet
-                                          ? CupertinoIcons.bell_fill
-                                          : CupertinoIcons.bell,
-                                      color: reminderSet
-                                          ? primaryTwo
-                                          : Colors.grey[400],
-                                      size: 20,
-                                    ),
-                                  )
-                                : IconButton(
-                                    onPressed: () async {
-                                      await _setReminder(context);
-                                    },
-                                    icon: Icon(
-                                      reminderSet
-                                          ? Icons.notifications_active
-                                          : Icons.notifications,
-                                      color: reminderSet
-                                          ? primaryTwo
-                                          : Colors.grey[400],
-                                      size: 20,
-                                    ),
-                                    style: IconButton.styleFrom(
-                                      backgroundColor: Colors.grey[100],
-                                      padding: const EdgeInsets.all(5),
-                                    ),
-                                  ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),

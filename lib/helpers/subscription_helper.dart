@@ -1,27 +1,48 @@
-const Map<String, double> subscriptionPrices = {
+/// Offline fallback only — live amounts come from GET subscription/status/.
+const Map<String, double> subscriptionPricesFallback = {
   "UGX": 20500.0,
-  "KES": 506.17,
-  "TZS": 1331.17,
-  "RWF": 6833.33,
-  "BIF": 27702.7,
-  "USD": 5.39,
-  "NGN": 745.45,
-  "GHS": 64.06,
-  "XOF": 3253.97,
-  "XAF": 3253.97,
-  "ETB": 301.47,
-  "SDG": 2091.84,
-  "ZMW": 44.57,
-  "MWK": 891.3,
-  "SSP": 7068.97,
-  "DJF": 957.94,
-  "MGA": 23563.22,
-  "SCR": 70.69,
-  "KMF": 2440.48,
-  "LSL": 102.5,
-  "SLL": 110.81,
-  "LRD": 1025.0,
-  "GNF": 46590.91,
-  "MRO": 2180.85,
-  "CVE": 512.5,
 };
+
+@Deprecated('Use subscription quote from API (parseSubscriptionQuote)')
+const Map<String, double> subscriptionPrices = subscriptionPricesFallback;
+
+class SubscriptionQuote {
+  final double amount;
+  final String currency;
+  final String msisdn;
+
+  const SubscriptionQuote({
+    required this.amount,
+    required this.currency,
+    this.msisdn = '',
+  });
+}
+
+SubscriptionQuote parseSubscriptionQuote(Map<String, dynamic> resp) {
+  // Endpoint should provide amount + currency (derived from user's country).
+  final currency =
+      (resp['currency'] ?? resp['subscription_currency'] ?? 'UGX').toString();
+  final amountRaw = resp['subscription_amount'];
+
+  double amount = subscriptionPricesFallback['UGX']!;
+  if (amountRaw is num) {
+    amount = amountRaw.toDouble();
+  } else if (amountRaw != null) {
+    amount = double.tryParse(amountRaw.toString()) ??
+        subscriptionPricesFallback['UGX']!;
+  }
+
+  final msisdn = (resp['msisdn'] ?? '').toString().trim(); // optional
+  return SubscriptionQuote(
+    amount: amount,
+    currency: currency,
+    msisdn: msisdn,
+  );
+}
+
+String formatSubscriptionPrice(double amount, {int fractionDigits = 0}) {
+  if (fractionDigits <= 0) {
+    return amount.round().toString();
+  }
+  return amount.toStringAsFixed(fractionDigits);
+}

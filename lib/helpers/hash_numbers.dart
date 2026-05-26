@@ -3,6 +3,37 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:cyanase/helpers/database_helper.dart';
+import 'package:cyanase/helpers/endpoints.dart';
+
+/// Logs contact-sync API failures to the console (`flutter run` / terminal).
+void debugPrintContactSyncFailure({
+  required String source,
+  required String url,
+  required http.Response response,
+  int requestPhoneCount = 0,
+  String? requestBodyPreview,
+}) {
+  final preview = requestBodyPreview == null
+      ? ''
+      : (requestBodyPreview.length > 4000
+          ? '${requestBodyPreview.substring(0, 4000)}… [truncated]'
+          : requestBodyPreview);
+  print('');
+  print('========== CONTACT SYNC API ERROR [$source] ==========');
+  print('URL: $url');
+  if (requestPhoneCount > 0) {
+    print('request phoneNumbers count: $requestPhoneCount');
+  }
+  if (preview.isNotEmpty) {
+    print('request body preview: $preview');
+  }
+  print('statusCode: ${response.statusCode}');
+  print('reasonPhrase: ${response.reasonPhrase}');
+  print('response headers: ${response.headers}');
+  print('response body (raw): ${response.body}');
+  print('======================================================');
+  print('');
+}
 
 // Function to normalize Ugandan phone numbers
 String normalizePhoneNumber(String phoneNumber, String regionCode) {
@@ -81,16 +112,17 @@ Future<List<Map<String, String>>> fetchAndHashContacts() async {
 // Function to send normalized contacts to the server
 Future<List<Map<String, dynamic>>> getRegisteredContacts(
     List<Map<String, dynamic>> contacts) async {
-  final String apiUrl = "https://fund.cyanase.app/app/get_my_contacts.php";
+  final String apiUrl = ApiEndpoints.fundAppGetMyContacts;
 
   // Extract normalized phone numbers for the request
   List<String> phoneNumbers =
       contacts.map((contact) => contact['phone'] as String).toList();
 
+  final requestBody = jsonEncode({"phoneNumbers": phoneNumbers});
   final response = await http.post(
     Uri.parse(apiUrl),
     headers: {"Content-Type": "application/json"},
-    body: jsonEncode({"phoneNumbers": phoneNumbers}),
+    body: requestBody,
   );
 
   if (response.statusCode == 200) {
@@ -122,7 +154,14 @@ Future<List<Map<String, dynamic>>> getRegisteredContacts(
 
     return registeredContacts;
   } else {
+    debugPrintContactSyncFailure(
+      source: 'hash_numbers.getRegisteredContacts',
+      url: apiUrl,
+      response: response,
+      requestPhoneCount: phoneNumbers.length,
+      requestBodyPreview: requestBody,
+    );
     throw Exception(
-        "Failed to fetch registered contacts: ${response.statusCode}");
+        "Failed to fetch registered contacts: ${response.statusCode} (see console log above)");
   }
 }

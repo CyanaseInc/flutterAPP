@@ -6,12 +6,14 @@ import 'package:cyanase/helpers/database_helper.dart';
 import 'package:cyanase/theme/theme.dart';
 import 'package:http/http.dart' as http;
 import 'package:cyanase/helpers/api_helper.dart';
+import 'package:cyanase/helpers/endpoints.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:cyanase/helpers/chat_websocket_service.dart';
 import 'package:share_plus/share_plus.dart'; // Added for sharing
 import 'package:clipboard/clipboard.dart'; // Added for copying to clipboard
+import 'package:cyanase/helpers/hash_numbers.dart' show debugPrintContactSyncFailure;
 
 class AddGroupMembersScreen extends StatefulWidget {
   final int groupId;
@@ -205,13 +207,14 @@ class _AddGroupMembersScreenState extends State<AddGroupMembersScreen>
 
   Future<List<Map<String, dynamic>>> getRegisteredContacts(
       List<Map<String, dynamic>> contacts) async {
-    final String apiUrl = "https://fund.cyanase.app/app/get_my_contacts.php";
+    final String apiUrl = ApiEndpoints.fundAppGetMyContacts;
     List<String> phoneNumbers =
         contacts.map((contact) => contact['phone'] as String).toList();
+    final requestBody = jsonEncode({"phoneNumbers": phoneNumbers});
     final response = await http.post(
       Uri.parse(apiUrl),
       headers: {"Content-Type": "application/json"},
-      body: jsonEncode({"phoneNumbers": phoneNumbers}),
+      body: requestBody,
     );
     if (response.statusCode == 200) {
       List<dynamic> registeredNumbersWithIds =
@@ -235,8 +238,15 @@ class _AddGroupMembersScreenState extends State<AddGroupMembersScreen>
       await dbHelper.insertContacts(registeredContacts);
       return registeredContacts;
     } else {
+      debugPrintContactSyncFailure(
+        source: 'add_member.dart getRegisteredContacts',
+        url: apiUrl,
+        response: response,
+        requestPhoneCount: phoneNumbers.length,
+        requestBodyPreview: requestBody,
+      );
       throw Exception(
-          "Failed to fetch registered contacts: ${response.statusCode}");
+          "Failed to fetch registered contacts: ${response.statusCode} (see console log above)");
     }
   }
 
@@ -374,7 +384,7 @@ class _AddGroupMembersScreenState extends State<AddGroupMembersScreen>
 
       try {
         final response = await http.post(
-          Uri.parse('https://fund.cyanase.app/app/search.php'),
+          Uri.parse(ApiEndpoints.fundAppSearch),
           body: {'query': query},
         );
 

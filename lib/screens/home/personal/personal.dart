@@ -13,7 +13,9 @@ import './fund_manager.dart';
 import 'package:cyanase/helpers/database_helper.dart';
 import 'package:cyanase/helpers/api_helper.dart';
 import 'package:cyanase/helpers/get_currency.dart';
+import 'package:cyanase/helpers/xcel_payment_helper.dart';
 import 'package:cyanase/helpers/subscription_helper.dart';
+import 'package:cyanase/screens/home/transactions_screen.dart';
 
 class PersonalTab extends StatefulWidget {
   final TabController tabController;
@@ -36,7 +38,7 @@ class _PersonalTabState extends State<PersonalTab>
   String currency = '';
   String Phonenumber = '';
   String subscriptionFee = '';
-  bool processing = false;
+  SubscriptionQuote? _subscriptionQuote;
   bool _isLoading = true;
 
   final DatabaseHelper _dbHelper = DatabaseHelper();
@@ -115,6 +117,14 @@ class _PersonalTabState extends State<PersonalTab>
       if (profile.isEmpty) return;
       final token = profile.first['token'] as String;
       final resp = await ApiService.subscriptionStatus(token);
+      final quote = parseSubscriptionQuote(resp);
+      if (mounted) {
+        setState(() {
+          _subscriptionQuote = quote;
+          if (quote.currency.isNotEmpty) currency = quote.currency;
+          subscriptionFee = formatSubscriptionPrice(quote.amount);
+        });
+      }
       if (resp['status'] == 'pending') {
         Future.microtask(() => _showSubscriptionReminder());
       }
@@ -124,7 +134,13 @@ class _PersonalTabState extends State<PersonalTab>
   }
 
   void _showSubscriptionReminder() {
-    final price = subscriptionPrices[currency]?.toStringAsFixed(2) ?? '20,500';
+    final quote = _subscriptionQuote;
+    final displayCurrency = quote?.currency ?? currency;
+    final price = quote != null
+        ? formatSubscriptionPrice(quote.amount)
+        : subscriptionFee.isNotEmpty
+            ? subscriptionFee
+            : formatSubscriptionPrice(subscriptionPricesFallback['UGX']!);
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -132,8 +148,8 @@ class _PersonalTabState extends State<PersonalTab>
       enableDrag: false,
       backgroundColor: Colors.transparent,
       builder: (_) => _SubscriptionReminder(
-        price: price, 
-        currency: currency,
+        price: price,
+        currency: displayCurrency,
         onSubscribe: () {
           Navigator.pop(context); // Close subscription reminder
           _showPhoneNumberInput(); // Show phone input
@@ -153,120 +169,133 @@ class _PersonalTabState extends State<PersonalTab>
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(
-          left: 24,
-          right: 24,
-          top: 24,
-          bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text(
-              'Confirm Payment Details',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: primaryTwo,
-                decoration: TextDecoration.none,
-              ),
-              textAlign: TextAlign.center,
+      builder: (sheetContext) {
+        var paying = false;
+        return StatefulBuilder(
+          builder: (sheetContext, setSheetState) {
+            return Padding(
+            padding: EdgeInsets.only(
+              left: 24,
+              right: 24,
+              top: 24,
+              bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 24,
             ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: primaryLight,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Confirm Payment Details',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: primaryTwo,
+                    decoration: TextDecoration.none,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: primaryLight,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.phone, size: 24, color: primaryTwo),
-                      const SizedBox(width: 12),
-                      Text(
-                        formatPhoneNumber(Phonenumber),
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: primaryTwo,
+                      Row(
+                        children: [
+                          const Icon(Icons.phone, size: 24, color: primaryTwo),
+                          const SizedBox(width: 12),
+                          Text(
+                            formatPhoneNumber(Phonenumber),
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: primaryTwo,
+                              decoration: TextDecoration.none,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Payment will be processed using this number',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey,
                           decoration: TextDecoration.none,
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Payment will be processed using this number',
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: paying
+                      ? null
+                      : () => _processPayment(
+                            sheetContext,
+                            () => setSheetState(() => paying = true),
+                            () => setSheetState(() => paying = false),
+                          ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryTwo,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: paying
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(white),
+                          ),
+                        )
+                      : const Text(
+                          'Confirm Payment',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: white,
+                            decoration: TextDecoration.none,
+                          ),
+                        ),
+                ),
+                const SizedBox(height: 12),
+                TextButton(
+                  onPressed: paying ? null : () => Navigator.pop(sheetContext),
+                  child: const Text(
+                    'Cancel',
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: 14,
                       color: Colors.grey,
                       decoration: TextDecoration.none,
                     ),
                   ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: processing ? null : () => _processPayment(context),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryTwo,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
                 ),
-              ),
-              child: processing
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(white),
-                      ),
-                    )
-                  : const Text(
-                      'Confirm Payment',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: white,
-                        decoration: TextDecoration.none,
-                      ),
-                    ),
+              ],
             ),
-            const SizedBox(height: 12),
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text(
-                'Cancel',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey,
-                  decoration: TextDecoration.none,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
+            );
+          },
+        );
+      },
     );
   }
 
-  Future<void> _processPayment(BuildContext ctx) async {
-    setState(() => processing = true);
-    Navigator.pop(ctx); // Close the phone input dialog
-    
-    showDialog(
-      context: ctx,
-      barrierDismissible: false,
-      builder: (_) => const _ProcessingDialog(),
-    );
+  Future<void> _processPayment(
+    BuildContext sheetContext,
+    VoidCallback onPayStart,
+    VoidCallback onPayEnd,
+  ) async {
+    if (!mounted) return;
+    final hostContext = context;
+
+    onPayStart();
 
     try {
       final db = await _dbHelper.database;
@@ -274,45 +303,67 @@ class _PersonalTabState extends State<PersonalTab>
       if (profile.isEmpty) throw Exception('Profile not found');
 
       final token = profile.first['token'] as String;
-      final country = profile.first['country'] as String;
-      final cur = CurrencyHelper.getCurrencyCode(country);
-      final amount = subscriptionPrices[cur] ?? 20500.0;
-      final ref = 'CYANASE-SUB-${DateTime.now().millisecondsSinceEpoch}';
+      var quote = _subscriptionQuote;
+      if (quote == null) {
+        final statusResp = await ApiService.subscriptionStatus(token);
+        quote = parseSubscriptionQuote(statusResp);
+      }
+      final reference = 'CYSUB${DateTime.now().millisecondsSinceEpoch}';
 
-      final payment = await ApiService.requestPayment(token, {
-        "account_no": "REL6AEDF95B5A",
-        "reference": ref,
-        "internal_reference": ref,
-        "amount": amount,
-        "currency": cur,
-        "reference_id": DateTime.now().millisecondsSinceEpoch.toString(),
+      final paymentPayload = {
+        "reference": reference,
+        "amount": quote.amount,
+        "currency": quote.currency,
+        // Use locally-stored profile phone number; backend can also fill it if missing.
         "msisdn": Phonenumber,
-        "tx_ref": ref,
         "type": "cyanase_subscription",
         "description": "Annual Subscription Payment",
-      });
+      };
 
-      if (!payment['success']) throw Exception(payment['message'] ?? 'Payment failed');
+      final payment = await ApiService.requestPayment(token, paymentPayload);
 
-      await Future.delayed(const Duration(seconds: 25));
-      final auth = await ApiService.getTransaction(token, payment);
+      if (!payment['success']) {
+        final msg = payment['message']?.toString().trim();
+        throw Exception(
+          msg != null && msg.isNotEmpty ? msg : 'Payment request failed',
+        );
+      }
 
-      if (mounted) Navigator.pop(ctx);
-      if (mounted) _showResultDialog(ctx, auth['success'], auth['message'] ?? '');
+      final auth = await finalizeMobileMoneyPayment(
+        context: sheetContext,
+        token: token,
+        requestPayment: payment,
+      );
+
+      if (!mounted) return;
+      Navigator.pop(sheetContext);
+
+      final success = auth['success'] == true;
+      final message = auth['message']?.toString() ??
+          (success ? 'Subscription payment successful' : 'Payment not completed');
+
+      ScaffoldMessenger.of(hostContext).showSnackBar(
+        SnackBar(
+          content: Text(
+            success
+                ? 'Your subscription is now active.'
+                : message,
+          ),
+          duration: Duration(seconds: success ? 4 : 6),
+        ),
+      );
+
     } catch (e) {
-      if (mounted) Navigator.pop(ctx);
-      if (mounted) _showResultDialog(ctx, false, e.toString());
+      if (!mounted) return;
+      ScaffoldMessenger.of(hostContext).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          duration: const Duration(seconds: 6),
+        ),
+      );
     } finally {
-      if (mounted) setState(() => processing = false);
+      onPayEnd();
     }
-  }
-
-  void _showResultDialog(BuildContext ctx, bool success, String msg) {
-    showDialog(
-      context: ctx,
-      barrierDismissible: false,
-      builder: (_) => _ResultDialog(success: success, message: msg),
-    );
   }
 
   // ──────────────────────────────────────────────────────────────
@@ -376,117 +427,169 @@ class _PersonalTabState extends State<PersonalTab>
   // ──────────────────────────────────────────────────────────────
   // UI - Added My Goals section from File A
   // ──────────────────────────────────────────────────────────────
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      physics: const ClampingScrollPhysics(),
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Portfolio button
-          Align(
-            alignment: Alignment.topRight,
-            child: OutlinedButton.icon(
-              onPressed: _isLoading
-                  ? null
-                  : () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => Portfolio(currency: currency),
-                        ),
-                      ),
-              icon: const Icon(Icons.pie_chart, size: 18),
-              label: const Text('My Portfolio'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: primaryTwo,
-                side: const BorderSide(color: primaryTwo),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
+  Widget _sectionHeader(String title, {String? subtitle}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 4,
+              height: 22,
+              decoration: BoxDecoration(
+                color: primaryColor,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              title,
+              style: const TextStyle(
+                color: primaryTwo,
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.2,
+              ),
+            ),
+          ],
+        ),
+        if (subtitle != null) ...[
+          const SizedBox(height: 4),
+          Padding(
+            padding: const EdgeInsets.only(left: 14),
+            child: Text(
+              subtitle,
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.grey.shade600,
               ),
             ),
           ),
-          const SizedBox(height: 20),
+        ],
+      ],
+    );
+  }
 
-          // Deposit Card
+  Widget _sectionHeaderWithAction(
+    String title, {
+    required String actionLabel,
+    required VoidCallback onAction,
+  }) {
+    return Row(
+      children: [
+        Expanded(child: _sectionHeader(title)),
+        TextButton(
+          onPressed: onAction,
+          style: TextButton.styleFrom(
+            foregroundColor: primaryTwo,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            minimumSize: Size.zero,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          child: Text(
+            actionLabel,
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+          ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(
+        parent: AlwaysScrollableScrollPhysics(),
+      ),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 88),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
           _isLoading
               ? _buildDepositCardSkeleton()
               : FadeTransition(
                   opacity: _fadeAnimation,
-                  child: TotalDepositsCard(
-                    depositLocal: formatNumberWithCommas(_totalDepositUGX),
-                    depositForeign: formatNumberWithCommas(_totalDepositUSD),
+                  child: PortfolioHeroCard(
                     currency: currency,
+                    networthLocal:
+                        formatNumberWithCommas(_totalNetworthy),
+                    networthForeign:
+                        formatNumberWithCommas(_totalNetworthyUSD),
+                    depositLocal:
+                        formatNumberWithCommas(_totalDepositUGX),
+                    depositForeign:
+                        formatNumberWithCommas(_totalDepositUSD),
+                    onPortfolioTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => Portfolio(currency: currency),
+                      ),
+                    ),
                   ),
                 ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
 
-          // Buttons
           _isLoading
               ? _buildButtonsSkeleton()
               : FadeTransition(
                   opacity: _fadeAnimation,
-                  child: DepositWithdrawButtons(),
+                  child: const DepositWithdrawButtons(),
                 ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
 
-          // Net Worth Card
           _isLoading
               ? _buildNetworthCardSkeleton()
               : FadeTransition(
                   opacity: _fadeAnimation,
-                  child: NetworthCard(
-                    networthLocal: formatNumberWithCommas(_totalNetworthy),
+                  child: NetworthInsightCard(
                     currency: currency,
-                    networthForeign: formatNumberWithCommas(_totalNetworthyUSD),
+                    networthLocal:
+                        formatNumberWithCommas(_totalNetworthy),
+                    networthForeign:
+                        formatNumberWithCommas(_totalNetworthyUSD),
+                    growthPercent: _growthPercent(),
                   ),
                 ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 28),
 
-          // Investment options title
           _isLoading
               ? _buildTitleSkeleton()
               : FadeTransition(
                   opacity: _fadeAnimation,
-                  child: const Text(
+                  child: _sectionHeader(
                     'Investment options',
-                    style: TextStyle(
-                      color: primaryTwo,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    subtitle: 'Funds curated for your goals',
                   ),
                 ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           FundManagerSlider(),
-          const SizedBox(height: 24),
+          const SizedBox(height: 28),
 
-        
           _isLoading
               ? _buildTitleSkeleton()
               : FadeTransition(
                   opacity: _fadeAnimation,
-                  child: const Text(
-                    'Recent transactions',
-                    style: TextStyle(
-                      color: primaryTwo,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  child: _sectionHeaderWithAction(
+                    'Recent activity',
+                    actionLabel: 'View all',
+                    onAction: () {
+                      Navigator.push<void>(
+                        context,
+                        MaterialPageRoute<void>(
+                          builder: (_) => const TransactionsScreen(),
+                        ),
+                      );
+                    },
                   ),
                 ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
 
-          // Transactions
           _isLoading
               ? _buildTransactionsSkeleton()
               : FadeTransition(
                   opacity: _fadeAnimation,
                   child: TransactionsSection(),
                 ),
-
-          const SizedBox(height: 80),
         ],
       ),
     );
@@ -514,7 +617,7 @@ class _PersonalTabState extends State<PersonalTab>
   // Deposit Card
   Widget _buildDepositCardSkeleton() => _shimmer(
         child: Container(
-          height: 120,
+          height: 200,
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: Colors.white,
@@ -523,47 +626,76 @@ class _PersonalTabState extends State<PersonalTab>
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              _skeletonLine(width: 110, height: 20),
-              const SizedBox(height: 8),
-              _skeletonLine(width: 160, height: 32),
-              const SizedBox(height: 8),
-              _skeletonLine(width: 130, height: 18),
+              _skeletonLine(width: 110, height: 16),
+              const SizedBox(height: 12),
+              _skeletonLine(width: 160, height: 28),
             ],
           ),
         ),
       );
 
-  // Net‑worth Card
+  // Networth insight card (matches [NetworthInsightCard] row layout — avoids overflow)
   Widget _buildNetworthCardSkeleton() => _shimmer(
         child: Container(
-          height: 120,
-          padding: const EdgeInsets.all(16),
+          height: 76,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(18),
             border: Border.all(color: primaryLight),
           ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+          child: Row(
             children: [
-              _skeletonLine(width: 110, height: 20),
-              const SizedBox(height: 8),
-              _skeletonLine(width: 160, height: 32),
-              const SizedBox(height: 8),
-              _skeletonLine(width: 130, height: 18),
+              _skeletonCircle(),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _skeletonLine(width: 120, height: 12),
+                    const SizedBox(height: 8),
+                    _skeletonLine(width: 140, height: 18),
+                  ],
+                ),
+              ),
+              _skeletonLine(width: 52, height: 22),
             ],
           ),
         ),
       );
 
   // Buttons
-  Widget _buildButtonsSkeleton() => Row(
-        children: [
-          Expanded(child: _shimmer(child: _skeletonButton())),
-          const SizedBox(width: 12),
-          Expanded(child: _shimmer(child: _skeletonButton())),
-        ],
+  Widget _buildButtonsSkeleton() => SizedBox(
+        height: DepositWithdrawButtons.buttonHeight,
+        child: Row(
+          children: [
+            Expanded(
+              child: _shimmer(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _shimmer(
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       );
 
   // Goals Skeleton - Added from File A
@@ -595,7 +727,7 @@ class _PersonalTabState extends State<PersonalTab>
       );
 
   Widget _skeletonButton() => Container(
-        height: 50,
+        height: 48,
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(10),
@@ -615,43 +747,16 @@ class _PersonalTabState extends State<PersonalTab>
       );
 
   // Transactions
-  Widget _buildTransactionsSkeleton() => Column(
-    children: List.generate(
-      3,
-      (_) => Padding(
-        padding: const EdgeInsets.only(bottom: 12),
-        child: _shimmer(
-          child: Container(
-            height: 80,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: const Color(0xFFE5E5E5)),
-            ),
-            child: Row(
-              children: [
-                _skeletonCircle(),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _skeletonLine(width: 130, height: 16),
-                      const SizedBox(height: 6),
-                      _skeletonLine(width: 190, height: 14),
-                    ],
-                  ),
-                ),
-                _skeletonLine(width: 80, height: 16),
-              ],
-            ),
+  Widget _buildTransactionsSkeleton() => _shimmer(
+        child: Container(
+          height: 168,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFE5E5E5)),
           ),
         ),
-      ),
-    ),
-  );
+      );
 
   // Helpers
   Widget _skeletonLine({required double width, required double height}) =>
@@ -675,13 +780,21 @@ class _PersonalTabState extends State<PersonalTab>
 
   String formatNumberWithCommas(double number) =>
       NumberFormat('#,###').format(number);
+
+  double _growthPercent() {
+    if (_totalDepositUGX <= 0) return 0;
+    return (_totalNetworthy / _totalDepositUGX) * 100;
+  }
 }
 
 // ──────────────────────────────────────────────────────────────
 // TRANSACTIONS SECTION – PROFESSIONAL, MODERN, CAPITALIZED
 // ──────────────────────────────────────────────────────────────
 class TransactionsSection extends StatefulWidget {
-  const TransactionsSection({Key? key}) : super(key: key);
+  /// Home preview only — keep small; full list on [TransactionsScreen].
+  final int maxItems;
+
+  TransactionsSection({super.key, this.maxItems = 3});
 
   @override
   State<TransactionsSection> createState() => _TransactionsSectionState();
@@ -728,6 +841,7 @@ class _TransactionsSectionState extends State<TransactionsSection> {
     }
   }
 
+
   // ────── UI Helpers ──────
   Color _statusColor(String s) => switch (s.toLowerCase()) {
         'success' => const Color(0xFF4CAF50),
@@ -753,127 +867,155 @@ class _TransactionsSectionState extends State<TransactionsSection> {
         .join(' ');
   }
 
+  void _openAllTransactions(BuildContext context) {
+    Navigator.push<void>(
+      context,
+      MaterialPageRoute<void>(builder: (_) => const TransactionsScreen()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
       return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 24),
+        padding: EdgeInsets.symmetric(vertical: 16),
         child: Center(child: Loader()),
       );
     }
 
     if (_error != null) {
-      return Center(
+      return _previewCard(
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.error_outline, size: 48, color: Colors.red),
+            Text(_error!, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13)),
             const SizedBox(height: 8),
-            Text(_error!, textAlign: TextAlign.center),
-            const SizedBox(height: 12),
-            ElevatedButton.icon(
-              icon: const Icon(Icons.refresh),
-              label: const Text('Retry'),
-              onPressed: _fetch,
-            ),
+            TextButton(onPressed: _fetch, child: const Text('Retry')),
           ],
         ),
       );
     }
 
     if (_tx.isEmpty) {
-      return const Center(
-        child: Text('No transactions yet', style: TextStyle(color: Colors.grey)),
+      return _previewCard(
+        child: Text(
+          'No activity yet',
+          style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+        ),
       );
     }
 
-    return RefreshIndicator(
-      onRefresh: _fetch,
-      color: primaryTwo,
-      child: ListView.separated(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        itemCount: _tx.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 12),
-        itemBuilder: (context, i) {
-          final t = _tx[i];
-          final amount = (t['amount'] ?? 0.0).toDouble();
-          final cur = t['currency']?.toString().toUpperCase() ?? 'UGX';
-          final rawType = (t['transaction_type'] ?? '').toString();
-          final type = _capitalizedType(rawType);
-          final status = (t['status'] ?? '').toString().toLowerCase();
-          final date = DateTime.tryParse(t['created'] ?? '') ?? DateTime.now();
+    final preview = _tx.take(widget.maxItems).toList();
 
-          final showHeader = i == 0 ||
-              DateFormat('MMM d, yyyy').format(date) !=
-                  DateFormat('MMM d, yyyy').format(
-                      DateTime.tryParse(_tx[i - 1]['created'] ?? '') ??
-                          DateTime.now());
-
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _openAllTransactions(context),
+        borderRadius: BorderRadius.circular(16),
+        child: Ink(
+          decoration: BoxDecoration(
+            color: white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: surfaceMutedBorder.withOpacity(0.6)),
+          ),
+          child: Column(
             children: [
-              if (showHeader)
-                Padding(
-                  padding: const EdgeInsets.only(left: 12, bottom: 8, top: 8),
-                  child: Text(
-                    DateFormat('MMM d, yyyy').format(date),
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey[700],
-                    ),
-                  ),
-                ),
-              Card(
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  side: const BorderSide(color: Color(0xFFE5E5E5), width: 1),
-                ),
-                child: ListTile(
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  leading: CircleAvatar(
-                    radius: 22,
-                    backgroundColor: _statusColor(status).withOpacity(0.12),
-                    child: Icon(
-                      _typeIcon(rawType),
-                      color: _statusColor(status),
-                      size: 20,
-                    ),
-                  ),
-                  title: Text(
-                    type,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 15,
-                    ),
-                  ),
-                  subtitle: Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: Text(
-                      '${DateFormat('HH:mm').format(date)} • $cur ${NumberFormat('#,###').format(amount.abs())}',
+              for (var i = 0; i < preview.length; i++) ...[
+                if (i > 0) Divider(height: 1, color: Colors.grey.shade200),
+                _previewRow(preview[i]),
+              ],
+              Divider(height: 1, color: Colors.grey.shade200),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      'See all transactions',
                       style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.grey[600],
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: primaryTwo,
                       ),
                     ),
-                  ),
-                  trailing: Text(
-                    '${amount >= 0 ? '+' : '-'}${NumberFormat('#,###').format(amount.abs())}',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: amount >= 0 ? const Color(0xFF4CAF50) : const Color(0xFFF44336),
-                    ),
-                  ),
+                    const SizedBox(width: 4),
+                    Icon(Icons.chevron_right, size: 20, color: primaryTwo),
+                  ],
                 ),
               ),
             ],
-          );
-        },
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _previewCard({required Widget child}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: surfaceMutedBorder.withOpacity(0.6)),
+      ),
+      child: Center(child: child),
+    );
+  }
+
+  Widget _previewRow(Map<String, dynamic> t) {
+    final amount = (t['amount'] ?? 0.0).toDouble();
+    final cur = t['currency']?.toString().toUpperCase() ?? 'UGX';
+    final rawType = (t['transaction_type'] ?? '').toString();
+    final type = _capitalizedType(rawType);
+    final status = (t['status'] ?? '').toString().toLowerCase();
+    final date = DateTime.tryParse(t['created'] ?? '') ?? DateTime.now();
+    final isCredit = amount >= 0;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: _statusColor(status).withOpacity(0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(_typeIcon(rawType), color: _statusColor(status), size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  type,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    color: primaryTwo,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  DateFormat('MMM d · HH:mm').format(date),
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                ),
+              ],
+            ),
+          ),
+          Text(
+            '${isCredit ? '+' : '-'} $cur ${NumberFormat('#,###').format(amount.abs())}',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w800,
+              color: isCredit ? const Color(0xFF2E7D32) : const Color(0xFFC62828),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -934,82 +1076,6 @@ class _SubscriptionReminder extends StatelessWidget {
   }
 }
 
-class _ProcessingDialog extends StatelessWidget {
-  const _ProcessingDialog();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Card(
-        elevation: 5,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
-        child: Padding(
-          padding: EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Loader(),
-              SizedBox(height: 16),
-              Text('Processing Payment ...',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: primaryTwo)),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ResultDialog extends StatelessWidget {
-  final bool success;
-  final String message;
-  const _ResultDialog({required this.success, required this.message});
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(success ? Icons.check_circle : Icons.error_outline,
-                size: 48, color: success ? Colors.green : Colors.red),
-            const SizedBox(height: 16),
-            Text(success ? 'Payment Successful!' : 'Payment Failed',
-                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: primaryTwo)),
-            const SizedBox(height: 12),
-            Text(success ? 'Your subscription is now active. Enjoy all premium features!' : message,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 14, color: Colors.grey)),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                if (success) {
-                  Navigator.of(context).popUntil((r) => r.isFirst);
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                  backgroundColor: primaryTwo,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-              child: Text(success ? 'Continue' : 'Try Again',
-                  style: const TextStyle(color: white)),
-            ),
-            if (!success) ...[
-              const SizedBox(height: 12),
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 String formatPhoneNumber(String p) {
   if (p.length < 10) return p;

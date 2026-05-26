@@ -1,9 +1,9 @@
 import 'package:cyanase/helpers/api_helper.dart';
 import 'package:cyanase/helpers/get_currency.dart';
-import 'package:cyanase/helpers/loader.dart';
 import 'package:cyanase/theme/theme.dart';
 import 'package:flutter/material.dart';
 import 'package:cyanase/helpers/database_helper.dart';
+import 'package:cyanase/helpers/xcel_payment_helper.dart';
 
 class PayHelper extends StatefulWidget {
   final String amount;
@@ -78,8 +78,6 @@ class _PayHelperState extends State<PayHelper> {
       _isProcessingPayment = true;
     });
 
-    // Show loading dialog
-
     try {
       final dbHelper = DatabaseHelper();
       final db = await dbHelper.database;
@@ -91,20 +89,14 @@ class _PayHelperState extends State<PayHelper> {
       final token = userProfile.first['token'] as String;
       final userCountry = userProfile.first['country'] as String? ?? 'Unknown';
       final currencyCode = CurrencyHelper.getCurrencyCode(userCountry);
-      final reference = 'SUB-${DateTime.now().millisecondsSinceEpoch}';
-      final referenceId = DateTime.now().millisecondsSinceEpoch.toString();
+      final reference = 'CYGRP${DateTime.now().millisecondsSinceEpoch}';
       final phoneNumber = userProfile.first['phone_number'] as String;
 
       final paymentData = {
-        "account_no":
-            "REL6AEDF95B5A", // TODO: Replace with dynamic account number if applicable
-        "reference": "CYANASE-SUB-$reference",
-        "internal_reference": reference,
+        "reference": reference,
         "amount": widget.amount,
         "currency": currencyCode,
-        "reference_id": referenceId,
         "msisdn": phoneNumber,
-        "tx_ref": "CYANASE-SUB-$reference",
         "type": widget.paymentType,
         "description": "Annual Subscription Payment",
       };
@@ -115,17 +107,25 @@ class _PayHelperState extends State<PayHelper> {
       if (!requestPayment['success']) {
         throw Exception(requestPayment['message'] ?? 'Payment request failed');
       }
-      
-      // Wait for transaction status (adjust delay as needed)
-      await Future.delayed(const Duration(seconds: 25));
-      final authPayment = await ApiService.getTransaction(
-        token,
-        requestPayment,
+
+      final authPayment = await finalizeMobileMoneyPayment(
+        context: context,
+        token: token,
+        requestPayment: requestPayment,
       );
 
-      final internalRef = authPayment['transaction']['internal_reference'];
-  
-      if (authPayment['success']=='success') {
+      if (authPayment['success'] != true) {
+        throw Exception(authPayment['message'] ?? 'Payment failed');
+      }
+
+      final txn = authPayment['transaction'];
+      if (txn is! Map || txn['internal_reference'] == null) {
+        throw Exception(
+            authPayment['message'] ?? 'Transaction verification failed');
+      }
+      final internalRef = txn['internal_reference'].toString();
+
+      if (authPayment['success'] == true) {
         final data = {
           "group_id": widget.groupId,
           "msisdn": phoneNumber,
@@ -155,14 +155,17 @@ class _PayHelperState extends State<PayHelper> {
       }
     } catch (e) {
       if (mounted) {
-        
+        final msg = e.toString().replaceFirst('Exception: ', '');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to process payment, check your balance and try again'),
+            content: Text(
+              msg.isNotEmpty
+                  ? msg
+                  : 'Payment failed. Check your balance and try again.',
+            ),
             duration: const Duration(seconds: 8),
           ),
         );
-        Navigator.of(context).pop(); // Close loading dialog
       }
     } finally {
       if (mounted) {
@@ -344,7 +347,11 @@ class _PayHelperState extends State<PayHelper> {
                         ? const SizedBox(
                             width: 24,
                             height: 24,
-                            child: Loader(),
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor:
+                                  AlwaysStoppedAnimation<Color>(white),
+                            ),
                           )
                         : const Text(
                             'Pay',

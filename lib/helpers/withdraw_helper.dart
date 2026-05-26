@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:cyanase/theme/theme.dart';
 import 'package:flutter/services.dart';
 import 'package:cyanase/helpers/subscription_helper.dart';
+import 'package:cyanase/helpers/xcel_payment_helper.dart';
 
 class WithdrawHelper extends StatefulWidget {
   final String withdrawType;
@@ -35,9 +36,9 @@ class _WithdrawHelperState extends State<WithdrawHelper> {
   String? phoneNumber;
   String? bankDetails;
   double? withdrawAmount;
+  SubscriptionQuote? _subscriptionQuote;
   int currentStep = 0;
   bool _isSubmitting = false;
-  bool processing = false;
 
   @override
   void initState() {
@@ -83,41 +84,15 @@ class _WithdrawHelperState extends State<WithdrawHelper> {
     }
   }
 
-  Future<void> _processPayment(BuildContext context) async {
-    setState(() => processing = true);
+  Future<void> _processPayment(
+    BuildContext sheetContext,
+    VoidCallback onPayStart,
+    VoidCallback onPayEnd,
+  ) async {
+    if (!mounted) return;
+    final hostContext = context;
 
-    // Show loading overlay
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(
-        child: Card(
-          elevation: 5,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(12)),
-          ),
-          child: Padding(
-            padding: EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Loader(),
-                SizedBox(height: 16),
-                Text(
-                  'Processing Payment...',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: primaryTwo,
-                    decoration: TextDecoration.none,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
+    onPayStart();
 
     try {
       final db = await _dbHelper.database;
@@ -127,21 +102,19 @@ class _WithdrawHelperState extends State<WithdrawHelper> {
       }
 
       final token = userProfile.first['token'] as String;
-      final userCountry = userProfile.first['country'] as String;
-      final currencyCode = CurrencyHelper.getCurrencyCode(userCountry);
-      final reference = 'SUB-${DateTime.now().millisecondsSinceEpoch}';
-      final referenceId = DateTime.now().millisecondsSinceEpoch.toString();
+      var quote = _subscriptionQuote;
+      if (quote == null) {
+        final statusResp = await ApiService.subscriptionStatus(token);
+        quote = parseSubscriptionQuote(statusResp);
+      }
+      final msisdn = phoneNumber ?? '';
+      final reference = 'CYSUB${DateTime.now().millisecondsSinceEpoch}';
 
-      final amount = subscriptionPrices[currencyCode] ?? 20500.0;
       final paymentData = {
-        "account_no": "REL6AEDF95B5A",
-        "reference": "CYANASE-SUB-${DateTime.now().millisecondsSinceEpoch}",
-        'internal_reference': reference,
-        "amount": amount,
-        "currency": currencyCode,
-        "reference_id": referenceId,
-        "msisdn": phoneNumber,
-        "tx_ref": "CYANASE-SUB-${DateTime.now().millisecondsSinceEpoch}",
+        "reference": reference,
+        "amount": quote.amount,
+        "currency": quote.currency,
+        "msisdn": msisdn,
         "type": "cyanase_subscription",
         "description": "Annual Subscription Payment",
       };
@@ -150,125 +123,50 @@ class _WithdrawHelperState extends State<WithdrawHelper> {
           await ApiService.requestPayment(token, paymentData);
 
       if (!requestPayment['success']) {
-        throw Exception(requestPayment['message']);
+        final msg = requestPayment['message']?.toString().trim();
+        throw Exception(
+          msg != null && msg.isNotEmpty ? msg : 'Payment request failed',
+        );
       }
-// Wait for 30 seconds before checking transaction status
-      await Future.delayed(const Duration(seconds: 25));
-      final authPayment =
-          await ApiService.getTransaction(token, requestPayment);
-      // Close loading dialog
-      Navigator.pop(context);
 
-      // Show result dialog
-      _showPaymentResultDialog(
-          context, authPayment['success'], authPayment['message']);
-    } catch (e) {
-      // Close loading dialog
-      Navigator.pop(context);
+      final authPayment = await finalizeMobileMoneyPayment(
+        context: sheetContext,
+        token: token,
+        requestPayment: requestPayment,
+      );
 
-      // Show error dialog
-      _showPaymentResultDialog(context, false, e.toString());
-    } finally {
-      setState(() => processing = false);
-    }
-  }
+      if (!mounted) return;
+      Navigator.pop(sheetContext);
 
-  void _showPaymentResultDialog(
-      BuildContext context, bool success, String message) {
-    // First, close any loading dialog that might be open
-    Navigator.pop(context);
+      final success = authPayment['success'] == true;
+      final message = authPayment['message']?.toString() ??
+          (success ? 'Subscription payment successful' : 'Payment not completed');
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                success ? Icons.check_circle : Icons.error_outline,
-                size: 48,
-                color: success ? Colors.green : Colors.red,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                success ? 'Payment Successful!' : 'Payment Failed',
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: primaryTwo,
-                  decoration: TextDecoration.none,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 12),
-              Text(
-                success
-                    ? 'Your subscription is now active. Enjoy all premium features!'
-                    : message,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey[800],
-                  decoration: TextDecoration.none,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(context); // Close result dialog
-                  if (success) {
-                    // Close all modals and bottom sheets by popping until we reach the main screen
-                    Navigator.of(context).popUntil((route) => route.isFirst);
-                  }
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: primaryTwo,
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 16,
-                    horizontal:
-                        32, // Increased horizontal padding for wider button
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: Text(
-                  success ? 'Continue' : 'Try Again',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: primaryColor,
-                    decoration: TextDecoration.none,
-                  ),
-                ),
-              ),
-              if (!success) ...[
-                const SizedBox(height: 12),
-                TextButton(
-                  onPressed: () {
-                    Navigator.pop(context); // Close result dialog
-                  },
-                  child: const Text(
-                    'Cancel',
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey,
-                      decoration: TextDecoration.none,
-                    ),
-                  ),
-                ),
-              ],
-            ],
+      ScaffoldMessenger.of(hostContext).showSnackBar(
+        SnackBar(
+          content: Text(
+            success
+                ? 'Your subscription is now active.'
+                : message,
           ),
+          duration: Duration(seconds: success ? 4 : 6),
         ),
-      ),
-    );
+      );
+
+      if (success) {
+        Navigator.of(hostContext).popUntil((route) => route.isFirst);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(hostContext).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          duration: const Duration(seconds: 6),
+        ),
+      );
+    } finally {
+      onPayEnd();
+    }
   }
 
   void _showPhoneNumberInput() {
@@ -278,104 +176,129 @@ class _WithdrawHelperState extends State<WithdrawHelper> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(
-          left: 24,
-          right: 24,
-          top: 24,
-          bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text(
-              'Confirm Payment Details',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: primaryTwo,
-                decoration: TextDecoration.none,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: primaryLight,
-                borderRadius: BorderRadius.circular(12),
+      builder: (sheetContext) {
+        var paying = false;
+        return StatefulBuilder(
+          builder: (sheetContext, setSheetState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 24,
+                right: 24,
+                top: 24,
+                bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 24,
               ),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.phone, size: 24, color: primaryTwo),
-                      const SizedBox(width: 12),
-                      Text(
-                        formatPhoneNumber(phoneNumber!),
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: primaryTwo,
-                          decoration: TextDecoration.none,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
                   const Text(
-                    'Payment will be processed using this number',
+                    'Confirm Payment Details',
                     style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: primaryTwo,
                       decoration: TextDecoration.none,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: primaryLight,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.phone, size: 24, color: primaryTwo),
+                            const SizedBox(width: 12),
+                            Text(
+                              formatPhoneNumber(phoneNumber!),
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: primaryTwo,
+                                decoration: TextDecoration.none,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Payment will be processed using this number',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey,
+                            decoration: TextDecoration.none,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton(
+                    onPressed: paying
+                        ? null
+                        : () => _processPayment(
+                              sheetContext,
+                              () => setSheetState(() => paying = true),
+                              () => setSheetState(() => paying = false),
+                            ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: primaryTwo,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: paying
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor:
+                                  AlwaysStoppedAnimation<Color>(white),
+                            ),
+                          )
+                        : const Text(
+                            'Confirm Payment',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: white,
+                              decoration: TextDecoration.none,
+                            ),
+                          ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextButton(
+                    onPressed:
+                        paying ? null : () => Navigator.pop(sheetContext),
+                    child: const Text(
+                      'Cancel',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey,
+                        decoration: TextDecoration.none,
+                      ),
                     ),
                   ),
                 ],
               ),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: processing ? null : () => _processPayment(context),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryTwo,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              child: const Text(
-                'Confirm Payment',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: white,
-                  decoration: TextDecoration.none,
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text(
-                'Cancel',
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey,
-                  decoration: TextDecoration.none,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
+            );
+          },
+        );
+      },
     );
   }
 
-  Future<void> _showSubscriptionReminder(currency) async {
-    final price = subscriptionPrices[currency]?.toStringAsFixed(2) ?? '20,500';
+  Future<void> _showSubscriptionReminder(SubscriptionQuote quote) async {
+    final price = formatSubscriptionPrice(quote.amount);
+    final currency = quote.currency;
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -514,10 +437,11 @@ class _WithdrawHelperState extends State<WithdrawHelper> {
 
       final subscriptionResponse = await ApiService.subscriptionStatus(token);
       if (subscriptionResponse['status'] == 'pending') {
-        final userCountry =
-            userProfile.first['country'] as String? ?? 'Unknown';
-        final currencyCode = CurrencyHelper.getCurrencyCode(userCountry);
-        _showSubscriptionReminder(currencyCode);
+        final quote = parseSubscriptionQuote(subscriptionResponse);
+        setState(() {
+          _subscriptionQuote = quote;
+        });
+        _showSubscriptionReminder(quote);
         throw Exception('Please complete your subscription payment first');
       }
 

@@ -7,8 +7,8 @@ import 'package:cyanase/helpers/database_helper.dart';
 import 'package:cyanase/helpers/api_helper.dart';
 
 import '../../../theme/theme.dart';
-import '../componets/investment_deposit.dart';
-
+import 'package:cyanase/helpers/invest_navigation.dart';
+ 
 class FundManagerSlider extends StatefulWidget {
   @override
   _FundManagerSliderState createState() => _FundManagerSliderState();
@@ -18,7 +18,6 @@ class _FundManagerSliderState extends State<FundManagerSlider> {
   late PageController _pageController;
   int _currentIndex = 0;
   bool _isLoading = true;
-  List<Map<String, dynamic>> _investmentData = [];
   List<Map<String, dynamic>> _investmentOptions = [];
 
   @override
@@ -51,6 +50,7 @@ class _FundManagerSliderState extends State<FundManagerSlider> {
       List<Map<String, dynamic>> options = [];
       for (var classData in investmentData) {
         final className = classData['investment_class'] as String;
+        final classId = classData['investment_class_id'];
         final classLogo = classData['logo'] as String?;
         final optionsList =
             classData['investment_options'] as List<dynamic>? ?? [];
@@ -58,6 +58,8 @@ class _FundManagerSliderState extends State<FundManagerSlider> {
           options.add({
             'investment_option': option['investment_option'] as String,
             'class_name': className,
+            'investment_class_id': classId is int ? classId : int.tryParse('$classId'),
+            'investment_option_id': option['investment_option_id'],
             'fund_manager': option['handler'] as String,
             'logo': classLogo,
             'minimum_deposit': option['minimum_deposit'] as int,
@@ -67,7 +69,6 @@ class _FundManagerSliderState extends State<FundManagerSlider> {
       }
 
       setState(() {
-        _investmentData = investmentData;
         _investmentOptions = options;
         _isLoading = false;
       });
@@ -134,17 +135,16 @@ class _FundManagerSliderState extends State<FundManagerSlider> {
             padding: const EdgeInsets.symmetric(horizontal: 4.0),
             child: GestureDetector(
               onTap: () {
-                if (Platform.isIOS) {
-                  showCupertinoModalPopup(
-                    context: context,
-                    builder: (BuildContext context) => Deposit(),
-                  );
-                } else {
-                  showModalBottomSheet(
-                    context: context,
-                    builder: (BuildContext context) => Deposit(),
-                  );
-                }
+                final cidRaw = option['investment_class_id'];
+                final oidRaw = option['investment_option_id'];
+                final classId = cidRaw is int ? cidRaw : int.tryParse('$cidRaw');
+                final optionId =
+                    oidRaw is int ? oidRaw : int.tryParse('$oidRaw');
+                ensureInvestAllowed(
+                  context,
+                  initialInvestmentClassId: classId,
+                  initialInvestmentOptionId: optionId,
+                );
               },
               child: Card(
                 elevation: 5,

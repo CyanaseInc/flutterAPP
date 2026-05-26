@@ -11,6 +11,10 @@ const Color primaryTwoDark = Color(0xFF1A1E3A);
 const Color highliter = Color(0xFFeff6ff);
 const Color white = Color(0xFFFFFFFF);
 
+/// Soft navy-tinted surface — bottom navigation, goal cards, etc. (reads above white).
+const Color surfaceMuted = Color(0xFFE8EAF4);
+const Color surfaceMutedBorder = Color(0xFFC8CCDE);
+
 // Create a ThemeData instance to be used throughout the app
 final ThemeData appTheme = ThemeData(
   colorScheme: ColorScheme.fromSeed(

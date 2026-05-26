@@ -14,6 +14,8 @@ class DatabaseHelper {
   static const String tableMedia = 'media';
   static const String tableMessages = 'messages';
   static const String tableContacts = 'contacts';
+    static const String tableAppData = 'app_data'; // NEW TABLE
+  static const String tableSignupData = 'signup_data'; // NEW TABLE
 
   // StreamController for broadcasting message updates
   final StreamController<Map<int, List<Map<String, dynamic>>>> _messageStreamController =
@@ -53,7 +55,7 @@ class DatabaseHelper {
     // Open the database with proper configuration
     return await openDatabase(
       dbPath,
-      version: 4,
+      version: 5,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
       onConfigure: (Database db) async {
@@ -98,7 +100,15 @@ class DatabaseHelper {
         privacy_settings TEXT
       )
     ''');
-
+    
+  await db.execute('''
+    CREATE TABLE app_data (
+      key TEXT PRIMARY KEY,
+      value TEXT,
+      created_at TEXT
+    )
+  ''');
+  
     await db.execute('''
       CREATE TABLE groups (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -208,7 +218,47 @@ class DatabaseHelper {
     if (oldVersion < 4) {
       await db.execute('ALTER TABLE messages ADD COLUMN reply_to_message TEXT');
     }
+
+if (oldVersion < 5) {
+  // Add the new tables for existing users
+  await db.execute('''
+    CREATE TABLE IF NOT EXISTS app_data (
+      key TEXT PRIMARY KEY,
+      value TEXT,
+      created_at TEXT
+    )
+  ''');
+  
+
+}
+
   }
+  
+
+  // SIMPLE STORE AND RETRIEVE - THAT'S ALL WE NEED
+
+Future<void> storeInviteCode(String code) async {
+  final db = await database;
+  await db.insert(
+    'app_data',
+    {
+      'key': 'invite_code', // Simple key name
+      'value': code,
+      'created_at': DateTime.now().toIso8601String(),
+    },
+    conflictAlgorithm: ConflictAlgorithm.replace, // Overwrite if exists
+  );
+}
+
+Future<String?> getInviteCode() async {
+  final db = await database;
+  final result = await db.query('app_data'); // No WHERE clause
+ print( 'getInviteCode result: $result'); // Debug print
+  if (result.isEmpty) return null;
+
+  return result.first['value'] as String?;
+}
+
   Future<void> insertMedia({
     required int messageId,
     required String type,
@@ -709,6 +759,28 @@ Future<String?> getgroupic(String userId) async {
   );
   return result.isNotEmpty ? result.first['profile_pic'] as String? : null;
 }
+
+  /// After profile photo upload — keeps [profile] + [participants] in sync locally.
+  Future<void> updateLocalProfilePicture(String profilePicPath) async {
+    final db = await database;
+    final rows = await db.query(tableUsers, limit: 1);
+    if (rows.isEmpty) return;
+
+    final userId = rows.first['id']?.toString() ?? '';
+    await db.update(
+      tableUsers,
+      {'profile_pic': profilePicPath},
+    );
+
+    if (userId.isNotEmpty) {
+      await db.update(
+        tableParticipants,
+        {'profile_pic': profilePicPath},
+        where: 'user_id = ?',
+        whereArgs: [userId],
+      );
+    }
+  }
   Future<List<Map<String, dynamic>>> getMediaForGroup(int groupId) async {
     final db = await database;
     return await db.rawQuery('''

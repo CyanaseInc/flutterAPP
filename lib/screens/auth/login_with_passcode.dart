@@ -44,8 +44,8 @@ class _NumericLoginScreenState extends State<NumericLoginScreen> {
     }
   }
 
- Future<void> _verifyPasscode(String passcode) async {
-  final dbHelper = DatabaseHelper(); // Get the DatabaseHelper instance
+Future<void> _verifyPasscode(String passcode) async {
+  final dbHelper = DatabaseHelper();
 
   if (Platform.isIOS) {
     showCupertinoDialog(
@@ -78,24 +78,36 @@ class _NumericLoginScreenState extends State<NumericLoginScreen> {
   }
 
   try {
-    // Initialize the database
     final db = await dbHelper.database;
-
-    // Retrieve the user's email from the profile table
     final userProfile = await db.query('profile', limit: 1);
-    final email = userProfile.first['email'] as String;
-    final name = userProfile.first['name'] as String;
+    
+    if (userProfile.isEmpty) {
+      Navigator.pop(context);
+      _showErrorSnackBar('No user profile found. Please login with phone number first.');
+      return;
+    }
+    
+    final email = userProfile.first['email'] as String?;
+    
+    if (email == null || email.isEmpty) {
+      Navigator.pop(context);
+      _showErrorSnackBar('No email found in profile. Please login with phone number first.');
+      return;
+    }
 
-    // Perform login API request using the retrieved email and passcode
-    final loginResponse = await ApiService.passcodeLogin({
-      'username': email,
-      'password': passcode,
-    });
+  final loginResponse = await ApiService.passcodeLogin({
+  'username': email,
+  'password': passcode,
+});
 
-    // Dismiss the loading indicator
-    Navigator.pop(context);
+Navigator.pop(context);
 
-    // Check if the response indicates failure
+// Print the full response
+print('Login response: $loginResponse');
+
+// Print the email used
+print('Login email: $email');
+
     if (loginResponse.containsKey('success') && !loginResponse['success']) {
       if (Platform.isIOS) {
         showCupertinoDialog(
@@ -115,69 +127,68 @@ class _NumericLoginScreenState extends State<NumericLoginScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(loginResponse['message'] ?? 'Login failed'),
-            backgroundColor: Colors.red, // Red SnackBar for errors
+            backgroundColor: Colors.red,
           ),
         );
       }
       return;
     }
 
-    // Check if the response contains the expected fields for a successful login
     if (loginResponse.containsKey('token') &&
         loginResponse.containsKey('user_id') &&
         loginResponse.containsKey('user')) {
-      final token = loginResponse['token'];
+      
+      final token = loginResponse['token'] as String;
       final userId = loginResponse['user_id'];
-      final user = loginResponse['user'];
+      final user = loginResponse['user'] as Map<String, dynamic>;
 
-      // Extract user details
-      final email = user['email'];
+      final email = user['email'] as String? ?? '';
       final firstName = user['first_name'] as String? ?? '';
       final lastName = user['last_name'] as String? ?? '';
       final userName = '$firstName $lastName'.trim();
-
-      // Extract profile details
-      final profile = user['profile'];
-      final picture = profile['profile_picture'];
-
-      final userCountry = profile['country'];
-      final phoneNumber = profile['phoneno'];
-        final inviteCode =  profile['invite_code'];
-      final isVerified = profile['is_verified'] ?? false;
-      final mypasscode = profile['passcode'] as String?;
       
-      // EXTRACT CURRENCY FROM RESPONSE
+      if (!user.containsKey('profile') || user['profile'] == null) {
+        _showErrorSnackBar('Invalid user profile data');
+        return;
+      }
+
+      final profile = user['profile'] as Map<String, dynamic>;
+      
+      final picture = profile['profile_picture'] as String? ?? '';
+      final userCountry = profile['country'] as String? ?? '';
+      final phoneNumber = profile['phoneno'] as String? ?? '';
+      final inviteCode = profile['inviteCode'] as String? ?? '';
+      final isVerified = profile['is_verified'] as bool? ?? false;
+      final mypasscode = profile['passcode'] as String? ?? '';
+      
+      final financialStats = profile['financial_stats'] as Map<String, dynamic>?;
+      
       final currencyCode = loginResponse['currency'] as String? ?? 'UGX';
       final currencySymbol = loginResponse['currency_symbol'] as String? ?? 'UGX';
-    
       
-      // Also check profile for currency (fallback)
       final profileCurrencyCode = profile['currency'] as String?;
       final profileCurrencySymbol = profile['currency_symbol'] as String?;
       
-      // Use profile currency if available, otherwise use response currency
       final finalCurrencyCode = profileCurrencyCode ?? currencyCode;
       final finalCurrencySymbol = profileCurrencySymbol ?? currencySymbol;
 
-      final autoSave = profile['auto_save'] ?? false;
-      final goalsAlert = profile['goals_alert'] ?? false;
+      final autoSave = profile['auto_save'] as bool? ?? false;
+      final goalsAlert = profile['goals_alert'] as bool? ?? false;
       
+      print('Login successful for: $email');
+      print('Username: $userName');
+      print('Currency: $finalCurrencyCode, $finalCurrencySymbol');
+      print('Invite Code: $inviteCode');
+
       setState(() {
-        // Always set email
-        _passcode = (mypasscode != null &&
-            mypasscode.isNotEmpty); // True if not empty
+        _passcode = mypasscode.isNotEmpty;
       });
       
       if (isVerified) {
-        // Store only the required profile details in the database
-        final dbHelper = DatabaseHelper();
         final db = await dbHelper.database;
-
-        // Check if the profile already exists
         final existingProfile = await db.query('profile');
 
         if (existingProfile.isNotEmpty) {
-          // Update the existing profile
           await db.update(
             'profile',
             {
@@ -190,11 +201,11 @@ class _NumericLoginScreenState extends State<NumericLoginScreen> {
               'created_at': DateTime.now().toIso8601String(),
               'auto_save': autoSave,
               'goals_alert': goalsAlert,
-             
             },
+            where: 'id = ?',
+            whereArgs: [userId],
           );
         } else {
-          // Insert a new profile
           await db.insert(
             'profile',
             {
@@ -208,19 +219,35 @@ class _NumericLoginScreenState extends State<NumericLoginScreen> {
               'created_at': DateTime.now().toIso8601String(),
               'auto_save': autoSave,
               'goals_alert': goalsAlert,
-         
             },
           );
         }
 
-        // SET CURRENCY IN PROVIDER
-       final currencyProvider = Provider.of<CurrencyProvider>(context, listen: false);
-currencyProvider.setCurrency(finalCurrencyCode, finalCurrencySymbol);
-currencyProvider.setInviteCode(inviteCode); // Add this line
-
-        Navigator.pop(context);
+        final currencyProvider = Provider.of<CurrencyProvider>(context, listen: false);
         
-        // Handle pending deep link after login
+        currencyProvider.setCurrency(finalCurrencyCode, finalCurrencySymbol);
+        currencyProvider.setInviteCode(inviteCode);
+        
+        final financialSummary = loginResponse['financial_summary'] as Map<String, dynamic>?;
+        final bonusBreakdown = loginResponse['bonus_breakdown'] as Map<String, dynamic>?;
+        final recentActivity = loginResponse['recent_activity'] as Map<String, dynamic>?;
+        
+        Map<String, dynamic> combinedFinancialSummary = {};
+        if (financialSummary != null) {
+          combinedFinancialSummary.addAll(financialSummary);
+        }
+        if (financialStats != null) {
+          combinedFinancialSummary.addAll(financialStats);
+        }
+        
+        currencyProvider.setFinancialData(
+          financialSummary: combinedFinancialSummary.isNotEmpty ? combinedFinancialSummary : null,
+          bonusBreakdown: bonusBreakdown,
+          recentActivity: recentActivity,
+        );
+        
+        print('Provider data set successfully');
+        
         if (PendingDeepLink.uri != null &&
             PendingDeepLink.uri!.scheme == 'cyanase' &&
             PendingDeepLink.uri!.host == 'join') {
@@ -239,58 +266,35 @@ currencyProvider.setInviteCode(inviteCode); // Add this line
           }
         }
         
+        await Future.delayed(const Duration(milliseconds: 100));
+        
         Navigator.push(
           context,
           MaterialPageRoute(
             builder: (context) => HomeScreen(
               passcode: _passcode, 
-              name: userName, // Use userName instead of name for consistency
+              name: userName,
               picture: picture,
-              email: email, // Add email if your HomeScreen needs it
+              email: email,
             ),
           ),
         );
       } else {
-        // Show bottom sheet to verify account
-        Navigator.pop(context);
         _showVerificationBottomSheet(phoneNumber);
       }
     } else {
-      Navigator.pop(context); // Show a red SnackBar for invalid response
-      if (Platform.isIOS) {
-        showCupertinoDialog(
-          context: context,
-          builder: (context) => CupertinoAlertDialog(
-            title: const Text('Error'),
-            content: const Text('Invalid login response: Missing required fields'),
-            actions: [
-              CupertinoDialogAction(
-                child: const Text('OK'),
-                onPressed: () => Navigator.pop(context),
-              ),
-            ],
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Invalid login response: Missing required fields'),
-            backgroundColor: Colors.red, // Red SnackBar for errors
-          ),
-        );
-      }
+      _showErrorSnackBar('Invalid login response: Missing required fields');
     }
   } catch (e) {
-    // Dismiss the loading indicator
     Navigator.pop(context);
+    print('Login error: $e');
     
-    // Show a red SnackBar for errors
     if (Platform.isIOS) {
       showCupertinoDialog(
         context: context,
         builder: (context) => CupertinoAlertDialog(
           title: const Text('Error'),
-          content: Text('Check your network connection: $e'),
+          content: Text('Check your network connection: ${e.toString()}'),
           actions: [
             CupertinoDialogAction(
               child: const Text('OK'),
@@ -303,14 +307,39 @@ currencyProvider.setInviteCode(inviteCode); // Add this line
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Check your network connection: ${e.toString()}'),
-          backgroundColor: Colors.red, // Red SnackBar for errors
+          backgroundColor: Colors.red,
         ),
       );
     }
   }
 }
-
 // ADD THIS METHOD IF IT DOESN'T EXIST
+
+
+void _showErrorSnackBar(String message) {
+  if (Platform.isIOS) {
+    showCupertinoDialog(
+      context: context,
+      builder: (context) => CupertinoAlertDialog(
+        title: const Text('Error'),
+        content: Text(message),
+        actions: [
+          CupertinoDialogAction(
+            child: const Text('OK'),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ],
+      ),
+    );
+  } else {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+}
 void _showVerificationBottomSheet(String phoneNumber) {
   showModalBottomSheet(
     context: context,

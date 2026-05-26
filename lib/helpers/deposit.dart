@@ -6,6 +6,7 @@ import 'package:cyanase/helpers/database_helper.dart';
 import 'package:cyanase/helpers/get_currency.dart';
 import 'package:cyanase/helpers/api_helper.dart';
 import 'package:flutter/services.dart';
+import 'package:cyanase/helpers/xcel_payment_helper.dart';
 
 class DepositHelper extends StatefulWidget {
   final String? selectedFundClass;
@@ -141,11 +142,11 @@ class _DepositScreenState extends State<DepositHelper> {
 
   void _copyBankDetails() async {
     const bankDetails = '''
-Bank Name: Cyanase Bank
-Account Name: Cyanase Investments
-Account Number: 1234567890
-Bank Code: CYA123
-SWIFT Code: CYANUS33
+Bank Name: Diamond Trust Bank
+Account Name: Cyanase Technology and Investment Ltd
+Account Number: 0190514001
+Bank Code: DTKEUGKAXXX
+SWIFT Code: DTKEUGKAXXX
     ''';
     await Clipboard.setData(ClipboardData(text: bankDetails.trim()));
     setState(() {
@@ -201,6 +202,8 @@ SWIFT Code: CYANUS33
         final userCountry = userProfile.first['country'] as String;
         final currency = CurrencyHelper.getCurrencyCode(userCountry);
 
+        final chargeAmount =
+            _calculateTotalAmount(depositAmount!).toStringAsFixed(2);
         final requestData = {
           "payment_means": _selectedMethod == 'Online' ? 'online' : 'online',
           "deposit_category": widget.depositCategory,
@@ -215,32 +218,81 @@ SWIFT Code: CYANUS33
           "type": widget.depositCategory,
         };
 
+        final depositIntent = {
+          ...requestData,
+          if (widget.groupId != null) "group_id": widget.groupId,
+          if (widget.goalId != null) "goal_id": widget.goalId,
+          if (widget.loanId != null) "loan_id": widget.loanId,
+          "amount": depositAmount,
+          "charge_amount": chargeAmount,
+          "msisdn": phonenumber,
+        };
+
         final paymentData = {
-          "account_no": "REL6AEDF95B5A",
           "reference": requestData['reference'],
           "msisdn": requestData['phone_number'],
           "currency": requestData['currency'],
-          "amount": _calculateTotalAmount(depositAmount!).toStringAsFixed(2),
+          "amount": chargeAmount,
           "description": "Payment Request",
           "tx_ref":
               "CYANASE-${widget.depositCategory}-${DateTime.now().millisecondsSinceEpoch}",
           "type": "${widget.depositCategory}_deposit",
+          "deposit_intent": depositIntent,
         };
 
         final requestPayment =
             await ApiService.requestPayment(token, paymentData);
 
         if (requestPayment['success'] == true) {
-          await Future.delayed(const Duration(seconds: 25));
-          final authPayment =
-              await ApiService.getTransaction(token, requestPayment);
+          final authPayment = await finalizeMobileMoneyPayment(
+            context: context,
+            token: token,
+            requestPayment: requestPayment,
+          );
 
-          final internalRef = authPayment['transaction']['internal_reference'];
+          if (authPayment['success'] != true) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  authPayment['message']?.toString() ??
+                      'Payment not completed',
+                ),
+              ),
+            );
+            return;
+          }
 
+          final dep = authPayment['deposit'];
+          if (dep is Map && dep['success'] == true) {
+            _pageController.nextPage(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOut,
+            );
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  authPayment['message']?.toString() ?? 'Deposit recorded',
+                ),
+              ),
+            );
+            return;
+          }
+
+          final txn = authPayment['transaction'];
+          if (txn is! Map || txn['internal_reference'] == null) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Payment confirmed but transaction data missing'),
+              ),
+            );
+            return;
+          }
+
+          final internalRef = txn['internal_reference'].toString();
           final myData = {
             "group_id": widget.groupId,
-             "payment_means": _selectedMethod == 'Online' ? 'online' : 'online',
-             "deposit_category": widget.depositCategory,
+            "payment_means": _selectedMethod == 'Online' ? 'online' : 'online',
+            "deposit_category": widget.depositCategory,
             "msisdn": phonenumber,
             "internal_reference": internalRef,
             "amount": depositAmount,
@@ -252,38 +304,41 @@ SWIFT Code: CYANUS33
             "currency": currency,
             "account_type": "basic",
             "reference": _generateReference(),
-          "reference_id": _generateReferenceId(),
-          "tx_ref":_generateReference(),
-           
+            "reference_id": _generateReferenceId(),
           };
-         print("my data is $myData");
-          if (authPayment['success'] == true) {
-            final response = await _processDeposit(
-              token: token,
-              requestData: myData,
-            );
+
+          final response = await _processDeposit(
+            token: token,
+            requestData: myData,
+          );
  
-            if (response['success'] == true) {
-              _pageController.nextPage(
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeInOut,
-              );
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(response['message'])),
-              );
-            } else {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(response['message'])),
-              );
-            }
+          if (response['success'] == true) {
+            _pageController.nextPage(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOut,
+            );
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(response['message']?.toString() ?? 'Deposit recorded')),
+            );
           } else {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(authPayment['message'])),
+              SnackBar(
+                content: Text(
+                  response['message']?.toString() ?? 'Deposit could not be recorded',
+                ),
+              ),
             );
           }
         } else {
+          final errMsg = requestPayment['message']?.toString().trim();
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Payment request failed')),
+            SnackBar(
+              content: Text(
+                errMsg != null && errMsg.isNotEmpty
+                    ? errMsg
+                    : 'Payment request failed',
+              ),
+            ),
           );
         }
       }

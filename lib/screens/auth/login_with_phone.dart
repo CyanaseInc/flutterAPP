@@ -13,6 +13,7 @@ import 'package:cyanase/providers/provider.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:cyanase/helpers/link_handler.dart';
 import 'package:cyanase/screens/home/group/group_invite.dart';
+import 'dart:async';
 import 'dart:io'; // Import entire dart:io for SocketException
 
 // Custom formatter to enforce '+' at the beginning
@@ -66,6 +67,9 @@ class LoginScreenState extends State<LoginScreen> {
   bool _showPasscodeOption = false;
   final TextEditingController _phoneController =
       TextEditingController(text: '+256');
+  final TextEditingController _emailController = TextEditingController();
+  /// When true, user signs in with email + password; otherwise phone + password.
+  bool _loginWithEmail = false;
   bool _obscurePassword = true; // Controls password visibility
   final List<TextEditingController> _controllers =
       List.generate(6, (_) => TextEditingController());
@@ -92,45 +96,71 @@ class LoginScreenState extends State<LoginScreen> {
     }
   }
 
-
- Future<void> _handleLogin(String username, String password) async {
-  setState(() {
-    _isLoading = true;
-  });
-
-  // Ensure username starts with '+'
-  if (!username.startsWith('+')) {
-    username = '+$username';
+  bool _isValidEmail(String email) {
+    final emailRegex =
+        RegExp(r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$');
+    return emailRegex.hasMatch(email);
   }
 
-  if (username.isEmpty || password.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('All fields are required')),
-    );
+  Future<void> _handleLogin(String username, String password) async {
     setState(() {
-      _isLoading = false;
-    });
-    return;
-  }
-
-  try {
-    final loginResponse = await ApiService.login({
-      'username': username,
-      'password': password,
+      _isLoading = true;
     });
 
-    if (loginResponse.containsKey('success') && !loginResponse['success']) {
-      String errorMessage = loginResponse['message'] ?? 'Login failed';
-      // Convert technical messages to user-friendly ones
-      if (errorMessage.contains('Invalid credentials')) {
-        errorMessage = 'Incorrect phone number or password. Please try again.';
-      } else if (errorMessage.contains('not found')) {
-        errorMessage = 'No account found with this phone number. Please sign up first.';
-      } else if (errorMessage.contains('network')) {
-        errorMessage = 'Unable to connect to the internet. Please check your connection.';
+    final isEmail = _loginWithEmail;
+    String resolvedUsername = username.trim();
+
+    if (isEmail) {
+      resolvedUsername = resolvedUsername.toLowerCase();
+      if (!_isValidEmail(resolvedUsername)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please enter a valid email address')),
+        );
+        setState(() {
+          _isLoading = false;
+        });
+        return;
       }
-      throw Exception(errorMessage);
+    } else {
+      if (!resolvedUsername.startsWith('+')) {
+        resolvedUsername = '+$resolvedUsername';
+      }
     }
+
+    if (resolvedUsername.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('All fields are required')),
+      );
+      setState(() {
+        _isLoading = false;
+      });
+      return;
+    }
+
+    try {
+      final loginResponse = await ApiService.login({
+        'username': resolvedUsername,
+        'password': password,
+      });
+
+      if (loginResponse.containsKey('success') && !loginResponse['success']) {
+        String errorMessage =
+            loginResponse['message']?.toString() ?? loginResponse.toString();
+        // Convert technical messages to user-friendly ones
+        if (errorMessage.contains('Invalid credentials')) {
+          errorMessage = isEmail
+              ? 'Incorrect email or password. Please try again.'
+              : 'Incorrect phone number or password. Please try again.';
+        } else if (errorMessage.contains('not found')) {
+          errorMessage = isEmail
+              ? 'No account found with this email. Please sign up first.'
+              : 'No account found with this phone number. Please sign up first.';
+        } else if (errorMessage.contains('network')) {
+          errorMessage =
+              'Unable to connect to the internet. Please check your connection.';
+        }
+        throw Exception(errorMessage);
+      }
 
     if (loginResponse.containsKey('token') &&
         loginResponse.containsKey('user_id') &&
@@ -138,14 +168,18 @@ class LoginScreenState extends State<LoginScreen> {
       final token = loginResponse['token'] as String;
       final userId = loginResponse['user_id'] as int;
       final user = loginResponse['user'] as Map<String, dynamic>;
-      final email = user['email'] as String;
+      final financialSummary = loginResponse['financial_summary'] as Map<String, dynamic>?;
+final bonusBreakdown = loginResponse['bonus_breakdown'] as Map<String, dynamic>?;
+final recentActivity = loginResponse['recent_activity'] as Map<String, dynamic>?;
+
+      final email = user['email'] as String? ?? '';
 
       final profile = user['profile'] as Map<String, dynamic>;
-      final picture = profile['profile_picture'] as String;
-      final firstName = user["first_name"] as String;
-      final lastName = user['last_name'] as String;
-      final userCountry = profile['country'] as String;
-      final phoneNumber = profile['phoneno'] as String;
+      final picture = profile['profile_picture'] as String? ?? '';
+      final firstName = user['first_name'] as String? ?? '';
+      final lastName = user['last_name'] as String? ?? '';
+      final userCountry = profile['country'] as String? ?? '';
+      final phoneNumber = profile['phoneno'] as String? ?? '';
       final isVerified = profile['is_verified'] as bool? ?? false;
       final mypasscode = profile['passcode'] as String?;
       final inviteCode = profile['inviteCode'];
@@ -267,6 +301,14 @@ class LoginScreenState extends State<LoginScreen> {
 
         // SET CURRENCY IN PROVIDER
        final currencyProvider = Provider.of<CurrencyProvider>(context, listen: false);
+
+       if (financialSummary != null || bonusBreakdown != null || recentActivity != null) {
+  currencyProvider.setFinancialData(
+    financialSummary: financialSummary,
+    bonusBreakdown: bonusBreakdown,
+    recentActivity: recentActivity,
+  );
+}
 currencyProvider.setCurrency(finalCurrencyCode, finalCurrencySymbol);
 currencyProvider.setInviteCode(inviteCode); // Add this line
 
@@ -301,7 +343,16 @@ currencyProvider.setInviteCode(inviteCode); // Add this line
           ),
         );
       } else {
-        _showVerificationBottomSheet(phoneNumber);
+        final profilePhone = profile['phoneno'] as String? ?? phoneNumber;
+        final accountEmail = (user['email'] as String? ?? '').trim();
+        _showVerificationBottomSheet(
+          verificationUsername: isEmail
+              ? (accountEmail.isNotEmpty
+                  ? accountEmail.toLowerCase()
+                  : resolvedUsername)
+              : profilePhone,
+          userEmailForResend: accountEmail,
+        );
       }
     } else {
       throw Exception('Invalid login response: Missing required fields');
@@ -323,7 +374,10 @@ currencyProvider.setInviteCode(inviteCode); // Add this line
   }
 }
 
-  void _showVerificationBottomSheet(String phoneNumber) {
+  void _showVerificationBottomSheet({
+    required String verificationUsername,
+    required String userEmailForResend,
+  }) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -347,7 +401,7 @@ currencyProvider.setInviteCode(inviteCode); // Add this line
 
     
     Map<String, dynamic> userData = {
-      'username': phoneNumber,
+      'username': verificationUsername,
       'code': otp,
     };
     
@@ -355,12 +409,7 @@ currencyProvider.setInviteCode(inviteCode); // Add this line
     
     // Call API
     final response = await ApiService.VerificationEmail(userData);
-
- 
-
-    if (response is Map<String, dynamic>) {
-      print('Response keys: ${response.keys.toList()}');
-    }
+    print('Verification response keys: ${response.keys.toList()}');
 
     // ✅ Success
     if (response.containsKey('success') && response['success'] == true) {
@@ -421,14 +470,6 @@ currencyProvider.setInviteCode(inviteCode); // Add this line
         backgroundColor: Colors.red,
       ),
     );
-  }  catch (e) {
-    print('Timeout exception: $e');
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Request timed out. Please check your internet connection.'),
-        backgroundColor: Colors.red,
-      ),
-    );
   } on FormatException catch (e) {
     print('Format exception: $e');
     ScaffoldMessenger.of(context).showSnackBar(
@@ -441,10 +482,14 @@ currencyProvider.setInviteCode(inviteCode); // Add this line
     print('Unexpected exception type: ${e.runtimeType}');
     print('Exception details: $e');
     print('Stack trace: $stackTrace');
-    
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Verification failed: ${e.toString()}'),
+        content: Text(
+          e is TimeoutException
+              ? 'Request timed out. Please check your internet connection.'
+              : 'Verification failed: ${e.toString()}',
+        ),
         backgroundColor: Colors.red,
       ),
     );
@@ -512,9 +557,22 @@ currencyProvider.setInviteCode(inviteCode); // Add this line
                               modalSetState(() {
                                 modalLoading = true;
                               });
-                              await ApiService.post('resend_verification_code', {
-                                'phone_number': phoneNumber,
-                              });
+                              final resendEmail = userEmailForResend.isNotEmpty
+                                  ? userEmailForResend
+                                  : (verificationUsername.contains('@')
+                                      ? verificationUsername
+                                      : '');
+                              if (resendEmail.isEmpty) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                        'No email on file to resend the code. Contact support.'),
+                                  ),
+                                );
+                                return;
+                              }
+                              await ApiService.resendVerificationEmail(
+                                  resendEmail);
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
                                   content: Text('Verification code resent.'),
@@ -572,6 +630,131 @@ currencyProvider.setInviteCode(inviteCode); // Add this line
     );
   }
 
+  Widget _buildLoginModeToggle() {
+    return Row(
+      children: [
+        Expanded(
+          child: OutlinedButton(
+            onPressed: _isLoading
+                ? null
+                : () => setState(() => _loginWithEmail = false),
+            style: OutlinedButton.styleFrom(
+              backgroundColor:
+                  !_loginWithEmail ? primaryTwo.withOpacity(0.12) : null,
+              foregroundColor: primaryTwo,
+              side: const BorderSide(color: primaryTwo),
+            ),
+            child: const Text('Phone'),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: OutlinedButton(
+            onPressed: _isLoading
+                ? null
+                : () => setState(() => _loginWithEmail = true),
+            style: OutlinedButton.styleFrom(
+              backgroundColor:
+                  _loginWithEmail ? primaryTwo.withOpacity(0.12) : null,
+              foregroundColor: primaryTwo,
+              side: const BorderSide(color: primaryTwo),
+            ),
+            child: const Text('Email'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPhoneNumberField() {
+    return TextFormField(
+      controller: _phoneController,
+      keyboardType: TextInputType.phone,
+      inputFormatters: [
+        PhoneNumberFormatter(),
+        LengthLimitingTextInputFormatter(13), // +256XXXXXXXXXX
+      ],
+      decoration: const InputDecoration(
+        labelText: 'Phone Number',
+        prefixIcon: Icon(Icons.phone, color: primaryColor),
+        border: UnderlineInputBorder(),
+      ),
+      onChanged: (value) {
+        setState(() {
+          if (value.startsWith('+')) {
+            String stripped = value.substring(1);
+            if (stripped.length >= 3) {
+              countryCode = '+${stripped.substring(0, 3)}';
+              phoneNumber = stripped.substring(3);
+            } else {
+              countryCode = value;
+              phoneNumber = '';
+            }
+          }
+        });
+      },
+    );
+  }
+
+  Widget _buildEmailField() {
+    return TextFormField(
+      controller: _emailController,
+      keyboardType: TextInputType.emailAddress,
+      autofillHints: const [AutofillHints.email],
+      textInputAction: TextInputAction.next,
+      decoration: const InputDecoration(
+        labelText: 'Email',
+        prefixIcon: Icon(Icons.email, color: primaryColor),
+        border: UnderlineInputBorder(),
+      ),
+    );
+  }
+
+  void _submitLogin() {
+    if (_loginWithEmail) {
+      final email = _emailController.text.trim();
+      if (email.isEmpty || !_isValidEmail(email)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              email.isEmpty
+                  ? 'Please enter your email'
+                  : 'Please enter a valid email address',
+            ),
+          ),
+        );
+        return;
+      }
+      if (password.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please enter your password')),
+        );
+        return;
+      }
+      _handleLogin(email, password);
+      return;
+    }
+    if (_phoneController.text.length < 4) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Please enter a valid phone number')),
+      );
+      return;
+    }
+    var u = _phoneController.text;
+    if (!u.startsWith('+')) {
+      u = '+$u';
+    }
+    setState(() => username = u);
+    if (password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter your password')),
+      );
+      return;
+    }
+    _handleLogin(u, password);
+  }
+
   @override
   Widget build(BuildContext context) {
     if (Platform.isIOS) {
@@ -599,34 +782,10 @@ currencyProvider.setInviteCode(inviteCode); // Add this line
                         color: primaryTwo,
                       ),
                     ),
-                    const SizedBox(height: 40),
-                    TextFormField(
-                      controller: _phoneController,
-                      keyboardType: TextInputType.phone,
-                      inputFormatters: [
-                        PhoneNumberFormatter(),
-                        LengthLimitingTextInputFormatter(13), // +256XXXXXXXXXX
-                      ],
-                      decoration: const InputDecoration(
-                        labelText: 'Phone Number',
-                        prefixIcon: Icon(Icons.phone, color: primaryColor),
-                        border: UnderlineInputBorder(),
-                      ),
-                      onChanged: (value) {
-                        setState(() {
-                          if (value.startsWith('+')) {
-                            String stripped = value.substring(1);
-                            if (stripped.length >= 3) {
-                              countryCode = '+${stripped.substring(0, 3)}';
-                              phoneNumber = stripped.substring(3);
-                            } else {
-                              countryCode = value;
-                              phoneNumber = '';
-                            }
-                          }
-                        });
-                      },
-                    ),
+                    const SizedBox(height: 24),
+                    _buildLoginModeToggle(),
+                    const SizedBox(height: 20),
+                    if (_loginWithEmail) _buildEmailField() else _buildPhoneNumberField(),
                     const SizedBox(height: 20),
                     TextFormField(
                       obscureText: _obscurePassword,
@@ -656,25 +815,7 @@ currencyProvider.setInviteCode(inviteCode); // Add this line
                     ),
                     const SizedBox(height: 40),
                     ElevatedButton(
-                      onPressed: _isLoading
-                          ? null
-                          : () {
-                              if (_phoneController.text.length < 4) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                      content: Text(
-                                          'Please enter a valid phone number')),
-                                );
-                                return;
-                              }
-                              setState(() {
-                                username = _phoneController.text;
-                                if (!username.startsWith('+')) {
-                                  username = '+$username';
-                                }
-                              });
-                              _handleLogin(username, password);
-                            },
+                      onPressed: _isLoading ? null : _submitLogin,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: primaryTwo,
                         shape: RoundedRectangleBorder(
@@ -783,34 +924,10 @@ currencyProvider.setInviteCode(inviteCode); // Add this line
                       color: primaryTwo,
                     ),
                   ),
-                  const SizedBox(height: 40),
-                  TextFormField(
-                    controller: _phoneController,
-                    keyboardType: TextInputType.phone,
-                    inputFormatters: [
-                      PhoneNumberFormatter(),
-                      LengthLimitingTextInputFormatter(13), // +256XXXXXXXXXX
-                    ],
-                    decoration: const InputDecoration(
-                      labelText: 'Phone Number',
-                      prefixIcon: Icon(Icons.phone, color: primaryColor),
-                      border: UnderlineInputBorder(),
-                    ),
-                    onChanged: (value) {
-                      setState(() {
-                        if (value.startsWith('+')) {
-                          String stripped = value.substring(1);
-                          if (stripped.length >= 3) {
-                            countryCode = '+${stripped.substring(0, 3)}';
-                            phoneNumber = stripped.substring(3);
-                          } else {
-                            countryCode = value;
-                            phoneNumber = '';
-                          }
-                        }
-                      });
-                    },
-                  ),
+                  const SizedBox(height: 24),
+                  _buildLoginModeToggle(),
+                  const SizedBox(height: 20),
+                  if (_loginWithEmail) _buildEmailField() else _buildPhoneNumberField(),
                   const SizedBox(height: 20),
                   TextFormField(
                     obscureText: _obscurePassword,
@@ -840,25 +957,7 @@ currencyProvider.setInviteCode(inviteCode); // Add this line
                   ),
                   const SizedBox(height: 40),
                   ElevatedButton(
-                    onPressed: _isLoading
-                        ? null
-                        : () {
-                            if (_phoneController.text.length < 4) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                    content: Text(
-                                        'Please enter a valid phone number')),
-                              );
-                              return;
-                            }
-                            setState(() {
-                              username = _phoneController.text;
-                              if (!username.startsWith('+')) {
-                                username = '+$username';
-                              }
-                            });
-                            _handleLogin(username, password);
-                          },
+                    onPressed: _isLoading ? null : _submitLogin,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: primaryTwo,
                       shape: RoundedRectangleBorder(
@@ -948,6 +1047,7 @@ currencyProvider.setInviteCode(inviteCode); // Add this line
   @override
   void dispose() {
     _phoneController.dispose();
+    _emailController.dispose();
     for (var controller in _controllers) {
       controller.dispose();
     }

@@ -1,6 +1,7 @@
 class ApiEndpoints {
- static const myIp = "server.cyanase.app"; 
-//   static const myIp = "192.168.147.220:8000";
+//   static const String myIp = "10.47.14.220:8080";
+//  static const String myIp = "shrewdly-foam-energize.ngrok-free.dev";
+static const String myIp = "server.cyanase.app";
   static const String server = "https://$myIp";
   static const String checkuser = "$server/api/v1/en/checkUser/user/";
   static const String signup = "$server/api/v1/en/register/user/";
@@ -50,6 +51,9 @@ class ApiEndpoints {
   static const String requestPaymentWebhook =
       "$server/api/v1/en/requestpaymentshook/";
   static const String getTransaction = "$server/api/v1/en/get/transaction/";
+  static const String verifyPayment = "$server/api/v1/en/verify/payment/";
+  static const String xcelConfirmPayment =
+      "$server/api/v1/en/xcel/confirm-payment/";
   static const String verifyOtp = "$server/api/v1/en/verifyemail/user/";
   static const String passcode = "$server/api/v1/en/passcode/user/";
   static const String verifyPasscode = "$server/api/v1/en/verify/passcode/";
@@ -85,8 +89,9 @@ class ApiEndpoints {
       "$server/api/v1/en/loan/application/group/";
   static const String paySubscription = "$server/api/v1/en/make/subscription/";
   static const String payGroupSubscription =
-      "$server/api/v1/en/make/subscription/group";
-  static const String groupDeposit = "$server/api/v1/en/general/deposit/group";
+      "$server/api/v1/en/make/subscription/group/";
+  static const String groupDeposit =
+      "$server/api/v1/en/general/deposit/group/";
 
   static const String apiUrlGetWithdraw = "$server/api/v1/en/get/withdraw/";
   static const String apiUrlGetWithdrawFee =
@@ -138,6 +143,12 @@ class ApiEndpoints {
       "$server/api/v1/en/auth/user/riskprofile/";
   static const String apiUrlGetRiskProfile =
       "$server/api/v1/en/auth/get/riskprofile/";
+  static const String apiUrlUserInvestmentPolicy =
+      "$server/api/v1/en/auth/user/investment-policy/";
+  static const String apiUrlUserInvestmentPolicyStatus =
+      "$server/api/v1/en/auth/user/investment-policy/status/";
+  static const String apiUrlGetIps = "$server/api/v1/en/get/ips/";
+  static const String apiUrlUpdateIps = "$server/api/v1/en/update/ips/";
   static const String checkPasswordEmail = "$server/api/v1/en/password/reset/";
   static const String apiUrlPasswordReset = "$server/reset/password/";
   static const String changeUserPassword =
@@ -163,5 +174,31 @@ class ApiEndpoints {
 
        static const String allTransactions =
       "$server/api/v1/en/user/top-transactions/";
+
+  /// Fund portal (PHP + MySQL). IPS pending / sign / check all hit this host — **not** the Django `server` URL.
+  /// If this fails while `server` is local, the phone/emulator must still reach this URL (internet), or run fund PHP locally and point here, e.g. `http://$myIp/fund`.
+  static const String fundPortalServer = "https://fund.cyanase.app/fund";
+
+  /// Mobile app PHP scripts on the same host as the fund portal, under `/app/` (not under `/fund/`).
+  static const String fundAppBase = "https://fund.cyanase.app/app";
+
+  /// POST JSON `{ "phoneNumbers": [...] }` or `{ "hashedContacts": [...] }` — registered Cyanase users on device.
+  static const String fundAppGetMyContacts = "$fundAppBase/get_my_contacts.php";
+
+  static const String fundAppSearch = "$fundAppBase/search.php";
+  // static const String fundPortalServer = "http://$myIp/fund";
+  static const String sharedIpsGet = "$fundPortalServer/ips_get_shared.php";
+  static const String sharedIpsSign = "$fundPortalServer/ips_sign.php";
+  static const String sharedIpsSubmit = "$fundPortalServer/ips_post.php";
+  static const String sharedIpsPending = "$fundPortalServer/ips_pending_signatures.php";
+  static const String ipsDocumentsCheck = "$fundPortalServer/ips_get.php";
+
+  /// Public fund factsheets + performance series. Implemented in-repo as
+  /// `fund_portal/server/fund_option_public.php` (same contract as deployed `fund.cyanase.app/fund/...`).
+  ///
+  /// **404 from this URL** almost always means: this `investment_option_id` exists in **Django** but not in
+  /// the **fund portal MySQL** `api_investmentoption` table (different DB / seed / deploy). Point
+  /// [fundPortalServer] at a portal that shares the same DB as your API, or sync option IDs.
+  static const String fundOptionPublic = "$fundPortalServer/fund_option_public.php";
 
 }

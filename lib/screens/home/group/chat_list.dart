@@ -478,11 +478,10 @@ class ChatListState extends State<ChatList> with SingleTickerProviderStateMixin 
 
 Future<void> _handleNewMessage(String groupId, Map<String, dynamic> message) async {
     try {
-    debugPrint('🟢 [1] START _handleNewMessage for group: $groupId');
-    debugPrint('🟢 [1] Full raw message: ${jsonEncode(message)}');
+    
       
       final db = await _dbHelper.database;
-    debugPrint('🟢 [2] Database connection established');
+    
 
     // Convert all IDs to strings for consistent comparison
       final messageId = message['id'] ?? '';
@@ -511,7 +510,7 @@ Future<void> _handleNewMessage(String groupId, Map<String, dynamic> message) asy
       whereArgs: whereArgs,
     );
 
-    debugPrint('🟢 [5] Existing message check: ${existingMessage.length} matches found');
+  
     if (existingMessage.isNotEmpty) {
       debugPrint('🟡 [5] Message already exists in database:');
       for (var msg in existingMessage) {
@@ -637,7 +636,7 @@ Future<void> _handleNewMessage(String groupId, Map<String, dynamic> message) asy
       }
 
       final token = userProfile.first['token'] as String;
-      _userId = userProfile.first['user_id'] as String? ?? '145';
+      _userId = userProfile.first['id'] as String? ?? '';
 
       final wsUrl = 'ws://${ApiEndpoints.myIp}/ws/chat-list/?token=$token';
       
@@ -1109,86 +1108,142 @@ Future<void> _handleNewMessage(String groupId, Map<String, dynamic> message) asy
   }
 
   Future<List<Map<String, dynamic>>> _loadChats() async {
-    if (!_mounted) return [];
+ 
+  if (!_mounted) {
+   
+    return [];
+  }
 
-    List<Map<String, dynamic>> chats = [];
-    try {
-      final db = await _dbHelper.database;
-      final groups = await _dbHelper.getGroups();
-      final unreadCounts = await _dbHelper.getGroupUnreadCounts();
+  List<Map<String, dynamic>> chats = [];
+  try {
+    final db = await _dbHelper.database;
+    final groups = await _dbHelper.getGroups();
+    final unreadCounts = await _dbHelper.getGroupUnreadCounts();
     
 
-      for (var group in groups) {
-        final isApproved = await _isUserApproved(group['id']);
+    
+    // Get current user ID for debugging
+    final userProfile = await db.query('profile', limit: 1);
+    final userId = userProfile.first['id'] as String? ?? '';
+  
+    
+    for (var group in groups) {
+      final groupId = group['id'].toString();
+      final groupName = group['name'] as String? ?? 'Unknown';
+      
+     
+      
+      // DEBUG: Check participants in database
+      final participants = await db.query(
+        'participants',
+        where: 'group_id = ?',
+        whereArgs: [groupId],
+      );
+      
+     
+      
+      // Find current user's participant record
+      final userParticipant = participants.firstWhere(
+        (p) => p['user_id'].toString() == userId,
+        orElse: () => {},
+      );
+      
+    
+      final isApproved = await _isUserApproved(group['id']);
+    
+      
       if (!isApproved) {
-        
+      
         continue;
       }
-
-        final groupId = group['id'].toString();
-        final unreadCount = unreadCounts[groupId] ?? 0;
-        _groupUnreadCounts[groupId] = unreadCount;
-
-        // Get the last message for this group
+      
+      final unreadCount = unreadCounts[groupId] ?? 0;
+      _groupUnreadCounts[groupId] = unreadCount;
+      
+     
+      
+      // Get the last message for this group
       final lastMessage = await _dbHelper.getLastMessageById(group['id']);
      
-        Widget lastMessagePreview = const Text(
-          "No messages yet",
-          style: TextStyle(color: Colors.grey),
-        );
-        String? lastMessageStatus;
-        String timestamp = group['last_activity'] as String? ?? group['created_at'] as String? ?? DateTime.now().toIso8601String();
+      
+      Widget lastMessagePreview = const Text(
+        "No messages yet",
+        style: TextStyle(color: Colors.grey),
+      );
+      String? lastMessageStatus;
+      String timestamp = group['last_activity'] as String? ?? 
+                        group['created_at'] as String? ?? 
+                        DateTime.now().toIso8601String();
 
-        if (lastMessage != null) {
-          lastMessagePreview = _buildLastMessagePreview(lastMessage);
-          lastMessageStatus = lastMessage['status'] as String?;
+      if (lastMessage != null) {
+        lastMessagePreview = _buildLastMessagePreview(lastMessage);
+        lastMessageStatus = lastMessage['status'] as String?;
         timestamp = lastMessage['timestamp'] as String;
        
-        }
+      } else {
+       
+      }
 
-        chats.add({
-          'id': group['id'],
-          'name': _toSentenceCase(group['name'] as String? ?? ''),
-          'description': group['description'] as String? ?? '',
-          'profilePic': group['profile_pic'] as String? ?? '',
-          'lastMessage': lastMessagePreview,
-          'lastMessageStatus': lastMessageStatus,
-          'timestamp': timestamp,
-          'unreadCount': unreadCount,
-          'isGroup': true,
-          'hasMessages': lastMessage != null,
-          'restrict_messages_to_admins': group['restrict_messages_to_admins'] == 1,
-          'amAdmin': group['amAdmin'] == 1,
-          'allows_subscription': group['allows_subscription'] == 1,
-          'has_user_paid': group['has_user_paid'] == 1,
-          'subscription_amount': _parseDouble(group['subscription_amount']),
-          'isMe': lastMessage?['isMe'] == 1,
+      final chatData = {
+        'id': group['id'],
+        'name': _toSentenceCase(groupName),
+        'description': group['description'] as String? ?? '',
+        'profilePic': group['profile_pic'] as String? ?? '',
+        'lastMessage': lastMessagePreview,
+        'lastMessageStatus': lastMessageStatus,
+        'timestamp': timestamp,
+        'unreadCount': unreadCount,
+        'isGroup': true,
+        'hasMessages': lastMessage != null,
+        'restrict_messages_to_admins': group['restrict_messages_to_admins'] == 1,
+        'amAdmin': group['amAdmin'] == 1,
+        'allows_subscription': group['allows_subscription'] == 1,
+        'has_user_paid': group['has_user_paid'] == 1,
+        'subscription_amount': _parseDouble(group['subscription_amount']),
+        'isMe': lastMessage?['isMe'] == 1,
         'lastMessageId': lastMessage?['id'],
         'lastMessageType': lastMessage?['type'],
         'lastMessageText': lastMessage?['message'],
         'lastMessageSender': lastMessage?['sender_name'],
-        });
-      }
-
-      // Sort chats by most recent message
-      chats.sort((a, b) => DateTime.parse(b['timestamp']).compareTo(DateTime.parse(a['timestamp'])));
-
-      if (!_mounted) return [];
-
-      setState(() {
-        _allChats = chats;
-        _filteredChats = List.from(chats);
-        _totalUnreadCount = _groupUnreadCounts.values.fold(0, (sum, count) => sum + count);
-        _unreadCountController.add(_totalUnreadCount);
-        widget.onUnreadCountChanged?.call(_totalUnreadCount);
+      };
       
-      });
-  } catch (e, stackTrace) {
-      
-    
+      chats.add(chatData);
+  
     }
-    return _allChats;
+
+   
+    
+    // Sort chats by most recent message
+    try {
+      chats.sort((a, b) => DateTime.parse(b['timestamp']).compareTo(DateTime.parse(a['timestamp'])));
+      
+    } catch (e) {
+     
+    }
+
+    if (!_mounted) {
+     
+      return [];
+    }
+
+    setState(() {
+      _allChats = chats;
+      _filteredChats = List.from(chats);
+      _totalUnreadCount = _groupUnreadCounts.values.fold(0, (sum, count) => sum + count);
+      _unreadCountController.add(_totalUnreadCount);
+      widget.onUnreadCountChanged?.call(_totalUnreadCount);
+    });
+    
+  
+  } catch (e, stackTrace) {
+  
+    print("❌ Error: $e");
+    print("❌ Stack trace: $stackTrace");
   }
+  
+ 
+  return _allChats;
+}
 
 
 
@@ -1218,22 +1273,34 @@ Future<void> _handleNewMessage(String groupId, Map<String, dynamic> message) asy
     return 0.0;
   }
 
-  Future<bool> _isUserApproved(int groupId) async {
-    final db = await _dbHelper.database;
-    final userProfile = await db.query('profile', limit: 1);
-    final userId = userProfile.first['user_id'] as String? ?? '145';
+ Future<bool> _isUserApproved(int groupId) async {
+  
+  
+  final db = await _dbHelper.database;
+  final userProfile = await db.query('profile', limit: 1);
+  final userId = userProfile.first['id'] as String? ?? '';
+  
 
-    final participant = await db.query(
-      'participants',
-      where: 'group_id = ? AND user_id = ?',
-      whereArgs: [groupId, userId],
-      limit: 1,
-    );
+  final participant = await db.query(
+    'participants',
+    where: 'group_id = ? AND user_id = ?',
+    whereArgs: [groupId, userId],
+    limit: 1,
+  );
 
-    if (participant.isNotEmpty) {
-      return participant.first['is_approved'] == 1;
-    }
-    return false;
+  if (participant.isNotEmpty) {
+    final isApproved = participant.first['is_approved'] == 1;
+   
+    return isApproved;
+  }
+  
+
+  return false;
+}
+
+  /// Call after the current user changes their profile photo.
+  void reloadAfterProfilePictureChange() {
+    _reloadChats();
   }
 
   void _reloadChats() {

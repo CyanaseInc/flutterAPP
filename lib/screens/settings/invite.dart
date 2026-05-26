@@ -7,12 +7,7 @@ import 'package:cyanase/theme/theme.dart';
 import 'package:cyanase/providers/provider.dart';
 
 class ReferralPage extends StatefulWidget {
-  final double totalEarnings;
-
-  const ReferralPage({
-    Key? key,
-    required this.totalEarnings,
-  }) : super(key: key);
+  const ReferralPage({Key? key}) : super(key: key);
 
   @override
   State<ReferralPage> createState() => _ReferralPageState();
@@ -21,7 +16,6 @@ class ReferralPage extends StatefulWidget {
 class _ReferralPageState extends State<ReferralPage> {
   bool _isWithdrawing = false;
 
-  // FIXED: Use a method instead of getter
   String _getReferralUrl(String inviteCode) {
     return 'https://cyanase.com/referral/$inviteCode';
   }
@@ -30,268 +24,282 @@ class _ReferralPageState extends State<ReferralPage> {
   Widget build(BuildContext context) {
     final currencyProvider = Provider.of<CurrencyProvider>(context);
     final inviteCode = currencyProvider.inviteCode;
-    final referralUrl = _getReferralUrl(inviteCode); // FIXED: Call the method
+    final referralUrl = _getReferralUrl(inviteCode);
+    
+    final currentBalance = currencyProvider.currentBalance;
+    final totalEarnings = currencyProvider.totalEarnings;
+    final totalWithdrawals = currencyProvider.totalWithdrawals;
+    final totalInvitations = currencyProvider.totalInvitations;
+    final financialCurrencySymbol = currencyProvider.financialCurrencySymbol ?? 
+                                   currencyProvider.currencySymbol;
+    final bonusBreakdown = currencyProvider.bonusBreakdown;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        title: const Text("Refer & Earn"),
-        titleTextStyle: const TextStyle(
-          color: Colors.white,
-          fontSize: 26,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 0.5,
+        title: const Text(
+          "Earnings Dashboard",
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         backgroundColor: primaryTwo,
         elevation: 0,
-        centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
+          icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
-        child: Column(
-          children: [
-            _buildEarningsCard(),
-            const SizedBox(height: 28),
-            _buildHeroCard(),
-            const SizedBox(height: 28),
-            _buildInviteCard(inviteCode),
-            const SizedBox(height: 28),
-            _buildShareCard(inviteCode, referralUrl), // FIXED: Pass the string
-            const SizedBox(height: 28),
-            _buildHowItWorksCard(referralUrl), // FIXED: Pass the string
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ———————————————————————
-  // 1. EARNINGS CARD
-  // ———————————————————————
-  Widget _buildEarningsCard() {
-    return _premiumCard(
-      topColor: primaryTwo,
-      child: Column(
+      body: Column(
         children: [
-          const Text(
-            'Total Earnings',
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.black54),
-          ),
-          const SizedBox(height: 14),
-          Text(
-            '\$${widget.totalEarnings.toStringAsFixed(2)}',
-            style: const TextStyle(
-              fontSize: 30,
-              fontWeight: FontWeight.bold,
-              color: primaryTwo,
-              letterSpacing: -1,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Min withdrawal: \$100.00',
-            style: TextStyle(fontSize: 13, color: Colors.grey[600]),
-          ),
-          const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: _isWithdrawing ? null : () => _showWithdrawDialog(),
-              icon: _isWithdrawing
-                  ? const SizedBox(
-                      width: 15,
-                      height: 15,
-                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                    )
-                  : const Icon(Icons.account_balance_wallet, size: 15),
-              label: Text(_isWithdrawing ? 'Processing...' : 'Withdraw Now'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryTwo,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                elevation: 8,
-                shadowColor: primaryTwo.withOpacity(0.3),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ———————————————————————
-  // 2. HERO ILLUSTRATION
-  // ———————————————————————
-  Widget _buildHeroCard() {
-    return _premiumCard(
-      topColor: secondaryColor,
-      child: Column(
-        children: const [
-          Icon(Icons.card_giftcard_rounded, size: 68, color: primaryTwo),
-          SizedBox(height: 18),
-          Text(
-            'Invite Friends,\nEarn Big Rewards',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87),
-          ),
-          SizedBox(height: 10),
-          Text(
-            'You earn \$50 per friend. They get a bonus too!',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 15, color: Colors.black54, height: 1.5),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ———————————————————————
-  // 3. INVITE CODE CARD
-  // ———————————————————————
-  Widget _buildInviteCard(String inviteCode) {
-    return _premiumCard(
-      topColor: primaryTwo,
-      child: Column(
-        children: [
-          const Text(
-            'Your Invite Code',
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.black54),
-          ),
-          const SizedBox(height: 16),
+          // Header Stats with Withdraw Button
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
-            decoration: BoxDecoration(
-              color: primaryTwo.withOpacity(0.08),
-              border: Border.all(color: primaryTwo.withOpacity(0.4), width: 2.5),
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: SelectableText(
-              inviteCode.isEmpty ? 'No code available' : inviteCode,
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: primaryTwo,
-                letterSpacing: 5,
-                fontFamily: 'RobotoMono',
-              ),
-            ),
-          ),
-          const SizedBox(height: 18),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: inviteCode.isEmpty ? null : () => _copyToClipboard(inviteCode),
-              icon: const Icon(Icons.copy, size: 18),
-              label: const Text('Copy Code'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: primaryTwo,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ———————————————————————
-  // 4. SHARE CARD - MODIFIED TO ACCEPT PARAMETERS
-  // ———————————————————————
-  Widget _buildShareCard(String inviteCode, String referralUrl) {
-    return _premiumCard(
-      topColor: secondaryColor,
-      hasBottomBorder: true,
-      child: Column(
-        children: [
-          const Text(
-            'Share With Friends',
-            style: TextStyle(fontSize: 19, fontWeight: FontWeight.bold, color: Colors.black87),
-          ),
-          const SizedBox(height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _socialIcon(Icons.facebook, const Color(0xFF1877F2), () => _shareVia('facebook', inviteCode, referralUrl)),
-              _socialIcon(Icons.email, const Color(0xFFEA4335), () => _shareVia('email', inviteCode, referralUrl)),
-              _socialIcon(Icons.share, Colors.grey[700]!, () => _share(inviteCode, referralUrl)),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _socialIcon(IconData icon, Color color, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: color,
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.white, width: 3),
-              boxShadow: [
-                BoxShadow(color: color.withOpacity(0.4), blurRadius: 12, offset: const Offset(0, 6)),
+            padding: const EdgeInsets.all(20),
+            color: primaryTwo,
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _buildStatHeader(
+                      'Total Earnings',
+                      '$financialCurrencySymbol${totalEarnings.toStringAsFixed(2)}',
+                      Colors.white,
+                    ),
+                    _buildStatHeader(
+                      'Current Balance',
+                      '$financialCurrencySymbol${currentBalance.toStringAsFixed(2)}',
+                      Colors.white,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: _isWithdrawing || currentBalance < 100 
+                        ? null 
+                        : () => _showWithdrawDialog(currentBalance, financialCurrencySymbol),
+                    icon: _isWithdrawing 
+                        ? SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              color: primaryTwo,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Icon(Icons.account_balance_wallet, size: 18),
+                    label: Text(
+                      _isWithdrawing 
+                          ? 'Processing...' 
+                          : currentBalance < 100
+                              ? 'Min: ${financialCurrencySymbol}100 Required'
+                              : 'Withdraw Funds',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: primaryTwo,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      elevation: 2,
+                    ),
+                  ),
+                ),
               ],
             ),
-            child: Icon(icon, color: Colors.white, size: 28),
           ),
-          const SizedBox(height: 8),
-          Text(
-            icon == Icons.facebook ? 'Facebook' : icon == Icons.email ? 'Email' : 'More',
-            style: const TextStyle(fontSize: 13, color: Colors.black54, fontWeight: FontWeight.w500),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ———————————————————————
-  // 5. HOW IT WORKS - MODIFIED TO ACCEPT PARAMETER
-  // ———————————————————————
-  Widget _buildHowItWorksCard(String referralUrl) {
-    return _premiumCard(
-      topColor: primaryTwo,
-      child: Column(
-        children: [
-          const Icon(Icons.emoji_events, size: 52, color: primaryTwo),
-          const SizedBox(height: 16),
-          const Text(
-            'How It Works',
-            style: TextStyle(fontSize: 21, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 14),
-          const Text(
-            '• Share your code with friends\n'
-            '• They sign up → \n'
-            '• You earn \$50 instantly\n'
-            '• If they create an group → \n'
-            '• You earn \$150 bonus instantly\n'
-            '• Withdraw anytime after \$100',
-            textAlign: TextAlign.left,
-            style: TextStyle(color: Colors.black54, fontSize: 15, height: 1.7),
-          ),
-          const SizedBox(height: 22),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: () => _shareInviteLink(referralUrl),
-              icon: const Icon(Icons.send_rounded, size: 20),
-              label: const Text('Share Invite Link'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: primaryTwo,
-                side: BorderSide(color: primaryTwo, width: 2),
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          
+          // Main Content
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                children: [
+                  // Invitations Summary Card
+                  Card(
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(color: Colors.grey[300]!, width: 1),
+                    ),
+                    color: Colors.white,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.groups, size: 18, color: primaryTwo),
+                              const SizedBox(width: 8),
+                              const Text(
+                                'Invitation Summary',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                'Total Invitations',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                              Text(
+                                totalInvitations.toString(),
+                                style: const TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: primaryTwo,
+                                ),
+                              ),
+                            ],
+                          ),
+                      
+                        ],
+                      ),
+                    ),
+                  ),
+                  
+               
+                  
+                  // How It Works Card
+                  Card(
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(color: Colors.grey[300]!, width: 1),
+                    ),
+                    color: Colors.white,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.info, size: 18, color: primaryTwo),
+                              const SizedBox(width: 8),
+                              const Text(
+                                'How It Works',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          _buildWorkStep(
+                            1,
+                            'Share your referral link with friends',
+                          ),
+                          _buildWorkStep(
+                            2,
+                            'Friends sign up using your link',
+                          ),
+                          _buildWorkStep(
+                            3,
+                            'Earn ${financialCurrencySymbol}5000 when they complete their first desposit',
+                          ),
+                          _buildWorkStep(
+                            4,
+                            'Additional ${financialCurrencySymbol}5000 when they create and subscribe to a group',
+                          ),
+                          _buildWorkStep(
+                            5,
+                            'Withdraw when balance reaches ${financialCurrencySymbol}10000 minimum',
+                          ),
+                          const SizedBox(height: 16),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              onPressed: () => _shareInviteLink(referralUrl),
+                              icon: const Icon(Icons.share, size: 16),
+                              label: const Text('Share Referral Link'),
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                side: BorderSide(color: primaryTwo),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 16),
+                  
+                  // Notes Card
+                  Card(
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(color: Colors.grey[300]!, width: 1),
+                    ),
+                    color: Colors.white,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.lightbulb, size: 18, color: primaryTwo),
+                              const SizedBox(width: 8),
+                              const Text(
+                                'Important Notes',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          _buildNoteItem(
+                            'Instant Payout',
+                            'Bonuses are credited immediately when requirements are met',
+                          ),
+                          _buildNoteItem(
+                            'No Limits',
+                            'Invite unlimited friends - no cap on earnings',
+                          ),
+                          _buildNoteItem(
+                            'Real Cash',
+                            'All earnings are withdrawable real money',
+                          ),
+                          _buildNoteItem(
+                            '24/7 Support',
+                            'Contact support anytime for assistance',
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -300,184 +308,287 @@ class _ReferralPageState extends State<ReferralPage> {
     );
   }
 
-  // ———————————————————————
-  // PREMIUM CARD
-  // ———————————————————————
-  Widget _premiumCard({
-    required Widget child,
-    required Color topColor,
-    bool hasBottomBorder = false,
-  }) {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.grey.shade200, width: 1.2),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
+  Widget _buildStatHeader(String label, String value, Color color) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: color.withOpacity(0.8),
           ),
-        ],
-      ),
-      child: Column(
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStatRow(String label, String value, Color valueColor) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 14,
+            color: Colors.grey,
+          ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            color: valueColor,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWorkStep(int number, String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            height: 6,
+            width: 24,
+            height: 24,
             decoration: BoxDecoration(
-              color: topColor,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+              color: primaryTwo,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Center(
+              child: Text(
+                number.toString(),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.all(24),
-            child: child,
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(
+                fontSize: 14,
+                color: Colors.grey,
+                height: 1.4,
+              ),
+            ),
           ),
-          if (hasBottomBorder) _dashedLine(),
         ],
       ),
     );
   }
 
-  Widget _dashedLine() {
+  Widget _buildNoteItem(String title, String description) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: CustomPaint(
-        size: const Size(double.infinity, 1),
-        painter: _DashedLinePainter(),
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.check_circle, color: Colors.green, size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  description,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  // ———————————————————————
-  // WITHDRAW DIALOG
-  // ———————————————————————
-  void _showWithdrawDialog() {
-    final controller = TextEditingController();
-    double amount = 100;
+  String _formatBonusType(String type) {
+    switch (type) {
+      case 'invite': return 'Invitation Bonus';
+      case 'signup': return 'Signup Bonus';
+      case 'promo': return 'Promotional Bonus';
+      case 'group': return 'Group Bonus';
+      default: return type.replaceAll('_', ' ').toUpperCase();
+    }
+  }
 
-    showDialog(
+  void _showWithdrawDialog(double currentBalance, String currencySymbol) {
+    final controller = TextEditingController();
+    double amount = currentBalance >= 100 ? 100 : currentBalance;
+
+    showModalBottomSheet(
       context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: const Text('Withdraw Earnings', textAlign: TextAlign.center),
-        content: Column(
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
+        child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              'Balance: \$${widget.totalEarnings.toStringAsFixed(2)}',
-              style: const TextStyle(fontSize: 15, color: Colors.black54),
-            ),
-            const SizedBox(height: 20),
-            TextField(
-              controller: controller,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
-              decoration: InputDecoration(
-                prefixText: '\$ ',
-                labelText: 'Amount',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: const BorderSide(color: primaryTwo, width: 2),
-                ),
+            Container(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Withdraw Funds',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, size: 20),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Available: $currencySymbol${currentBalance.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  TextField(
+                    controller: controller,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
+                    decoration: InputDecoration(
+                      labelText: 'Amount',
+                      prefixText: '$currencySymbol ',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    onChanged: (v) {
+                      if (mounted) {
+                        setState(() {
+                          amount = double.tryParse(v) ?? 0;
+                        });
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                  Slider(
+                    value: amount.clamp(100, currentBalance),
+                    min: 100,
+                    max: currentBalance,
+                    divisions: ((currentBalance - 100) / 10).floor(),
+                    label: '$currencySymbol${amount.toStringAsFixed(2)}',
+                    onChanged: (v) {
+                      if (mounted) {
+                        setState(() {
+                          amount = v;
+                          controller.text = v.toStringAsFixed(2);
+                        });
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        if (amount >= 100 && amount <= currentBalance) {
+                          Navigator.pop(context);
+                          _processWithdrawal(amount, currencySymbol);
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: primaryTwo,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: const Text(
+                        'Confirm Withdrawal',
+                        style: TextStyle(fontSize: 14),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              onChanged: (v) => setState(() => amount = double.tryParse(v) ?? 0),
-            ),
-            const SizedBox(height: 16),
-            Slider(
-              value: amount.clamp(100, widget.totalEarnings),
-              min: 100,
-              max: widget.totalEarnings,
-              divisions: ((widget.totalEarnings - 100) / 10).floor(),
-              label: amount.toStringAsFixed(2),
-              activeColor: primaryTwo,
-              onChanged: (v) {
-                setState(() {
-                  amount = v;
-                  controller.text = v.toStringAsFixed(2);
-                });
-              },
             ),
           ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () {
-              if (amount >= 100 && amount <= widget.totalEarnings) {
-                Navigator.pop(context);
-                _processWithdrawal(amount);
-              }
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: primaryTwo),
-            child: const Text('Confirm'),
-          ),
-        ],
       ),
     );
   }
 
-  Future<void> _processWithdrawal(double amount) async {
+  Future<void> _processWithdrawal(double amount, String currencySymbol) async {
     setState(() => _isWithdrawing = true);
     await Future.delayed(const Duration(seconds: 2));
     if (!mounted) return;
     setState(() => _isWithdrawing = false);
-    _snack('Withdrawal of \$${amount.toStringAsFixed(2)} requested!');
+    _showSuccessSnackbar('Withdrawal of $currencySymbol${amount.toStringAsFixed(2)} requested successfully.');
   }
-
-  // ———————————————————————
-  // UTILS – SHARE - MODIFIED TO ACCEPT PARAMETERS
-  // ———————————————————————
-  Future<void> _copyToClipboard(String inviteCode) async {
-    await Clipboard.setData(ClipboardData(text: inviteCode));
-    _snack('Code copied!');
-  }
-
-  void _shareVia(String platform, String inviteCode, String referralUrl) {
-    final msg = 'Join Cyanase with my code **$inviteCode** and we both earn \$50!\n\n$referralUrl';
-    Share.share(msg);
-  }
-
-  void _share(String inviteCode, String referralUrl) => _shareVia('more', inviteCode, referralUrl);
 
   void _shareInviteLink(String referralUrl) {
     final currencyProvider = Provider.of<CurrencyProvider>(context, listen: false);
     final inviteCode = currencyProvider.inviteCode;
-    _shareVia('more', inviteCode, referralUrl);
+    final currencySymbol = currencyProvider.currencySymbol;
+    
+    final msg = '''
+Join Cyanase using my referral code: $inviteCode
+
+
+$referralUrl
+''';
+    Share.share(msg);
   }
 
-  void _snack(String msg) {
+  void _showSuccessSnackbar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(msg),
-        backgroundColor: primaryTwo,
+        content: Text(message),
+        backgroundColor: Colors.green,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
         margin: const EdgeInsets.all(16),
       ),
     );
   }
-}
-
-// ———————————————————————
-// DASHED LINE PAINTER
-// ———————————————————————
-class _DashedLinePainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.grey.shade300
-      ..strokeWidth = 1.5;
-    double startX = 0;
-    while (startX < size.width) {
-      canvas.drawLine(Offset(startX, 0), Offset(startX + 7, 0), paint);
-      startX += 12;
-    }
-  }
-
-  @override
-  bool shouldRepaint(_) => false;
 }

@@ -9,7 +9,8 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io'; // For handling file paths
 import 'package:cyanase/theme/theme.dart';
 import 'account_settings.dart';
-import 'riskprofiler.dart';
+import 'package:cyanase/screens/home/personal/ips_documents_screen.dart';
+import 'package:cyanase/screens/home/personal/personal_investment_policy_screen.dart';
 import 'notification_settings.dart';
 import 'help_page.dart';
 import 'invite.dart';
@@ -71,12 +72,25 @@ class _SettingsPageState extends material.State<SettingsPage> {
       if (shouldSave == true) {
         final upload =
             await ApiService.uploadProfileImage(token!, _profileImage!);
-        if (upload['success']) {
+        if (upload['success'] == true) {
+          final path = (upload['profile_pic'] ?? upload['profile_picture'])
+              ?.toString()
+              .trim();
+          if (path != null && path.isNotEmpty) {
+            await DatabaseHelper().updateLocalProfilePicture(path);
+            widget.onProfileUpdate?.call(path);
+          }
+          if (!mounted) return;
           setState(() {
-            picture = upload['profile_pic'];
+            _profileImage = null;
+            if (path != null && path.isNotEmpty) {
+              final base = path.split('?').first;
+              final rel = base.startsWith('http')
+                  ? Uri.parse(base).path
+                  : (base.startsWith('/') ? base : '/$base');
+              picture = '${ApiEndpoints.server}$rel?v=${DateTime.now().millisecondsSinceEpoch}';
+            }
           });
-          // Notify parent about the profile update
-          widget.onProfileUpdate?.call(upload['profile_pic']);
         }
       }
     }
@@ -199,14 +213,29 @@ class _SettingsPageState extends material.State<SettingsPage> {
           },
         ),
         _buildSettingsOption(
-          icon: material.Icons.lock,
-          title: "Risk profile",
-          subtitle: "Configure your risk preferences",
+          icon: material.Icons.account_balance_wallet_outlined,
+          title: 'Investment profile',
+          subtitle:
+              'Your goals, risk level, and time horizon — required once before you invest',
           onTap: () {
-            material.Navigator.push(
+            material.Navigator.push<void>(
               context,
-              material.MaterialPageRoute(
-                  builder: (context) => const RiskProfilerForm()),
+              material.MaterialPageRoute<void>(
+                builder: (_) => const PersonalInvestmentPolicyScreen(),
+              ),
+            );
+          },
+        ),
+        _buildSettingsOption(
+          icon: material.Icons.description_outlined,
+          title: 'IPS documents',
+          subtitle: 'View and edit formal Investment Policy Statements',
+          onTap: () {
+            material.Navigator.push<void>(
+              context,
+              material.MaterialPageRoute<void>(
+                builder: (_) => const IpsDocumentsScreen(),
+              ),
             );
           },
         ),
@@ -242,8 +271,6 @@ class _SettingsPageState extends material.State<SettingsPage> {
               context,
               material.MaterialPageRoute(
                   builder: (context) => ReferralPage(
-  
-  totalEarnings: 1250000.00, // Dynamic from your backend
 )),
             );
           },

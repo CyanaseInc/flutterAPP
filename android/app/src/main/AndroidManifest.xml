@@ -18,12 +18,10 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <uses-permission android:name="android.permission.READ_PHONE_NUMBERS" />
-    
     <!-- For legacy external storage access (Android < 10) -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
 
     <application
-        android:name="${applicationName}"
         android:label="Cyanase"
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="false"
@@ -50,24 +48,50 @@
             </intent-filter>
 
             <!-- ============================================================= -->
-            <!-- UNIVERSAL / APP LINKS – Handles referral after install -->
+            <!-- UNIVERSAL LINKS (HTTPS) -->
             <!-- ============================================================= -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <!-- Handles: https://cyanase.com/referral/r/ABC123 -->
-                <data android:scheme="https" android:host="cyanase.com" />
+                <data
+                    android:scheme="https"
+                    android:host="cyanase.com"
+                    android:pathPrefix="/referral" />
             </intent-filter>
 
             <!-- ============================================================= -->
-            <!-- CUSTOM SCHEME – Handles: cyanase://join?... or cyanase://referral?... -->
+            <!-- CUSTOM SCHEMES (cyanase://...) -->
             <!-- ============================================================= -->
+
+            <!-- Handles: cyanase://refer/ABC123 -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="cyanase" />
+                <data
+                    android:scheme="cyanase"
+                    android:host="refer" />
+            </intent-filter>
+
+            <!-- Handles: cyanase://join?group_id=123 -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="cyanase"
+                    android:host="join" />
+            </intent-filter>
+
+            <!-- XCEL PayGate return URL (in-app redirect, not external website) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="cyanase"
+                    android:host="payment-complete" />
             </intent-filter>
 
         </activity>
@@ -118,7 +142,7 @@
             android:value="2" />
     </application>
 
-    <!-- Intent query declarations -->
+    <!-- Intent query declarations for Android 11+ -->
     <queries>
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT" />

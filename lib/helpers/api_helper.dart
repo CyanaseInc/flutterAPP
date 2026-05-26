@@ -6,12 +6,56 @@ import 'endpoints.dart'; // Import the file with API endpoints
 import 'package:http_parser/http_parser.dart';
 
 class ApiService {
+  /// Production nginx redirects HTTP→HTTPS with 301; the Dart client does not
+  /// follow that redirect on POST, so always use HTTPS for cyanase.app hosts.
+  static Uri _resolveEndpoint(String endpoint) {
+    final uri = Uri.parse(endpoint);
+    if (uri.host.endsWith('cyanase.app') && uri.scheme == 'http') {
+      return uri.replace(scheme: 'https');
+    }
+    return uri;
+  }
+
+  static Future<http.Response> _sendPost(
+    Uri uri, {
+    required Map<String, String> headers,
+    required String body,
+  }) async {
+    var response = await http.post(uri, headers: headers, body: body);
+    if (response.statusCode == 301 ||
+        response.statusCode == 302 ||
+        response.statusCode == 307 ||
+        response.statusCode == 308) {
+      final location = response.headers['location'];
+      if (location != null && location.isNotEmpty) {
+        final next = location.startsWith('http')
+            ? Uri.parse(location)
+            : uri.resolve(location);
+        response = await http.post(next, headers: headers, body: body);
+      }
+    }
+    return response;
+  }
+
   // Helper function to handle API responses
   static dynamic _handleResponse(http.Response response) {
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return jsonDecode(response.body);
     } else {
-      throw Exception('Failed to load data: ${response.statusCode}');
+      final body = response.body;
+      String errorMessage;
+      try {
+        final decoded = jsonDecode(body);
+        if (decoded is Map && decoded.containsKey('message')) {
+          errorMessage = decoded['message'].toString();
+        } else {
+          errorMessage = body;
+        }
+      } catch (_) {
+        errorMessage = body;
+      }
+      throw Exception(
+          'HTTP ${response.statusCode}: ${response.reasonPhrase} - $errorMessage');
     }
   }
 
@@ -19,11 +63,10 @@ class ApiService {
   static Future<dynamic> post(
       String endpoint, Map<String, dynamic> data) async {
     try {
-      final response = await http.post(
-        Uri.parse(endpoint),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(data),
-      );
+      final uri = _resolveEndpoint(endpoint);
+      final headers = {'Content-Type': 'application/json'};
+      final body = jsonEncode(data);
+      final response = await _sendPost(uri, headers: headers, body: body);
       return _handleResponse(response);
     } catch (e) {
       throw Exception('Network error: $e');
@@ -33,7 +76,7 @@ class ApiService {
   // GET request
   static Future<dynamic> get(String endpoint) async {
     try {
-      final response = await http.get(Uri.parse(endpoint));
+      final response = await http.get(_resolveEndpoint(endpoint));
       return _handleResponse(response);
     } catch (e) {
       throw Exception('Network error: $e');
@@ -115,7 +158,33 @@ class ApiService {
     } catch (e) {
       throw Exception('Error during user check: $e');
     }
-  } // Login request
+  }
+
+  /// Resend account verification email (expects account email address).
+  static Future<Map<String, dynamic>> resendVerificationEmail(
+      String email) async {
+    final url = Uri.parse(ApiEndpoints.apiResendVerificationEmail);
+    try {
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email.trim()}),
+      );
+      final decoded = jsonDecode(response.body);
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return decoded is Map<String, dynamic>
+            ? decoded
+            : {'success': false, 'message': 'Unexpected response'};
+      }
+      if (decoded is Map<String, dynamic>) {
+        return decoded;
+      }
+      throw Exception(
+          'Resend failed: ${response.statusCode} - ${response.body}');
+    } catch (e) {
+      throw Exception('Error resending verification email: $e');
+    }
+  }
 
   ////set the passcode
   static Future<Map<String, dynamic>> Setpasscode(
@@ -274,7 +343,7 @@ class ApiService {
 
       return response as Map<String, dynamic>;
     } catch (e) {
-      throw Exception('Login failed');
+      throw Exception('Login failed: ${e.toString()}');
     }
   }
 
@@ -285,7 +354,7 @@ class ApiService {
 
       return response;
     } catch (e) {
-      throw Exception('Login failed: ');
+      throw Exception('Login failed: ${e.toString()}');
     }
   }
 
@@ -1359,23 +1428,32 @@ class ApiService {
     }
   }
 
+  static const Duration _paymentHttpTimeout = Duration(seconds: 90);
+
   static Future<Map<String, dynamic>> requestPayment(
       String token, Map<String, dynamic> data) async {
-    final response = await http.post(
-      Uri.parse(ApiEndpoints.requestPayment), // Replace with your API endpoint
-      headers: {
-        'Authorization': 'Token $token',
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode(data), // Convert requestData to JSON
-    );
+    final response = await http
+        .post(
+          Uri.parse(ApiEndpoints.requestPayment),
+          headers: {
+            'Authorization': 'Token $token',
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode(data),
+        )
+        .timeout(_paymentHttpTimeout);
 
     if (response.statusCode != 200) {
-      throw Exception('Failed to submit deposit: ${response.statusCode}');
-    } else {
-      return jsonDecode(response.body);
+      final body = response.body.isNotEmpty
+          ? jsonDecode(response.body)
+          : <String, dynamic>{};
+      final msg = body is Map ? body['message']?.toString() : null;
+      throw Exception(
+        msg ?? 'Payment request failed (${response.statusCode})',
+      );
     }
+    return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
   static Future<Map<String, dynamic>> withdrawRequest(
@@ -1626,23 +1704,82 @@ class ApiService {
     }
   }
 
-  static Future<Map<String, dynamic>> getTransaction(
-      String token, Map<String, dynamic> data) async {
+  static Future<Map<String, dynamic>> confirmXcelPayment(
+    String token, {
+    required dynamic transactionId,
+  }) async {
     final response = await http.post(
-      Uri.parse(ApiEndpoints.getTransaction), // Replace with your API endpoint
+      Uri.parse(ApiEndpoints.xcelConfirmPayment),
       headers: {
         'Authorization': 'Token $token',
         'Accept': 'application/json',
         'Content-Type': 'application/json',
       },
-      body: jsonEncode(data), // Convert requestData to JSON
+      body: jsonEncode({'transaction_id': transactionId}),
     );
-
-    if (response.statusCode != 200) {
-      throw Exception('Failed to submit deposit: ${response.statusCode}');
-    } else {
-      return jsonDecode(response.body);
+    if (response.statusCode >= 400 && response.statusCode != 202) {
+      throw Exception('Failed to confirm payment: ${response.statusCode}');
     }
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  /// Relworx MoMo completion (subscriptions). Marks pending txn success + activates subscription.
+  static Future<Map<String, dynamic>> verifyPayment(
+    String token,
+    Map<String, dynamic> data,
+  ) async {
+    final response = await http
+        .post(
+          Uri.parse(ApiEndpoints.verifyPayment),
+          headers: {
+            'Authorization': 'Token $token',
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode(data),
+        )
+        .timeout(_paymentHttpTimeout);
+
+    final decoded = response.body.isNotEmpty
+        ? jsonDecode(response.body) as Map<String, dynamic>
+        : <String, dynamic>{'success': false, 'message': 'Empty response'};
+    if (response.statusCode != 200) {
+      return {
+        'success': false,
+        'message': decoded['message']?.toString() ??
+            'Verify payment failed (${response.statusCode})',
+        ...decoded,
+      };
+    }
+    return decoded;
+  }
+
+  static Future<Map<String, dynamic>> getTransaction(
+      String token, Map<String, dynamic> data) async {
+    final response = await http
+        .post(
+          Uri.parse(ApiEndpoints.getTransaction),
+          headers: {
+            'Authorization': 'Token $token',
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode(data),
+        )
+        .timeout(_paymentHttpTimeout);
+
+    if (response.body.isEmpty) {
+      return {'success': false, 'message': 'No transaction data'};
+    }
+    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    if (response.statusCode != 200) {
+      return {
+        'success': false,
+        'message': decoded['message']?.toString() ?? 'Payment pending',
+        ...decoded,
+      };
+    }
+    return decoded;
   }
 
   static Future<Map<String, dynamic>> investDeposit(
@@ -1959,4 +2096,184 @@ static Future<Map<String, dynamic>> getAllTransactions(
   }
 
   // Add more methods for other API calls as needed
+
+  static Future<Map<String, dynamic>> getInvestmentPolicyStatus(
+      String token) async {
+    final response = await http.get(
+      Uri.parse(ApiEndpoints.apiUrlUserInvestmentPolicyStatus),
+      headers: {
+        'Authorization': 'Token $token',
+        'Content-Type': 'application/json',
+      },
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+    throw Exception(
+        'Failed to load investment policy status: ${response.statusCode}');
+  }
+
+  static Future<Map<String, dynamic>> getInvestmentPolicy(String token) async {
+    final response = await http.get(
+      Uri.parse(ApiEndpoints.apiUrlUserInvestmentPolicy),
+      headers: {
+        'Authorization': 'Token $token',
+        'Content-Type': 'application/json',
+      },
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+    throw Exception(
+        'Failed to load investment policy: ${response.statusCode}');
+  }
+
+  static Future<Map<String, dynamic>> saveInvestmentPolicy(
+    String token,
+    Map<String, dynamic> fields,
+  ) async {
+    final response = await http.post(
+      Uri.parse(ApiEndpoints.apiUrlUserInvestmentPolicy),
+      headers: {
+        'Authorization': 'Token $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode(fields),
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+    throw Exception(
+        'Failed to save investment policy: ${response.statusCode}');
+  }
+
+  static Future<Map<String, dynamic>> getSharedIPS(String shareId) async {
+    final response = await http.post(
+      Uri.parse(ApiEndpoints.sharedIpsGet),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'share_id': shareId}),
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+    throw Exception('Failed to get shared IPS: ${response.statusCode}');
+  }
+
+  static Future<Map<String, dynamic>> submitClientIPS(
+      Map<String, dynamic> data) async {
+    final response = await http.post(
+      Uri.parse(ApiEndpoints.sharedIpsSubmit),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(data),
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+    throw Exception('Failed to submit client IPS: ${response.statusCode}');
+  }
+
+  static Future<Map<String, dynamic>> signSharedIPS(
+      Map<String, dynamic> data) async {
+    final response = await http.post(
+      Uri.parse(ApiEndpoints.sharedIpsSign),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(data),
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+    throw Exception('Failed to sign shared IPS: ${response.statusCode}');
+  }
+
+  /// Lists IPS documents created by the authenticated user (Django `GetIPS`).
+  static Future<Map<String, dynamic>> getIpsDocuments(String token) async {
+    final response = await http.post(
+      Uri.parse(ApiEndpoints.apiUrlGetIps),
+      headers: {
+        'Authorization': 'Token $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({}),
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+    throw Exception('Failed to load IPS documents: ${response.statusCode}');
+  }
+
+  /// Updates an IPS document (`document_id` / `ips_id` required in [fields]).
+  static Future<Map<String, dynamic>> updateIpsDocument(
+    String token,
+    Map<String, dynamic> fields,
+  ) async {
+    final response = await http.post(
+      Uri.parse(ApiEndpoints.apiUrlUpdateIps),
+      headers: {
+        'Authorization': 'Token $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode(fields),
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+    throw Exception('Failed to update IPS: ${response.statusCode} ${response.body}');
+  }
+
+  /// Portal: time series for one option (`selling` / `bought` from `api_investmentperformance`).
+  ///
+  /// HTTP **404**: portal DB has no row for this `investment_option_id` (often local Django vs
+  /// production fund MySQL mismatch). Returns empty `points` so the UI can degrade gracefully.
+  static Future<Map<String, dynamic>> getFundOptionPublicPerformance({
+    required int investmentOptionId,
+    String range = 'ALL',
+  }) async {
+    final uri = Uri.parse(ApiEndpoints.fundOptionPublic).replace(
+      queryParameters: {
+        'action': 'performance',
+        'investment_option_id': '$investmentOptionId',
+        'range': range,
+      },
+    );
+    final response = await http.get(uri);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+    if (response.statusCode == 404) {
+      return <String, dynamic>{
+        'success': true,
+        'points': <dynamic>[],
+        'range': range,
+      };
+    }
+    throw Exception(
+        'Failed to load fund performance: ${response.statusCode} ${response.body.length > 120 ? response.body.substring(0, 120) : response.body}');
+  }
+
+  /// Portal: published PDFs (factsheets) for one option.
+  ///
+  /// See [getFundOptionPublicPerformance] — **404** → empty `documents` when option id is unknown
+  /// on the portal database.
+  static Future<Map<String, dynamic>> getFundOptionPublicDocuments({
+    required int investmentOptionId,
+  }) async {
+    final uri = Uri.parse(ApiEndpoints.fundOptionPublic).replace(
+      queryParameters: {
+        'action': 'documents',
+        'investment_option_id': '$investmentOptionId',
+      },
+    );
+    final response = await http.get(uri);
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+    if (response.statusCode == 404) {
+      return <String, dynamic>{
+        'success': true,
+        'documents': <dynamic>[],
+      };
+    }
+    throw Exception(
+        'Failed to load fund documents: ${response.statusCode} ${response.body.length > 120 ? response.body.substring(0, 120) : response.body}');
+  }
 }

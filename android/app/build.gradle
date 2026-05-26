@@ -14,8 +14,8 @@ if (localPropertiesFile.exists()) {
 }
 
 // 🔢 Versioning
-def flutterVersionCode = 12
-def flutterVersionName = "1.0.12"
+def flutterVersionCode = 18
+def flutterVersionName = "1.0.18"
 
 // 🔐 Keystore setup
 def keystoreProperties = new Properties()
@@ -26,7 +26,7 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace "com.cyanase.app"
-    compileSdkVersion 35
+    compileSdkVersion 36
     ndkVersion "27.0.12077973"
 
     compileOptions {
