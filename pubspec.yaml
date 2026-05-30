@@ -29,7 +29,7 @@ dependencies:
   # Notifications and Device Features
   awesome_notifications: ^0.10.1
   vibration: ^2.0.1
-  permission_handler: ^11.3.1
+  permission_handler: ^11.4.0
   connectivity_plus: ^6.1.2
   html: ^0.15.6
 

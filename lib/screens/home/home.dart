@@ -11,9 +11,8 @@ import '../settings/settings.dart';
 import '../auth/login_with_passcode.dart';
 import '../auth/set_three_code.dart';
 import 'package:cyanase/helpers/database_helper.dart';
-import 'package:flutter_contacts/flutter_contacts.dart';
+import 'package:cyanase/helpers/contact_sync_service.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:async';
 import 'package:cyanase/helpers/notification_service.dart';
@@ -24,7 +23,6 @@ import 'package:cyanase/helpers/api_helper.dart';
 import 'package:url_launcher/url_launcher.dart'; // Added
 import 'package:flutter/gestures.dart';
 import 'package:cyanase/screens/home/personal/personal_investment_policy_screen.dart';
-import 'package:cyanase/helpers/hash_numbers.dart' show debugPrintContactSyncFailure;
 
 class HomeScreen extends StatefulWidget {
   final bool? passcode;
@@ -51,7 +49,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   bool _isSearching = false;
   final TextEditingController _searchController = TextEditingController();
   bool _isSyncingContacts = false;
-  double _syncProgress = 0.0;
+  double? _syncProgress;
+  String _syncStatusMessage = 'Finding friends on Cyanase…';
   int _totalUnreadCount = 0;
   Timer? _unreadCheckTimer;
   int _notificationCount = 0;
@@ -93,11 +92,35 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         // Show disclosure and get consent before syncing
         bool? consentGiven = await _showContactAccessDisclosure();
         if (consentGiven == true) {
-          setState(() {
-            _isSyncingContacts = true;
-            _syncProgress = 0.0;
-          });
-          await _syncContacts();
+          final perm = await ContactSyncService.ensureContactsPermission();
+          if (!mounted) return;
+          if (perm == ContactsPermissionOutcome.granted) {
+            _startBackgroundContactSync();
+          } else if (perm == ContactsPermissionOutcome.permanentlyDenied) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text(
+                  'Enable contacts in Settings to find friends on Cyanase.',
+                ),
+                action: SnackBarAction(
+                  label: 'Settings',
+                  onPressed: openAppSettings,
+                ),
+              ),
+            );
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text(
+                  'Contact access is required to find friends on Cyanase.',
+                ),
+                action: SnackBarAction(
+                  label: 'Retry',
+                  onPressed: _checkAndSyncContacts,
+                ),
+              ),
+            );
+          }
         } else {
           // Handle case where user denies consent
           if (mounted) {
@@ -118,7 +141,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       if (mounted) {
         setState(() {
           _isSyncingContacts = false;
-          _syncProgress = 0.0;
+          _syncProgress = null;
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -131,6 +154,34 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         );
       }
     }
+  }
+
+  void _startBackgroundContactSync() {
+    ContactSyncService.resetCancellation();
+    setState(() {
+      _isSyncingContacts = true;
+      _syncProgress = null;
+      _syncStatusMessage = 'Finding friends on Cyanase…';
+    });
+    unawaited(_syncContacts());
+  }
+
+  void _skipContactSync() {
+    ContactSyncService.cancel();
+    if (!mounted) return;
+    setState(() {
+      _isSyncingContacts = false;
+      _syncProgress = null;
+      _syncStatusMessage = '';
+    });
+  }
+
+  void _onContactSyncProgress(ContactSyncProgress progress) {
+    if (!mounted) return;
+    setState(() {
+      _syncProgress = progress.fraction;
+      _syncStatusMessage = progress.statusMessage;
+    });
   }
 
 Future<bool?> _showContactAccessDisclosure() async {
@@ -281,39 +332,39 @@ Future<bool?> _showContactAccessDisclosure() async {
 
   Future<void> _syncContacts() async {
     try {
-      setState(() {
-        _syncProgress = 0.2;
-      });
-      final contacts = await fetchAndHashContacts();
-      setState(() {
-        _syncProgress = 0.5;
-      });
-      final registeredContacts = await getRegisteredContacts(contacts);
-      setState(() {
-        _syncProgress = 1.0;
-      });
-      await Future.delayed(const Duration(milliseconds: 500));
+      await ContactSyncService.syncContacts(
+        skipPermissionRequest: true,
+        onProgress: _onContactSyncProgress,
+      );
+      await Future.delayed(const Duration(milliseconds: 400));
       if (mounted) {
         setState(() {
           _isSyncingContacts = false;
-          _syncProgress = 0.0;
+          _syncProgress = null;
         });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Contacts synced successfully!')),
         );
       }
+    } on ContactSyncCancelled {
+      if (mounted) {
+        setState(() {
+          _isSyncingContacts = false;
+          _syncProgress = null;
+        });
+      }
     } catch (e) {
       if (mounted) {
         setState(() {
           _isSyncingContacts = false;
-          _syncProgress = 0.0;
+          _syncProgress = null;
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Failed to sync contacts: $e'),
             action: SnackBarAction(
               label: 'Retry',
-              onPressed: _syncContacts,
+              onPressed: _startBackgroundContactSync,
             ),
           ),
         );
@@ -321,105 +372,81 @@ Future<bool?> _showContactAccessDisclosure() async {
     }
   }
 
-  Future<List<Map<String, String>>> fetchAndHashContacts() async {
-    List<Map<String, String>> contactsWithHashes = [];
-    PermissionStatus permissionStatus = await Permission.contacts.request();
-    if (permissionStatus != PermissionStatus.granted) {
-      throw Exception("Permission to access contacts denied");
-    }
-    setState(() {
-      _syncProgress = 0.3;
-    });
-    final contacts = await FlutterContacts.getContacts(
-      withProperties: true,
-      withPhoto: false,
+  Widget _buildContactSyncBanner() {
+    final percentLabel = _syncProgress != null
+        ? '${(_syncProgress! * 100).clamp(0, 100).toInt()}%'
+        : null;
+
+    return Material(
+      elevation: 2,
+      color: primaryLight,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.5,
+                color: primaryTwo,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Setting up your contacts',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: primaryTwo,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _syncStatusMessage,
+                    style: TextStyle(fontSize: 12, color: Colors.grey[800]),
+                  ),
+                  const SizedBox(height: 8),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: _syncProgress,
+                      minHeight: 5,
+                      backgroundColor: Colors.grey[300],
+                      valueColor:
+                          const AlwaysStoppedAnimation<Color>(primaryTwo),
+                    ),
+                  ),
+                  if (percentLabel != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      '$percentLabel complete',
+                      style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            TextButton(
+              onPressed: _skipContactSync,
+              child: const Text(
+                'Skip',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: primaryTwo,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
-    for (var contact in contacts) {
-      if (contact.phones.isNotEmpty) {
-        for (var phone in contact.phones) {
-          try {
-            String normalizedNumber = normalizePhoneNumber(phone.number, 'UG');
-            contactsWithHashes.add({
-              'name': contact.displayName ?? 'Unknown',
-              'phone': phone.number,
-              'normalizedPhone': normalizedNumber,
-            });
-          } catch (e) {
-            // Log error if needed, but continue processing other contacts
-          }
-        }
-      }
-    }
-    return contactsWithHashes;
-  }
-
-  Future<List<Map<String, dynamic>>> getRegisteredContacts(
-      List<Map<String, dynamic>> contacts) async {
-    final String apiUrl = ApiEndpoints.fundAppGetMyContacts;
-
-    List<String> phoneNumbers =
-        contacts.map((contact) => contact['phone'] as String).toList();
-    final requestBody = jsonEncode({"phoneNumbers": phoneNumbers});
-    final response = await http.post(
-      Uri.parse(apiUrl),
-      headers: {"Content-Type": "application/json"},
-      body: requestBody,
-    );
-
-    if (response.statusCode == 200) {
-      List<dynamic> registeredNumbersWithIds =
-          jsonDecode(response.body)["registeredContacts"];
-      List<Map<String, dynamic>> registeredContacts = contacts
-          .where((contact) => registeredNumbersWithIds
-              .any((registered) => registered['phoneno'] == contact['phone']))
-          .map((contact) {
-        var registered = registeredNumbersWithIds.firstWhere(
-            (registered) => registered['phoneno'] == contact['phone']);
-        return {
-          'id': int.parse(registered['id'].toString()),
-          'user_id': registered['id'].toString(),
-          'name': contact['name'],
-          'phone': contact['phone'],
-          'profilePic': contact['profilePic'] ?? '',
-          'is_registered': true,
-        };
-      }).toList();
-      final dbHelper = DatabaseHelper();
-      await dbHelper.insertContacts(registeredContacts);
-      return registeredContacts;
-    } else {
-      debugPrintContactSyncFailure(
-        source: 'home.dart getRegisteredContacts',
-        url: apiUrl,
-        response: response,
-        requestPhoneCount: phoneNumbers.length,
-        requestBodyPreview: requestBody,
-      );
-      throw Exception(
-          "Failed to fetch registered contacts: ${response.statusCode} (see console log above)");
-    }
-  }
-
-  String normalizePhoneNumber(String phoneNumber, String regionCode) {
-    try {
-      phoneNumber = phoneNumber.replaceAll(RegExp(r'[^0-9+]'), '');
-      if (!phoneNumber.startsWith('+')) {
-        phoneNumber = '+256${phoneNumber.replaceFirst(RegExp(r'^0'), '')}';
-      }
-      if (!phoneNumber.startsWith('+256')) {
-        throw Exception("Invalid country code for Uganda: $phoneNumber");
-      }
-      if (phoneNumber.length != 12) {
-        throw Exception("Invalid phone number length: $phoneNumber");
-      }
-      final digits = phoneNumber.substring(4);
-      if (!RegExp(r'^\d+$').hasMatch(digits)) {
-        throw Exception("Invalid phone number format: $phoneNumber");
-      }
-      return phoneNumber;
-    } catch (e) {
-      return phoneNumber;
-    }
   }
 
   void _updateTabTitle() {
@@ -757,6 +784,7 @@ Future<bool?> _showContactAccessDisclosure() async {
         children: [
           Column(
             children: [
+              if (_isSyncingContacts) _buildContactSyncBanner(),
               if (_investmentPolicyIncomplete)
                 Container(
                   width: double.infinity,
@@ -811,90 +839,6 @@ Future<bool?> _showContactAccessDisclosure() async {
               ),
             ],
           ),
-          if (_isSyncingContacts)
-            Container(
-              color: Colors.black.withOpacity(0.5),
-              child: Center(
-                child: Container(
-                  width: 300,
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: white,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.grey.withOpacity(0.3),
-                        spreadRadius: 2,
-                        blurRadius: 10,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: primaryTwo.withOpacity(0.1),
-                        ),
-                        child: SvgPicture.asset(
-                          'assets/icons/groups.svg',
-                          width: 60,
-                          height: 60,
-                          colorFilter: const ColorFilter.mode(
-                              primaryTwo, BlendMode.srcIn),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      const Text(
-                        'Setting Up Your Cyanase',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: primaryTwo,
-                          decoration: TextDecoration.none,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        'Syncing your contacts to connect you with friends.',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey[800],
-                          decoration: TextDecoration.none,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 20),
-                      SizedBox(
-                        width: 200,
-                        child: LinearProgressIndicator(
-                          value: _syncProgress,
-                          backgroundColor: Colors.grey[300],
-                          valueColor:
-                              const AlwaysStoppedAnimation<Color>(primaryTwo),
-                          minHeight: 6,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        '${(_syncProgress * 100).toInt()}% Complete',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[700],
-                          decoration: TextDecoration.none,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
         ],
       ),
       bottomNavigationBar: SafeArea(

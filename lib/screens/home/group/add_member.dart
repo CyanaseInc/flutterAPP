@@ -7,13 +7,11 @@ import 'package:cyanase/theme/theme.dart';
 import 'package:http/http.dart' as http;
 import 'package:cyanase/helpers/api_helper.dart';
 import 'package:cyanase/helpers/endpoints.dart';
-import 'package:flutter_contacts/flutter_contacts.dart';
-import 'package:permission_handler/permission_handler.dart';
+import 'package:cyanase/helpers/contact_sync_service.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:cyanase/helpers/chat_websocket_service.dart';
 import 'package:share_plus/share_plus.dart'; // Added for sharing
 import 'package:clipboard/clipboard.dart'; // Added for copying to clipboard
-import 'package:cyanase/helpers/hash_numbers.dart' show debugPrintContactSyncFailure;
 
 class AddGroupMembersScreen extends StatefulWidget {
   final int groupId;
@@ -41,7 +39,8 @@ class _AddGroupMembersScreenState extends State<AddGroupMembersScreen>
   List<String> _existingMembers = [];
   bool _isLoading = true;
   bool _isSyncingContacts = false;
-  double _syncProgress = 0.0;
+  double? _syncProgress;
+  String _syncStatusMessage = 'Syncing your contacts…';
   final TextEditingController _searchController = TextEditingController();
   Timer? _debounce;
   bool _isOnlineSearching = false;
@@ -100,45 +99,68 @@ class _AddGroupMembersScreenState extends State<AddGroupMembersScreen>
     }
   }
 
+  void _onContactSyncProgress(ContactSyncProgress progress) {
+    if (!mounted) return;
+    setState(() {
+      _syncProgress = progress.fraction;
+      _syncStatusMessage = progress.statusMessage;
+    });
+  }
+
   Future<void> _refreshContacts() async {
     try {
+      final perm = await ContactSyncService.ensureContactsPermission();
+      if (perm != ContactsPermissionOutcome.granted) {
+        throw Exception('Permission to access contacts denied');
+      }
+
+      ContactSyncService.resetCancellation();
       setState(() {
         _isSyncingContacts = true;
-        _syncProgress = 0.0;
+        _syncProgress = null;
+        _syncStatusMessage = 'Refreshing contacts…';
       });
       _refreshAnimationController?.forward();
+
       final db = await _dbHelper.database;
       await db.delete('contacts');
-      setState(() {
-        _syncProgress = 0.2;
-      });
-      final contacts = await fetchAndHashContacts();
-      setState(() {
-        _syncProgress = 0.5;
-      });
-      final registeredContacts = await getRegisteredContacts(contacts);
-      setState(() {
-        _syncProgress = 1.0;
-      });
-      await Future.delayed(const Duration(milliseconds: 500));
+
+      final contacts = await ContactSyncService.fetchAndHashContacts(
+        onProgress: _onContactSyncProgress,
+        skipPermissionRequest: true,
+      );
+      await ContactSyncService.getRegisteredContacts(
+        contacts,
+        onProgress: _onContactSyncProgress,
+        debugSource: 'add_member',
+      );
+
+      await Future.delayed(const Duration(milliseconds: 400));
       final updatedContacts = await _dbHelper.getContacts();
       if (mounted) {
         setState(() {
           _allContacts = updatedContacts;
           _isSyncingContacts = false;
-          _syncProgress = 0.0;
+          _syncProgress = null;
         });
         _refreshAnimationController?.stop();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Contacts refreshed successfully!')),
         );
       }
-    } catch (e) {
-      
+    } on ContactSyncCancelled {
       if (mounted) {
         setState(() {
           _isSyncingContacts = false;
-          _syncProgress = 0.0;
+          _syncProgress = null;
+        });
+        _refreshAnimationController?.stop();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isSyncingContacts = false;
+          _syncProgress = null;
         });
         _refreshAnimationController?.stop();
         ScaffoldMessenger.of(context).showSnackBar(
@@ -151,102 +173,6 @@ class _AddGroupMembersScreenState extends State<AddGroupMembersScreen>
           ),
         );
       }
-    }
-  }
-
-  String normalizePhoneNumber(String phoneNumber, String regionCode) {
-    try {
-      phoneNumber = phoneNumber.replaceAll(RegExp(r'[^0-9+]'), '');
-      if (!phoneNumber.startsWith('+')) {
-        phoneNumber = '+256${phoneNumber.replaceFirst(RegExp(r'^0'), '')}';
-      }
-      if (!phoneNumber.startsWith('+256')) {
-        throw Exception("Invalid country code for Uganda: $phoneNumber");
-      }
-      if (phoneNumber.length != 12) {
-        throw Exception("Invalid phone number length: $phoneNumber");
-      }
-      final digits = phoneNumber.substring(4);
-      if (!RegExp(r'^\d+$').hasMatch(digits)) {
-        throw Exception("Invalid phone number format: $phoneNumber");
-      }
-      return phoneNumber;
-    } catch (e) {
-      return phoneNumber;
-    }
-  }
-
-  Future<List<Map<String, String>>> fetchAndHashContacts() async {
-    List<Map<String, String>> contactsWithHashes = [];
-    PermissionStatus permissionStatus = await Permission.contacts.request();
-    if (permissionStatus != PermissionStatus.granted) {
-      throw Exception("Permission to access contacts denied");
-    }
-    final contacts = await FlutterContacts.getContacts(
-      withProperties: true,
-      withPhoto: false,
-    );
-    for (var contact in contacts) {
-      if (contact.phones.isNotEmpty) {
-        for (var phone in contact.phones) {
-          try {
-            String normalizedNumber = normalizePhoneNumber(phone.number, 'UG');
-            contactsWithHashes.add({
-              'name': contact.displayName ?? 'Unknown',
-              'phone': phone.number,
-              'normalizedPhone': normalizedNumber,
-            });
-          } catch (e) {
-            
-          }
-        }
-      }
-    }
-    return contactsWithHashes;
-  }
-
-  Future<List<Map<String, dynamic>>> getRegisteredContacts(
-      List<Map<String, dynamic>> contacts) async {
-    final String apiUrl = ApiEndpoints.fundAppGetMyContacts;
-    List<String> phoneNumbers =
-        contacts.map((contact) => contact['phone'] as String).toList();
-    final requestBody = jsonEncode({"phoneNumbers": phoneNumbers});
-    final response = await http.post(
-      Uri.parse(apiUrl),
-      headers: {"Content-Type": "application/json"},
-      body: requestBody,
-    );
-    if (response.statusCode == 200) {
-      List<dynamic> registeredNumbersWithIds =
-          jsonDecode(response.body)["registeredContacts"];
-      List<Map<String, dynamic>> registeredContacts = contacts
-          .where((contact) => registeredNumbersWithIds
-              .any((registered) => registered['phoneno'] == contact['phone']))
-          .map((contact) {
-        var registered = registeredNumbersWithIds.firstWhere(
-            (registered) => registered['phoneno'] == contact['phone']);
-        return {
-          'id': int.parse(registered['id'].toString()),
-          'user_id': registered['id'].toString(),
-          'name': contact['name'],
-          'phone': contact['phone'],
-          'profilePic': contact['profilePic'] ?? '',
-          'is_registered': true,
-        };
-      }).toList();
-      final dbHelper = DatabaseHelper();
-      await dbHelper.insertContacts(registeredContacts);
-      return registeredContacts;
-    } else {
-      debugPrintContactSyncFailure(
-        source: 'add_member.dart getRegisteredContacts',
-        url: apiUrl,
-        response: response,
-        requestPhoneCount: phoneNumbers.length,
-        requestBodyPreview: requestBody,
-      );
-      throw Exception(
-          "Failed to fetch registered contacts: ${response.statusCode} (see console log above)");
     }
   }
 
@@ -795,7 +721,7 @@ class _AddGroupMembersScreenState extends State<AddGroupMembersScreen>
                       ),
                       const SizedBox(height: 10),
                       Text(
-                        'Syncing your contacts to find new friends.',
+                        _syncStatusMessage,
                         style: TextStyle(
                           fontSize: 14,
                           color: Colors.grey[800],
@@ -803,7 +729,16 @@ class _AddGroupMembersScreenState extends State<AddGroupMembersScreen>
                         ),
                         textAlign: TextAlign.center,
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 16),
+                      const SizedBox(
+                        width: 28,
+                        height: 28,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          color: primaryTwo,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
                       SizedBox(
                         width: 200,
                         child: LinearProgressIndicator(
@@ -815,16 +750,18 @@ class _AddGroupMembersScreenState extends State<AddGroupMembersScreen>
                           borderRadius: BorderRadius.circular(4),
                         ),
                       ),
-                      const SizedBox(height: 10),
-                      Text(
-                        '${(_syncProgress * 100).toInt()}% Complete',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[700],
-                          decoration: TextDecoration.none,
+                      if (_syncProgress != null) ...[
+                        const SizedBox(height: 10),
+                        Text(
+                          '${(_syncProgress! * 100).clamp(0, 100).toInt()}% Complete',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[700],
+                            decoration: TextDecoration.none,
+                          ),
+                          textAlign: TextAlign.center,
                         ),
-                        textAlign: TextAlign.center,
-                      ),
+                      ],
                     ],
                   ),
                 ),
